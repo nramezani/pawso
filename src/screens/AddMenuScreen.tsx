@@ -7,6 +7,9 @@ export function AddMenuScreen() {
     petName,
     pickVetRecord,
     setScreen,
+    householdRole,
+    canManageMedical,
+    canManageCare,
   } = usePawso();
 
   return (
@@ -18,12 +21,29 @@ export function AddMenuScreen() {
         </Text>
       </View>
 
-      <PrimaryButton title="📄 Upload veterinary record" onPress={pickVetRecord} />
-      <SecondaryButton title="💊 Add medication" onPress={() => setScreen('addMedication')} />
-      <SecondaryButton title="📅 Add care task" onPress={() => setScreen('addCareTask')} />
+      {canManageMedical ? (
+        <>
+          <PrimaryButton title="📄 Upload veterinary record" onPress={pickVetRecord} />
+          <SecondaryButton title="💊 Add medication" onPress={() => setScreen('addMedication')} />
+        </>
+      ) : null}
+
+      {canManageCare ? (
+        <SecondaryButton title="📅 Add care task" onPress={() => setScreen('addCareTask')} />
+      ) : null}
+
+      {!canManageMedical && !canManageCare ? (
+        <View style={styles.infoCard}>
+          <Text style={styles.cardStrong}>Sitter access</Text>
+          <Text style={styles.cardMuted}>
+            You can follow existing care tasks and log completion, but cannot create medical records,
+            medications, or new care plans.
+          </Text>
+        </View>
+      ) : null}
 
       <Text style={styles.safetyText}>
-        Symptom and weight logging will be added as dedicated flows next.
+        Signed in as {householdRole || 'household member'}.
       </Text>
     </Page>
   );

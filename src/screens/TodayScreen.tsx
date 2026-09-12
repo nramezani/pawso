@@ -45,6 +45,7 @@ export function TodayScreen() {
     openDocumentsScreen,
     timelineEvents,
     setScreen,
+    canManageMedical,
     notificationPermission,
     notificationsEnabled,
     notificationSyncing,
@@ -394,6 +395,11 @@ export function TodayScreen() {
                   onPress={() => logMedicationDose(dose, 'given')}
                 >
                   <Text style={styles.givenButtonText}>✓ Given</Text>
+                  {dose.log?.actor_name ? (
+                    <Text style={styles.cardMuted}>
+                      by {dose.log.actor_name}
+                    </Text>
+                  ) : null}
                 </Pressable>
                 <Pressable
                   style={styles.skipDoseButton}
@@ -530,7 +536,7 @@ export function TodayScreen() {
               label="Medication"
               onPress={openMedicationsScreen}
             />
-            <QuickAction icon="📄" label="Record" onPress={pickVetRecord} />
+            {canManageMedical ? <QuickAction icon="📄" label="Record" onPress={pickVetRecord} /> : null}
             <QuickAction icon="🩺" label="Symptom" />
             <QuickAction icon="⚖️" label="Weight" />
             <QuickAction icon="📅" label="Care task" onPress={openCareScreen} />

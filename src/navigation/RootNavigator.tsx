@@ -18,6 +18,7 @@ import { DocumentsScreen } from '../screens/DocumentsScreen';
 import { TimelineScreen } from '../screens/TimelineScreen';
 import { AddMenuScreen } from '../screens/AddMenuScreen';
 import { AccountScreen } from '../screens/AccountScreen';
+import { HouseholdScreen } from '../screens/HouseholdScreen';
 import type {
   MainTabParamList,
   RootStackParamList,
@@ -90,6 +91,7 @@ export function RootNavigator() {
       <Stack.Screen name="AddMedication" component={AddMedicationScreen} />
       <Stack.Screen name="AddCareTask" component={AddCareTaskScreen} />
       <Stack.Screen name="Account" component={AccountScreen} />
+      <Stack.Screen name="Household" component={HouseholdScreen} />
     </Stack.Navigator>
   );
 }

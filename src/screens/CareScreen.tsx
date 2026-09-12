@@ -19,6 +19,7 @@ import {
 export function CareScreen() {
   const {
     setScreen,
+    canManageCare,
     apiStatus,
     setApiStatus,
     authReady,
@@ -209,7 +210,16 @@ return (
           </View>
         </View>
 
-        <PrimaryButton title="Add Care Task" onPress={() => setScreen('addCareTask')} />
+        {canManageCare ? (
+          <PrimaryButton title="Add Care Task" onPress={() => setScreen('addCareTask')} />
+        ) : (
+          <View style={styles.infoCard}>
+            <Text style={styles.cardStrong}>Sitter view</Text>
+            <Text style={styles.cardMuted}>
+              You can complete existing care tasks, but only an owner or caregiver can create new ones.
+            </Text>
+          </View>
+        )}
 
         {careError !== '' && (
           <View style={styles.errorCard}>

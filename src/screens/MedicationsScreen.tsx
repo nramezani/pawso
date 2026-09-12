@@ -19,6 +19,7 @@ import {
 export function MedicationsScreen() {
   const {
     setScreen,
+    canManageMedical,
     apiStatus,
     setApiStatus,
     authReady,
@@ -210,10 +211,19 @@ return (
           </View>
         </View>
 
-        <PrimaryButton
-          title="Add Medication"
-          onPress={() => setScreen('addMedication')}
-        />
+        {canManageMedical ? (
+          <PrimaryButton
+            title="Add Medication"
+            onPress={() => setScreen('addMedication')}
+          />
+        ) : (
+          <View style={styles.infoCard}>
+            <Text style={styles.cardStrong}>Medication details are read-only</Text>
+            <Text style={styles.cardMuted}>
+              You can log scheduled doses, but only the household owner can add or change medication instructions.
+            </Text>
+          </View>
+        )}
 
         {medicationsError !== '' && (
           <View style={styles.errorCard}>

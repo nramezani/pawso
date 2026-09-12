@@ -19,6 +19,8 @@ import {
 export function DocumentsScreen() {
   const {
     setScreen,
+    canViewMedical,
+    canManageMedical,
     apiStatus,
     setApiStatus,
     authReady,
@@ -209,9 +211,25 @@ return (
           </View>
         </View>
 
-        <Pressable style={styles.outlineButton} onPress={pickVetRecord}>
-          <Text style={styles.outlineButtonText}>＋ Upload veterinary record</Text>
-        </Pressable>
+        {canManageMedical ? (
+          <Pressable style={styles.outlineButton} onPress={pickVetRecord}>
+            <Text style={styles.outlineButtonText}>＋ Upload veterinary record</Text>
+          </Pressable>
+        ) : canViewMedical ? (
+          <View style={styles.infoCard}>
+            <Text style={styles.cardStrong}>Medical records are read-only</Text>
+            <Text style={styles.cardMuted}>
+              Caregivers can review confirmed records; only the owner can upload or change them.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.infoCard}>
+            <Text style={styles.cardStrong}>Medical records are private</Text>
+            <Text style={styles.cardMuted}>
+              Sitter access is limited to day-to-day care and medication instructions.
+            </Text>
+          </View>
+        )}
 
         {documentsError !== '' && (
           <View style={styles.errorCard}>

@@ -38,6 +38,7 @@ import type {
   AskAnswer,
   PetSummary,
   PetTodaySummary,
+  HouseholdMember,
 } from '../types';
 
 function usePawsoState() {
@@ -53,6 +54,21 @@ function usePawsoState() {
   const [accountError, setAccountError] = useState('');
   const [secureAccountEmail, setSecureAccountEmail] = useState('');
   const [secureAccountPassword, setSecureAccountPassword] = useState('');
+  const [householdId, setHouseholdId] = useState<string | null>(null);
+  const [householdName, setHouseholdName] = useState('My Pawso Household');
+  const [householdRole, setHouseholdRole] = useState<'owner' | 'caregiver' | 'sitter' | null>(null);
+  const [householdMembers, setHouseholdMembers] = useState<HouseholdMember[]>([]);
+  const [householdBusy, setHouseholdBusy] = useState(false);
+  const [householdError, setHouseholdError] = useState('');
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<'caregiver' | 'sitter'>('caregiver');
+  const [inviteCode, setInviteCode] = useState('');
+  const [joinCode, setJoinCode] = useState('');
+  const [memberDisplayName, setMemberDisplayName] = useState('');
+  const canViewMedical = householdRole === 'owner' || householdRole === 'caregiver';
+  const canManageMedical = householdRole === 'owner';
+  const canManageCare = householdRole === 'owner' || householdRole === 'caregiver';
+  const canLogCare = householdRole !== null;
   const [databaseError, setDatabaseError] = useState('');
   const [isSavingPet, setIsSavingPet] = useState(false);
   const [isConfirmingExtraction, setIsConfirmingExtraction] = useState(false);
@@ -255,6 +271,146 @@ function usePawsoState() {
     }
   }
 
+  async function ensureHousehold(displayName?: string) {
+    const { data, error } = await supabase.rpc('ensure_household_for_current_user', {
+      preferred_display_name: displayName?.trim() || null,
+    });
+
+    if (error) throw error;
+    if (!data) throw new Error('Pawso could not prepare a household.');
+
+    setHouseholdId(data as string);
+    return data as string;
+  }
+
+  async function loadHousehold(targetHouseholdId?: string | null) {
+    try {
+      setHouseholdError('');
+
+      const id = targetHouseholdId ?? householdId ?? (await ensureHousehold(memberDisplayName));
+      setHouseholdId(id);
+
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError) throw sessionError;
+      if (!session?.user) throw new Error('Pawso session is not ready.');
+
+      const [
+        { data: household, error: householdLoadError },
+        { data: members, error: membersError },
+      ] = await Promise.all([
+        supabase.from('households').select('id, name').eq('id', id).single(),
+        supabase
+          .from('household_members')
+          .select('id, household_id, user_id, display_name, role, created_at')
+          .eq('household_id', id)
+          .order('created_at', { ascending: true }),
+      ]);
+
+      if (householdLoadError) throw householdLoadError;
+      if (membersError) throw membersError;
+
+      setHouseholdName(household?.name ?? 'My Pawso Household');
+      setHouseholdMembers((members ?? []) as HouseholdMember[]);
+
+      const currentMember = (members ?? []).find(
+        (member: any) => member.user_id === session.user.id
+      );
+
+      setHouseholdRole(currentMember?.role ?? null);
+
+      if (!memberDisplayName && currentMember?.display_name) {
+        setMemberDisplayName(currentMember.display_name);
+      }
+
+      return id;
+    } catch (error) {
+      console.log('Load household error:', error);
+      setHouseholdError(
+        error instanceof Error ? error.message : 'Could not load household.'
+      );
+      throw error;
+    }
+  }
+
+  async function refreshHousehold() {
+    if (!householdId) return;
+    setHouseholdBusy(true);
+    try {
+      await loadHousehold(householdId);
+    } finally {
+      setHouseholdBusy(false);
+    }
+  }
+
+  async function createHouseholdInvite() {
+    if (!householdId) return;
+
+    try {
+      setHouseholdBusy(true);
+      setHouseholdError('');
+      setInviteCode('');
+
+      const { data, error } = await supabase.rpc('create_household_invitation', {
+        target_household: householdId,
+        target_email: inviteEmail.trim() || null,
+        target_role: inviteRole,
+      });
+
+      if (error) throw error;
+      setInviteCode(String(data ?? ''));
+    } catch (error) {
+      console.log('Create household invitation error:', error);
+      setHouseholdError(
+        error instanceof Error ? error.message : 'Could not create invitation.'
+      );
+    } finally {
+      setHouseholdBusy(false);
+    }
+  }
+
+  async function acceptHouseholdInvite() {
+    const code = joinCode.trim();
+    if (!code) return;
+
+    try {
+      setHouseholdBusy(true);
+      setHouseholdError('');
+
+      const { data, error } = await supabase.rpc('accept_household_invitation', {
+        code_text: code,
+        preferred_display_name: memberDisplayName.trim() || null,
+      });
+
+      if (error) throw error;
+      if (!data) throw new Error('Pawso could not join that household.');
+
+      const joinedHouseholdId = String(data);
+      setHouseholdId(joinedHouseholdId);
+      setJoinCode('');
+      setInviteCode('');
+
+      await loadHousehold(joinedHouseholdId);
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session?.user) {
+        await loadExistingPet(session.user.id, joinedHouseholdId);
+      }
+    } catch (error) {
+      console.log('Accept household invitation error:', error);
+      setHouseholdError(
+        error instanceof Error ? error.message : 'Could not join household.'
+      );
+    } finally {
+      setHouseholdBusy(false);
+    }
+  }
   function hydrateAccount(user: any) {
     setAccountEmail(user?.email ?? '');
     setAccountIsAnonymous(Boolean(user?.is_anonymous));
@@ -385,7 +541,10 @@ function usePawsoState() {
       }
 
       hydrateAccount(activeSession.user);
-      await loadExistingPet(activeSession.user.id);
+      const activeHouseholdId = await ensureHousehold(
+        activeSession.user.email?.split('@')[0]
+      );
+      await loadExistingPet(activeSession.user.id, activeHouseholdId);
     } catch (error) {
       console.log('Supabase initialization error:', error);
 
@@ -427,13 +586,16 @@ function usePawsoState() {
     setVetClinic(data.vet_clinic ?? '');
   }
 
-  async function loadPets(userId: string) {
+  async function loadPets(userId: string, targetHouseholdId?: string | null) {
+    const activeHouseholdId =
+      targetHouseholdId ?? householdId ?? (await ensureHousehold());
+
     const { data, error } = await supabase
       .from('pets')
       .select(
-        'id, name, species, breed, approximate_age, sex, spayed_neutered, weight_kg, microchip_number, conditions, allergies, medications, vet_clinic, created_at'
+        'id, household_id, name, species, breed, approximate_age, sex, spayed_neutered, weight_kg, microchip_number, conditions, allergies, medications, vet_clinic, created_at'
       )
-      .eq('user_id', userId)
+      .eq('household_id', activeHouseholdId)
       .order('created_at', { ascending: true });
 
     if (error) throw error;
@@ -563,7 +725,7 @@ function usePawsoState() {
         const { data, error } = await supabase
           .from('pets')
           .select(
-            'id, name, species, breed, approximate_age, sex, spayed_neutered, weight_kg, microchip_number, conditions, allergies, medications, vet_clinic, created_at'
+            'id, household_id, name, species, breed, approximate_age, sex, spayed_neutered, weight_kg, microchip_number, conditions, allergies, medications, vet_clinic, created_at'
           )
           .eq('id', petId)
           .single();
@@ -623,8 +785,14 @@ function usePawsoState() {
     setScreen('welcome');
   }
 
-  async function loadExistingPet(userId: string) {
-    const rows = await loadPets(userId);
+  async function loadExistingPet(userId: string, targetHouseholdId?: string | null) {
+    const activeHouseholdId =
+      targetHouseholdId ?? householdId ?? (await ensureHousehold());
+
+    setHouseholdId(activeHouseholdId);
+    await loadHousehold(activeHouseholdId);
+
+    const rows = await loadPets(userId, activeHouseholdId);
 
     if (rows.length === 0) {
       setTodayView('pet');
@@ -825,7 +993,7 @@ function usePawsoState() {
       if (taskIds.length > 0) {
         const { data: completionRows, error: completionError } = await supabase
           .from('task_completions')
-          .select('id, task_id, completed_at')
+          .select('id, task_id, completed_at, actor_name')
           .in('task_id', taskIds);
 
         if (completionError) throw completionError;
@@ -934,10 +1102,17 @@ function usePawsoState() {
       if (sessionError) throw sessionError;
       if (!session?.user) throw new Error('Pawso session is not ready.');
 
+      const actorName =
+        householdMembers.find((member) => member.user_id === session.user.id)
+          ?.display_name ??
+        session.user.email?.split('@')[0] ??
+        'Household member';
+
       const { error } = await supabase.from('task_completions').insert({
         task_id: task.id,
         pet_id: currentPetId,
         user_id: session.user.id,
+        actor_name: actorName,
         completed_at: new Date().toISOString(),
       });
 
@@ -1036,7 +1211,7 @@ function usePawsoState() {
 
         const { data: logRows, error: logsError } = await supabase
           .from('medication_logs')
-          .select('id, medication_id, schedule_id, scheduled_for, status, logged_at, note')
+          .select('id, medication_id, schedule_id, scheduled_for, status, logged_at, note, actor_name')
           .eq('pet_id', petId)
           .gte('scheduled_for', start.toISOString())
           .lt('scheduled_for', end.toISOString());
@@ -1204,6 +1379,11 @@ function usePawsoState() {
           .from('medication_logs')
           .update({
             status,
+            actor_name:
+              householdMembers.find((member) => member.user_id === session.user.id)
+                ?.display_name ??
+              session.user.email?.split('@')[0] ??
+              'Household member',
             logged_at: new Date().toISOString(),
           })
           .eq('id', existingLog.id);
@@ -1217,6 +1397,11 @@ function usePawsoState() {
             schedule_id: dose.schedule.id,
             pet_id: currentPetId,
             user_id: session.user.id,
+            actor_name:
+              householdMembers.find((member) => member.user_id === session.user.id)
+                ?.display_name ??
+              session.user.email?.split('@')[0] ??
+              'Household member',
             scheduled_for: dose.scheduledFor.toISOString(),
             status,
             logged_at: new Date().toISOString(),
@@ -1371,6 +1556,7 @@ function usePawsoState() {
         .from('pets')
         .insert({
           user_id: session.user.id,
+          household_id: householdId ?? (await ensureHousehold()),
           name: petName.trim(),
           species: petType,
           breed: breed.trim() || null,
@@ -1899,6 +2085,30 @@ function usePawsoState() {
   return {
     setScreen,
     apiStatus,
+    householdId,
+    householdName,
+    householdRole,
+    householdMembers,
+    householdBusy,
+    householdError,
+    canViewMedical,
+    canManageMedical,
+    canManageCare,
+    canLogCare,
+    inviteEmail,
+    setInviteEmail,
+    inviteRole,
+    setInviteRole,
+    inviteCode,
+    joinCode,
+    setJoinCode,
+    memberDisplayName,
+    setMemberDisplayName,
+    ensureHousehold,
+    loadHousehold,
+    refreshHousehold,
+    createHouseholdInvite,
+    acceptHouseholdInvite,
     accountEmail,
     accountIsAnonymous,
     accountBusy,

@@ -13,7 +13,8 @@ export type Screen =
   | 'care'
   | 'addCareTask'
   | 'ask'
-  | 'account';
+  | 'account'
+  | 'household';
 
 export type PetType = 'cat' | 'dog';
 export type PetSex = 'female' | 'male';
@@ -62,6 +63,7 @@ export type MedicationLog = {
   status: 'given' | 'skipped' | 'missed';
   logged_at: string;
   note: string | null;
+  actor_name?: string | null;
 };
 
 export type TodayMedicationDose = {
@@ -84,6 +86,16 @@ export type TaskCompletion = {
   id: string;
   task_id: string;
   completed_at: string;
+  actor_name?: string | null;
+};
+
+export type HouseholdMember = {
+  id: string;
+  household_id: string;
+  user_id: string;
+  display_name: string;
+  role: 'owner' | 'caregiver' | 'sitter';
+  created_at: string;
 };
 
 export type AskSource = {
@@ -105,6 +117,7 @@ export type AskAnswer = {
 
 export type PetSummary = {
   id: string;
+  household_id?: string | null;
   name: string;
   species: PetType;
   breed: string | null;

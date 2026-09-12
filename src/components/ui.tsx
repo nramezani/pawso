@@ -1459,4 +1459,13 @@ export const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
   },
+
+  inviteCodeText: {
+    marginTop: 8,
+    marginBottom: 8,
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#1F6B57',
+    letterSpacing: 0.4,
+  },
 });

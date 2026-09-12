@@ -19,6 +19,7 @@ import {
 export function AddCareTaskScreen() {
   const {
     setScreen,
+    canManageCare,
     apiStatus,
     setApiStatus,
     authReady,

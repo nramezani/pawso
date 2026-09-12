@@ -19,6 +19,8 @@ import {
 export function TimelineScreen() {
   const {
     setScreen,
+    canViewMedical,
+    canManageMedical,
     apiStatus,
     setApiStatus,
     authReady,
@@ -257,10 +259,19 @@ return (
         ))
       )}
 
-      <PrimaryButton
-        title="Upload Another Record"
-        onPress={pickVetRecord}
-      />
+      {canManageMedical ? (
+        <PrimaryButton
+          title="Upload Another Record"
+          onPress={pickVetRecord}
+        />
+      ) : !canViewMedical ? (
+        <View style={styles.infoCard}>
+          <Text style={styles.cardStrong}>Medical timeline is limited</Text>
+          <Text style={styles.cardMuted}>
+            Sitter access does not include veterinary records or medical history.
+          </Text>
+        </View>
+      ) : null}
 
       <SecondaryButton
         title="Back to Today"

@@ -19,6 +19,7 @@ import {
 export function AddMedicationScreen() {
   const {
     setScreen,
+    canManageMedical,
     apiStatus,
     setApiStatus,
     authReady,

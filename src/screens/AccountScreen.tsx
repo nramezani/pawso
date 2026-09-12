@@ -107,13 +107,19 @@ export function AccountScreen() {
         </View>
       ) : null}
 
-      <View style={styles.infoCard}>
-        <Text style={styles.cardStrong}>Next: shared household care</Text>
-        <Text style={styles.cardMuted}>
-          Once Pawso has stable identities, the next milestone can safely add
-          household invitations, caregiver permissions, and “given by” activity.
-        </Text>
-      </View>
+      {!accountIsAnonymous ? (
+        <PrimaryButton
+          title="Household & shared care"
+          onPress={() => setScreen('household')}
+        />
+      ) : (
+        <View style={styles.infoCard}>
+          <Text style={styles.cardStrong}>Secure your account first</Text>
+          <Text style={styles.cardMuted}>
+            Household invitations require a persistent Pawso identity.
+          </Text>
+        </View>
+      )}
     </Page>
   );
 }
