@@ -28,9 +28,7 @@ type Screen =
   | 'timeline'
   | 'documents'
   | 'medications'
-  | 'addMedication'
-  | 'care'
-  | 'addCareTask';
+  | 'addMedication';
 
 type PetType = 'cat' | 'dog';
 type PetSex = 'female' | 'male';
@@ -86,21 +84,6 @@ type TodayMedicationDose = {
   schedule: MedicationSchedule;
   scheduledFor: Date;
   log: MedicationLog | null;
-};
-
-type CareTask = {
-  id: string;
-  title: string;
-  notes: string | null;
-  due_at: string;
-  task_type: string;
-  is_active: boolean;
-};
-
-type TaskCompletion = {
-  id: string;
-  task_id: string;
-  completed_at: string;
 };
 
 const API_BASE_URL = 'http://192.168.1.85:8000';
@@ -165,18 +148,6 @@ export default function App() {
   const [newMedicationInstructions, setNewMedicationInstructions] = useState('');
   const [newMedicationTime1, setNewMedicationTime1] = useState('08:00');
   const [newMedicationTime2, setNewMedicationTime2] = useState('');
-
-  const [careTasks, setCareTasks] = useState<CareTask[]>([]);
-  const [taskCompletions, setTaskCompletions] = useState<TaskCompletion[]>([]);
-  const [careLoading, setCareLoading] = useState(false);
-  const [careError, setCareError] = useState('');
-  const [savingCareTask, setSavingCareTask] = useState(false);
-  const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
-
-  const [newCareTitle, setNewCareTitle] = useState('');
-  const [newCareNotes, setNewCareNotes] = useState('');
-  const [newCareDate, setNewCareDate] = useState('');
-  const [newCareTime, setNewCareTime] = useState('09:00');
 
   useEffect(() => {
     checkBackend();
@@ -271,7 +242,6 @@ export default function App() {
 
     await loadTimeline(data.id);
     await loadMedicationData(data.id);
-    await loadCareData(data.id);
     setScreen('today');
   }
 
@@ -312,196 +282,6 @@ export default function App() {
     }));
 
     setTimelineEvents(events);
-  }
-
-  async function loadCareData(petId: string) {
-    try {
-      setCareLoading(true);
-      setCareError('');
-
-      const { data: tasks, error: tasksError } = await supabase
-        .from('care_tasks')
-        .select('id, title, notes, due_at, task_type, is_active')
-        .eq('pet_id', petId)
-        .eq('is_active', true)
-        .order('due_at', { ascending: true });
-
-      if (tasksError) throw tasksError;
-
-      const taskIds = (tasks ?? []).map((task) => task.id);
-      let completions: TaskCompletion[] = [];
-
-      if (taskIds.length > 0) {
-        const { data: completionRows, error: completionError } = await supabase
-          .from('task_completions')
-          .select('id, task_id, completed_at')
-          .in('task_id', taskIds);
-
-        if (completionError) throw completionError;
-        completions = (completionRows ?? []) as TaskCompletion[];
-      }
-
-      setCareTasks((tasks ?? []) as CareTask[]);
-      setTaskCompletions(completions);
-    } catch (error) {
-      console.log('Load care data error:', error);
-      setCareError(
-        error instanceof Error ? error.message : 'Could not load care tasks.'
-      );
-    } finally {
-      setCareLoading(false);
-    }
-  }
-
-  function parseCareDateTime(dateValue: string, timeValue: string) {
-    const date = dateValue.trim();
-    const time = timeValue.trim();
-
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      throw new Error('Use YYYY-MM-DD for the care date.');
-    }
-
-    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
-      throw new Error('Use HH:MM in 24-hour format for the care time.');
-    }
-
-    const value = new Date(`${date}T${time}:00`);
-
-    if (Number.isNaN(value.getTime())) {
-      throw new Error('The care date or time is invalid.');
-    }
-
-    return value;
-  }
-
-  async function openCareScreen() {
-    if (!currentPetId) return;
-    await loadCareData(currentPetId);
-    setScreen('care');
-  }
-
-  async function createCareTask() {
-    if (!currentPetId || !newCareTitle.trim()) return;
-
-    try {
-      setSavingCareTask(true);
-      setCareError('');
-
-      const dueDate = parseCareDateTime(newCareDate, newCareTime);
-
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession();
-
-      if (sessionError) throw sessionError;
-      if (!session?.user) throw new Error('Pawso session is not ready.');
-
-      const { error } = await supabase.from('care_tasks').insert({
-        pet_id: currentPetId,
-        user_id: session.user.id,
-        title: newCareTitle.trim(),
-        notes: newCareNotes.trim() || null,
-        due_at: dueDate.toISOString(),
-        task_type: 'general',
-        is_active: true,
-      });
-
-      if (error) throw error;
-
-      setNewCareTitle('');
-      setNewCareNotes('');
-      setNewCareDate('');
-      setNewCareTime('09:00');
-
-      await loadCareData(currentPetId);
-      setScreen('care');
-    } catch (error) {
-      console.log('Create care task error:', error);
-      setCareError(
-        error instanceof Error ? error.message : 'Could not save this care task.'
-      );
-    } finally {
-      setSavingCareTask(false);
-    }
-  }
-
-  async function completeCareTask(task: CareTask) {
-    if (!currentPetId) return;
-
-    try {
-      setCompletingTaskId(task.id);
-      setCareError('');
-
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession();
-
-      if (sessionError) throw sessionError;
-      if (!session?.user) throw new Error('Pawso session is not ready.');
-
-      const { error } = await supabase.from('task_completions').insert({
-        task_id: task.id,
-        pet_id: currentPetId,
-        user_id: session.user.id,
-        completed_at: new Date().toISOString(),
-      });
-
-      if (error) throw error;
-
-      const { error: taskError } = await supabase
-        .from('care_tasks')
-        .update({ is_active: false })
-        .eq('id', task.id);
-
-      if (taskError) throw taskError;
-
-      await loadCareData(currentPetId);
-    } catch (error) {
-      console.log('Complete care task error:', error);
-      setCareError(
-        error instanceof Error ? error.message : 'Could not complete this care task.'
-      );
-    } finally {
-      setCompletingTaskId(null);
-    }
-  }
-
-  function formatDueLabel(value: string) {
-    const due = new Date(value);
-    const now = new Date();
-
-    const todayStart = new Date(now);
-    todayStart.setHours(0, 0, 0, 0);
-
-    const tomorrowStart = new Date(todayStart);
-    tomorrowStart.setDate(tomorrowStart.getDate() + 1);
-
-    const nextDayStart = new Date(tomorrowStart);
-    nextDayStart.setDate(nextDayStart.getDate() + 1);
-
-    const time = due.toLocaleTimeString([], {
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-
-    if (due < now) return `Overdue · ${due.toLocaleDateString()} ${time}`;
-    if (due >= todayStart && due < tomorrowStart) return `Today · ${time}`;
-    if (due >= tomorrowStart && due < nextDayStart) return `Tomorrow · ${time}`;
-
-    return `${due.toLocaleDateString()} · ${time}`;
-  }
-
-  function getMedicationUrgency(dose: TodayMedicationDose) {
-    if (dose.log) return 'done';
-
-    const now = new Date();
-    const diffMinutes = (dose.scheduledFor.getTime() - now.getTime()) / 60000;
-
-    if (diffMinutes < -30) return 'overdue';
-    if (diffMinutes <= 60) return 'dueSoon';
-    return 'later';
   }
 
   async function loadMedicationData(petId: string) {
@@ -1361,31 +1141,6 @@ export default function App() {
     (dose) => dose.log
   );
 
-  const activeCareTasks = careTasks.filter(
-    (task) => !taskCompletions.some((completion) => completion.task_id === task.id)
-  );
-
-  const overdueMedicationDoses = pendingMedicationDoses.filter(
-    (dose) => getMedicationUrgency(dose) === 'overdue'
-  );
-  const dueSoonMedicationDoses = pendingMedicationDoses.filter(
-    (dose) => getMedicationUrgency(dose) === 'dueSoon'
-  );
-  const laterMedicationDoses = pendingMedicationDoses.filter(
-    (dose) => getMedicationUrgency(dose) === 'later'
-  );
-
-  const overdueCareTasks = activeCareTasks.filter(
-    (task) => new Date(task.due_at).getTime() < Date.now()
-  );
-  const upcomingCareTasks = activeCareTasks.filter(
-    (task) => new Date(task.due_at).getTime() >= Date.now()
-  );
-
-  const followUpEvents = timelineEvents.filter(
-    (event) => event.type === 'Follow-up'
-  );
-
   if (screen === 'welcome') {
     return (
       <Page>
@@ -1745,200 +1500,72 @@ export default function App() {
           </Text>
         </View>
 
-        <Text style={styles.sectionTitle}>Needs Attention</Text>
+        <Text style={styles.sectionTitle}>Today</Text>
 
-        {overdueMedicationDoses.map((dose) => (
-          <View key={`overdue-${dose.schedule.id}`} style={styles.attentionCard}>
-            <View style={styles.medicationDueHeader}>
-              <View style={styles.attentionIcon}>
-                <Text>💊</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.attentionTitle}>Medication overdue</Text>
-                <Text style={styles.cardStrong}>{dose.medication.name}</Text>
-                <Text style={styles.cardMuted}>
-                  {[dose.medication.dose, dose.medication.unit].filter(Boolean).join(' ') ||
-                    'Dose not specified'}
-                  {' · '}
-                  {formatMedicationTime(dose.scheduledFor)}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.medicationActionRow}>
-              <Pressable
-                style={styles.givenButton}
-                disabled={loggingDoseId === dose.schedule.id}
-                onPress={() => logMedicationDose(dose, 'given')}
-              >
-                <Text style={styles.givenButtonText}>
-                  {loggingDoseId === dose.schedule.id ? 'Saving…' : '✓ Given'}
-                </Text>
-              </Pressable>
-              <Pressable
-                style={styles.skipDoseButton}
-                disabled={loggingDoseId === dose.schedule.id}
-                onPress={() => logMedicationDose(dose, 'skipped')}
-              >
-                <Text style={styles.skipDoseButtonText}>Skip</Text>
-              </Pressable>
-            </View>
+        {medicationsLoading ? (
+          <View style={styles.successCard}>
+            <ActivityIndicator size="small" color="#2F6F63" />
+            <Text style={styles.cardMuted}>Loading today's care…</Text>
           </View>
-        ))}
-
-        {overdueCareTasks.map((task) => (
-          <View key={`overdue-task-${task.id}`} style={styles.attentionCard}>
-            <Text style={styles.attentionTitle}>Care task overdue</Text>
-            <Text style={styles.cardStrong}>{task.title}</Text>
-            <Text style={styles.cardMuted}>{formatDueLabel(task.due_at)}</Text>
-            {task.notes ? <Text style={styles.careNotes}>{task.notes}</Text> : null}
-            <Pressable
-              style={styles.completeCareButton}
-              disabled={completingTaskId === task.id}
-              onPress={() => completeCareTask(task)}
-            >
-              <Text style={styles.completeCareButtonText}>
-                {completingTaskId === task.id ? 'Saving…' : '✓ Mark complete'}
-              </Text>
-            </Pressable>
-          </View>
-        ))}
-
-        {overdueMedicationDoses.length === 0 &&
-        overdueCareTasks.length === 0 ? (
+        ) : pendingMedicationDoses.length === 0 ? (
           <View style={styles.successCard}>
             <Text style={styles.successIcon}>✓</Text>
+
             <View style={{ flex: 1 }}>
-              <Text style={styles.cardStrong}>Nothing overdue</Text>
-              <Text style={styles.cardMuted}>You're on top of today's care.</Text>
-            </View>
-          </View>
-        ) : null}
-
-        <Text style={styles.sectionTitle}>Today’s Care</Text>
-
-        {dueSoonMedicationDoses.map((dose) => (
-          <View key={`soon-${dose.schedule.id}`} style={styles.medicationDueCard}>
-            <View style={styles.medicationDueHeader}>
-              <View style={styles.medicationIcon}><Text>💊</Text></View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardStrong}>{dose.medication.name}</Text>
-                <Text style={styles.cardMuted}>
-                  {[dose.medication.dose, dose.medication.unit].filter(Boolean).join(' ') ||
-                    'Dose not specified'}
-                  {' · due '}
-                  {formatMedicationTime(dose.scheduledFor)}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.medicationActionRow}>
-              <Pressable
-                style={styles.givenButton}
-                disabled={loggingDoseId === dose.schedule.id}
-                onPress={() => logMedicationDose(dose, 'given')}
-              >
-                <Text style={styles.givenButtonText}>✓ Given</Text>
-              </Pressable>
-              <Pressable
-                style={styles.skipDoseButton}
-                disabled={loggingDoseId === dose.schedule.id}
-                onPress={() => logMedicationDose(dose, 'skipped')}
-              >
-                <Text style={styles.skipDoseButtonText}>Skip</Text>
-              </Pressable>
-            </View>
-          </View>
-        ))}
-
-        {laterMedicationDoses.map((dose) => (
-          <View key={`later-${dose.schedule.id}`} style={styles.careListCard}>
-            <Text style={styles.careListIcon}>💊</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.cardStrong}>{dose.medication.name}</Text>
+              <Text style={styles.cardStrong}>You're all caught up</Text>
               <Text style={styles.cardMuted}>
-                Scheduled for {formatMedicationTime(dose.scheduledFor)}
+                {todayMedicationDoses.length > 0
+                  ? 'All medication doses are logged for today.'
+                  : 'No care tasks are due yet.'}
               </Text>
             </View>
           </View>
-        ))}
-
-        {upcomingCareTasks
-          .filter((task) => {
-            const due = new Date(task.due_at);
-            const end = new Date();
-            end.setHours(23, 59, 59, 999);
-            return due <= end;
-          })
-          .map((task) => (
-            <View key={`today-task-${task.id}`} style={styles.medicationDueCard}>
+        ) : (
+          pendingMedicationDoses.map((dose) => (
+            <View key={dose.schedule.id} style={styles.medicationDueCard}>
               <View style={styles.medicationDueHeader}>
-                <View style={styles.medicationIcon}><Text>✓</Text></View>
+                <View style={styles.medicationIcon}>
+                  <Text>💊</Text>
+                </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.cardStrong}>{task.title}</Text>
-                  <Text style={styles.cardMuted}>{formatDueLabel(task.due_at)}</Text>
+                  <Text style={styles.cardStrong}>{dose.medication.name}</Text>
+                  <Text style={styles.cardMuted}>
+                    {[dose.medication.dose, dose.medication.unit]
+                      .filter(Boolean)
+                      .join(' ') || 'Dose not specified'}
+                    {' · '}
+                    {formatMedicationTime(dose.scheduledFor)}
+                  </Text>
                 </View>
               </View>
-              <Pressable
-                style={styles.completeCareButton}
-                disabled={completingTaskId === task.id}
-                onPress={() => completeCareTask(task)}
-              >
-                <Text style={styles.completeCareButtonText}>
-                  {completingTaskId === task.id ? 'Saving…' : '✓ Mark complete'}
-                </Text>
-              </Pressable>
+
+              <View style={styles.medicationActionRow}>
+                <Pressable
+                  style={styles.givenButton}
+                  disabled={loggingDoseId === dose.schedule.id}
+                  onPress={() => logMedicationDose(dose, 'given')}
+                >
+                  <Text style={styles.givenButtonText}>
+                    {loggingDoseId === dose.schedule.id ? 'Saving…' : '✓ Given'}
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  style={styles.skipDoseButton}
+                  disabled={loggingDoseId === dose.schedule.id}
+                  onPress={() => logMedicationDose(dose, 'skipped')}
+                >
+                  <Text style={styles.skipDoseButtonText}>Skip</Text>
+                </Pressable>
+              </View>
             </View>
-          ))}
-
-        {dueSoonMedicationDoses.length === 0 &&
-        laterMedicationDoses.length === 0 &&
-        upcomingCareTasks.filter((task) => {
-          const due = new Date(task.due_at);
-          const end = new Date();
-          end.setHours(23, 59, 59, 999);
-          return due <= end;
-        }).length === 0 ? (
-          <View style={styles.successCard}>
-            <Text style={styles.successIcon}>✓</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.cardStrong}>No more care due today</Text>
-              <Text style={styles.cardMuted}>
-                Completed doses: {completedMedicationDoses.length}
-              </Text>
-            </View>
-          </View>
-        ) : null}
-
-        {(followUpEvents.length > 0 || upcomingCareTasks.length > 0) && (
-          <>
-            <Text style={styles.sectionTitle}>Coming Up</Text>
-
-            {followUpEvents.slice(0, 2).map((event) => (
-              <View key={`follow-${event.id}`} style={styles.careListCard}>
-                <Text style={styles.careListIcon}>🩺</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.cardStrong}>{event.title}</Text>
-                  <Text style={styles.cardMuted}>{event.detail}</Text>
-                </View>
-              </View>
-            ))}
-
-            {upcomingCareTasks.slice(0, 3).map((task) => (
-              <View key={`upcoming-${task.id}`} style={styles.careListCard}>
-                <Text style={styles.careListIcon}>📅</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.cardStrong}>{task.title}</Text>
-                  <Text style={styles.cardMuted}>{formatDueLabel(task.due_at)}</Text>
-                </View>
-              </View>
-            ))}
-          </>
+          ))
         )}
 
-        {(medicationsError !== '' || careError !== '') && (
+        {medicationsError !== '' && (
           <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Today could not fully update</Text>
-            <Text style={styles.errorText}>{medicationsError || careError}</Text>
+            <Text style={styles.errorTitle}>Medication error</Text>
+            <Text style={styles.errorText}>{medicationsError}</Text>
           </View>
         )}
 
@@ -1996,12 +1623,6 @@ export default function App() {
             icon="⚖️"
             label="Weight"
           />
-
-          <QuickAction
-            icon="📅"
-            label="Care task"
-            onPress={openCareScreen}
-          />
         </View>
 
         {timelineEvents.length > 0 && (
@@ -2010,11 +1631,6 @@ export default function App() {
             onPress={() => setScreen('timeline')}
           />
         )}
-
-        <SecondaryButton
-          title="Care & Reminders"
-          onPress={openCareScreen}
-        />
 
         <SecondaryButton
           title="Medications & Doses"
@@ -2226,135 +1842,6 @@ export default function App() {
         <SecondaryButton
           title="Cancel"
           onPress={() => setScreen('today')}
-        />
-      </Page>
-    );
-  }
-
-  if (screen === 'care') {
-    return (
-      <Page scroll>
-        <Header back={() => setScreen('today')} title="Care & Reminders" />
-
-        <View style={styles.medicationHero}>
-          <View style={styles.medicationHeroIcon}>
-            <Text style={styles.medicationHeroEmoji}>📅</Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.documentsTitle}>{petName}'s care</Text>
-            <Text style={styles.cardMuted}>
-              Add one-time care tasks and follow-ups. Pawso will surface them on Today when they matter.
-            </Text>
-          </View>
-        </View>
-
-        <PrimaryButton title="Add Care Task" onPress={() => setScreen('addCareTask')} />
-
-        {careError !== '' && (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Care task error</Text>
-            <Text style={styles.errorText}>{careError}</Text>
-          </View>
-        )}
-
-        {careLoading ? (
-          <View style={styles.documentsLoading}>
-            <ActivityIndicator size="large" color="#2F6F63" />
-            <Text style={styles.cardMuted}>Loading care tasks…</Text>
-          </View>
-        ) : activeCareTasks.length === 0 ? (
-          <View style={styles.emptyDocuments}>
-            <Text style={styles.bigEmoji}>📅</Text>
-            <Text style={styles.cardStrong}>No active care tasks</Text>
-            <Text style={styles.cardMuted}>
-              Add things like a urine recheck, water-filter change, nail trim, or vet follow-up.
-            </Text>
-          </View>
-        ) : (
-          activeCareTasks.map((task) => (
-            <View key={task.id} style={styles.documentCard}>
-              <View style={styles.medicationDueHeader}>
-                <View style={styles.medicationIcon}><Text>📅</Text></View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.documentCardTitle}>{task.title}</Text>
-                  <Text style={styles.documentCardMeta}>{formatDueLabel(task.due_at)}</Text>
-                </View>
-              </View>
-
-              {task.notes ? <Text style={styles.medicationInstructions}>{task.notes}</Text> : null}
-
-              <Pressable
-                style={styles.completeCareButton}
-                disabled={completingTaskId === task.id}
-                onPress={() => completeCareTask(task)}
-              >
-                <Text style={styles.completeCareButtonText}>
-                  {completingTaskId === task.id ? 'Saving…' : '✓ Mark complete'}
-                </Text>
-              </Pressable>
-            </View>
-          ))
-        )}
-
-        <SecondaryButton title="Back to Today" onPress={() => setScreen('today')} />
-      </Page>
-    );
-  }
-
-  if (screen === 'addCareTask') {
-    return (
-      <Page scroll keyboard>
-        <Header back={() => setScreen('care')} title="Add Care Task" />
-
-        <Text style={styles.pageTitle}>Add care task</Text>
-        <Text style={styles.pageSubtitle}>
-          Create a reminder for something you need to do for {petName}.
-        </Text>
-
-        <Label text="Task *" />
-        <Input
-          value={newCareTitle}
-          onChangeText={setNewCareTitle}
-          placeholder="e.g. Repeat urinalysis"
-        />
-
-        <Label text="Notes" />
-        <Input
-          value={newCareNotes}
-          onChangeText={setNewCareNotes}
-          placeholder="Optional details"
-          multiline
-        />
-
-        <Label text="Due date *" />
-        <Input
-          value={newCareDate}
-          onChangeText={setNewCareDate}
-          placeholder="YYYY-MM-DD"
-        />
-
-        <Label text="Due time *" />
-        <Input
-          value={newCareTime}
-          onChangeText={setNewCareTime}
-          placeholder="09:00"
-        />
-
-        <Text style={styles.safetyText}>
-          Pawso will remind you about this task but will not change veterinary instructions.
-        </Text>
-
-        {careError !== '' && (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Could not save care task</Text>
-            <Text style={styles.errorText}>{careError}</Text>
-          </View>
-        )}
-
-        <PrimaryButton
-          title={savingCareTask ? 'Saving Care Task…' : 'Save Care Task'}
-          disabled={savingCareTask || !newCareTitle.trim() || !newCareDate.trim()}
-          onPress={createCareTask}
         />
       </Page>
     );
@@ -3712,59 +3199,6 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 12,
     color: '#88938F',
-  },
-
-  attentionCard: {
-    backgroundColor: '#FFF4EE',
-    borderRadius: 18,
-    padding: 17,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E9C6B5',
-  },
-  attentionIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 13,
-    backgroundColor: '#F8DED2',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  attentionTitle: {
-    color: '#A85845',
-    fontSize: 12,
-    fontWeight: '800',
-    marginBottom: 3,
-  },
-  careNotes: {
-    marginTop: 8,
-    color: '#66736F',
-    lineHeight: 20,
-  },
-  careListCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 15,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#E5E9E7',
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'center',
-  },
-  careListIcon: {
-    fontSize: 19,
-  },
-  completeCareButton: {
-    marginTop: 14,
-    backgroundColor: '#2F6F63',
-    borderRadius: 13,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  completeCareButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
   },
 
   medicationDueCard: {
