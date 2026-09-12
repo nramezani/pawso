@@ -30,7 +30,7 @@ type PetSex = 'female' | 'male';
 type AlteredStatus = 'yes' | 'no' | 'notSure';
 
 type TimelineEvent = {
-  id: number;
+  id: string;
   date: string;
   type: string;
   title: string;
@@ -48,6 +48,7 @@ export default function App() {
   const [authError, setAuthError] = useState('');
   const [databaseError, setDatabaseError] = useState('');
   const [isSavingPet, setIsSavingPet] = useState(false);
+  const [isConfirmingExtraction, setIsConfirmingExtraction] = useState(false);
   const [currentPetId, setCurrentPetId] = useState<string | null>(null);
 
   const [petName, setPetName] = useState('');
@@ -169,7 +170,57 @@ export default function App() {
     setMedications(data.medications ?? '');
     setVetClinic(data.vet_clinic ?? '');
 
+    await loadTimeline(data.id);
     setScreen('today');
+  }
+
+  async function loadTimeline(petId: string) {
+    const { data, error } = await supabase
+      .from('medical_events')
+      .select(
+        'id, event_type, event_date, title, description, source_type, created_at'
+      )
+      .eq('pet_id', petId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+
+    const events: TimelineEvent[] = (data ?? []).map((event) => ({
+      id: event.id,
+      date:
+        event.event_date ||
+        (event.created_at
+          ? new Date(event.created_at).toLocaleDateString()
+          : 'Date not found'),
+      type:
+        event.event_type === 'follow_up'
+          ? 'Follow-up'
+          : event.event_type === 'vet_visit'
+          ? 'Veterinary visit'
+          : event.event_type || 'Health event',
+      title: event.title || 'Health event',
+      detail: event.description || '',
+      source:
+        event.source_type === 'veterinary_record'
+          ? 'Veterinary record'
+          : event.source_type === 'owner_note'
+          ? 'Owner note'
+          : 'Pawso',
+    }));
+
+    setTimelineEvents(events);
+  }
+
+  function normalizeEventDate(value: string) {
+    const trimmed = value.trim();
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      return trimmed;
+    }
+
+    return null;
   }
 
   function parseWeightKg(value: string) {
@@ -380,69 +431,82 @@ export default function App() {
   }
 }
 
-  function confirmExtraction() {
-    const newEvents: TimelineEvent[] = [
-      {
-        id: Date.now(),
-        date: visitDate || 'Date not found',
-        type: 'Veterinary visit',
-        title: finding || 'Veterinary record added',
-        detail: diagnosis || 'No assessment provided.',
-        source: documentName || 'Veterinary record',
-      },
-      {
-        id: Date.now() + 1,
-        date: visitDate || 'Date not found',
-        type: 'Follow-up',
-        title: 'Follow-up recommended',
-        detail: followUp || 'No follow-up found.',
-        source: documentName || 'Veterinary record',
-      },
-    ];
-
-    setTimelineEvents((current) => [
-      ...newEvents,
-      ...current,
-    ]);
-
-    if (
-      conditions.trim() === '' &&
-      diagnosis.trim() !== ''
-    ) {
-      setConditions(diagnosis);
+  async function confirmExtraction() {
+    if (!currentPetId) {
+      setDatabaseError(
+        'Pawso could not identify the current pet. Please return to the pet profile and try again.'
+      );
+      return;
     }
 
-    setScreen('timeline');
-  }
+    try {
+      setIsConfirmingExtraction(true);
+      setDatabaseError('');
 
-  if (!authReady) {
-    return (
-      <Page>
-        <View style={styles.processingPage}>
-          <ActivityIndicator size="large" color="#2F6F63" />
-          <Text style={styles.processingTitle}>Opening Pawso</Text>
-          <Text style={styles.processingStep}>Connecting securely…</Text>
-        </View>
-      </Page>
-    );
-  }
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
 
-  if (authError) {
-    return (
-      <Page>
-        <View style={styles.processingPage}>
-          <Text style={styles.processingTitle}>Pawso could not sign in</Text>
-          <Text style={styles.errorText}>{authError}</Text>
-          <PrimaryButton
-            title="Try Again"
-            onPress={() => {
-              setAuthReady(false);
-              initializeSupabase();
-            }}
-          />
-        </View>
-      </Page>
-    );
+      if (sessionError) {
+        throw sessionError;
+      }
+
+      if (!session?.user) {
+        throw new Error('Pawso session is not ready. Please try again.');
+      }
+
+      const eventDate = normalizeEventDate(visitDate);
+
+      const eventsToInsert = [
+        {
+          pet_id: currentPetId,
+          document_id: null,
+          user_id: session.user.id,
+          event_type: 'vet_visit',
+          event_date: eventDate,
+          title: finding.trim() || 'Veterinary record added',
+          description:
+            diagnosis.trim() ||
+            'Veterinary record confirmed by the owner.',
+          source_type: 'veterinary_record',
+        },
+      ];
+
+      if (followUp.trim()) {
+        eventsToInsert.push({
+          pet_id: currentPetId,
+          document_id: null,
+          user_id: session.user.id,
+          event_type: 'follow_up',
+          event_date: eventDate,
+          title: 'Follow-up recommended',
+          description: followUp.trim(),
+          source_type: 'veterinary_record',
+        });
+      }
+
+      const { error } = await supabase
+        .from('medical_events')
+        .insert(eventsToInsert);
+
+      if (error) {
+        throw error;
+      }
+
+      await loadTimeline(currentPetId);
+      setScreen('timeline');
+    } catch (error) {
+      console.log('Confirm extraction error:', error);
+
+      setDatabaseError(
+        error instanceof Error
+          ? error.message
+          : 'Could not save this health history.'
+      );
+    } finally {
+      setIsConfirmingExtraction(false);
+    }
   }
 
   if (screen === 'welcome') {
@@ -1023,6 +1087,18 @@ export default function App() {
           multiline
         />
 
+        {databaseError !== '' && (
+          <View style={styles.errorCard}>
+            <Text style={styles.errorTitle}>
+              Could not save health history
+            </Text>
+
+            <Text style={styles.errorText}>
+              {databaseError}
+            </Text>
+          </View>
+        )}
+
         <View style={styles.confirmCard}>
           <Text style={styles.cardStrong}>
             When you confirm
@@ -1046,7 +1122,12 @@ export default function App() {
         </View>
 
         <PrimaryButton
-          title="Confirm & Add to Health History"
+          title={
+            isConfirmingExtraction
+              ? 'Saving Health History…'
+              : 'Confirm & Add to Health History'
+          }
+          disabled={isConfirmingExtraction}
           onPress={confirmExtraction}
         />
 
