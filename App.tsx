@@ -747,16 +747,6 @@ export default function App() {
           )}
         </View>
 
-        <View style={styles.mockNotice}>
-          <Text style={styles.mockNoticeTitle}>
-            Development mode
-          </Text>
-
-          <Text style={styles.mockNoticeText}>
-            The file upload is real. The medical extraction below is still
-            mocked by the backend. Real AI document reading comes next.
-          </Text>
-        </View>
 
         <Text style={styles.sectionTitle}>
           Visit
