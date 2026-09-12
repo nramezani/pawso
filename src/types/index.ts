@@ -12,7 +12,8 @@ export type Screen =
   | 'addMedication'
   | 'care'
   | 'addCareTask'
-  | 'ask';
+  | 'ask'
+  | 'account';
 
 export type PetType = 'cat' | 'dog';
 export type PetSex = 'female' | 'male';

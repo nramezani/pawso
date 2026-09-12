@@ -25,6 +25,7 @@ export type RootStackParamList = {
   Medications: undefined;
   AddMedication: undefined;
   AddCareTask: undefined;
+  Account: undefined;
 };
 
 export const navigationRef = createNavigationContainerRef<RootStackParamList>();
@@ -87,6 +88,9 @@ export function navigateToScreen(screen: Screen) {
       return;
     case 'addCareTask':
       navigateWhenReady('AddCareTask');
+      return;
+    case 'account':
+      navigateWhenReady('Account');
       return;
   }
 }

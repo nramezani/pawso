@@ -10,6 +10,7 @@ export function PetsScreen() {
     selectPet,
     startAddPet,
     databaseError,
+    setScreen,
   } = usePawso();
 
   return (
@@ -67,6 +68,18 @@ export function PetsScreen() {
       </View>
 
       <PrimaryButton title="+ Add another pet" onPress={startAddPet} />
+
+      <View style={{ marginTop: 12 }}>
+        <Pressable
+          style={styles.infoCard}
+          onPress={() => setScreen('account')}
+        >
+          <Text style={styles.cardStrong}>👤 Account & household</Text>
+          <Text style={styles.cardMuted}>
+            Secure your Pawso account before inviting caregivers.
+          </Text>
+        </Pressable>
+      </View>
     </Page>
   );
 }

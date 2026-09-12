@@ -46,6 +46,13 @@ function usePawsoState() {
   const [apiStatus, setApiStatus] = useState('Checking backend...');
   const [authReady, setAuthReady] = useState(false);
   const [authError, setAuthError] = useState('');
+  const [accountEmail, setAccountEmail] = useState('');
+  const [accountIsAnonymous, setAccountIsAnonymous] = useState(true);
+  const [accountBusy, setAccountBusy] = useState(false);
+  const [accountMessage, setAccountMessage] = useState('');
+  const [accountError, setAccountError] = useState('');
+  const [secureAccountEmail, setSecureAccountEmail] = useState('');
+  const [secureAccountPassword, setSecureAccountPassword] = useState('');
   const [databaseError, setDatabaseError] = useState('');
   const [isSavingPet, setIsSavingPet] = useState(false);
   const [isConfirmingExtraction, setIsConfirmingExtraction] = useState(false);
@@ -248,6 +255,106 @@ function usePawsoState() {
     }
   }
 
+  function hydrateAccount(user: any) {
+    setAccountEmail(user?.email ?? '');
+    setAccountIsAnonymous(Boolean(user?.is_anonymous));
+    if (user?.email) {
+      setSecureAccountEmail(user.email);
+    }
+  }
+
+  async function secureAccount() {
+    try {
+      setAccountBusy(true);
+      setAccountError('');
+      setAccountMessage('');
+
+      const email = secureAccountEmail.trim().toLowerCase();
+      const password = secureAccountPassword;
+
+      if (!email || !email.includes('@')) {
+        throw new Error('Enter a valid email address.');
+      }
+
+      if (password.length < 8) {
+        throw new Error('Use a password with at least 8 characters.');
+      }
+
+      const {
+        data: { user: currentUser },
+        error: currentUserError,
+      } = await supabase.auth.getUser();
+
+      if (currentUserError) throw currentUserError;
+      if (!currentUser) throw new Error('No active Pawso user was found.');
+
+      const originalUserId = currentUser.id;
+
+      const { data, error } = await supabase.auth.updateUser({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+      if (!data.user) throw new Error('Pawso could not update the account.');
+
+      if (data.user.id !== originalUserId) {
+        throw new Error('Account upgrade returned an unexpected user ID.');
+      }
+
+      hydrateAccount(data.user);
+      setSecureAccountPassword('');
+
+      if (data.user.email_confirmed_at) {
+        setAccountMessage('Your Pawso account is secured.');
+      } else {
+        setAccountMessage(
+          'Account details saved. Check your email if Supabase asks you to verify the address.'
+        );
+      }
+    } catch (error) {
+      console.log('Secure account error:', error);
+      setAccountError(
+        error instanceof Error
+          ? error.message
+          : 'Could not secure your Pawso account.'
+      );
+    } finally {
+      setAccountBusy(false);
+    }
+  }
+
+  async function signOutAccount() {
+    try {
+      setAccountBusy(true);
+      setAccountError('');
+      setAccountMessage('');
+
+      if (accountIsAnonymous) {
+        throw new Error(
+          'Secure the anonymous account before signing out so you do not lose access to its pet records.'
+        );
+      }
+
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+
+      setAccountEmail('');
+      setAccountIsAnonymous(true);
+      setPets([]);
+      setCurrentPetId(null);
+      setScreen('welcome');
+      setAccountMessage('Signed out.');
+    } catch (error) {
+      console.log('Sign out error:', error);
+      setAccountError(
+        error instanceof Error ? error.message : 'Could not sign out.'
+      );
+    } finally {
+      setAccountBusy(false);
+    }
+  }
+
   async function initializeSupabase() {
     try {
       setAuthError('');
@@ -277,6 +384,7 @@ function usePawsoState() {
         throw new Error('Could not create a Pawso session.');
       }
 
+      hydrateAccount(activeSession.user);
       await loadExistingPet(activeSession.user.id);
     } catch (error) {
       console.log('Supabase initialization error:', error);
@@ -1791,6 +1899,17 @@ function usePawsoState() {
   return {
     setScreen,
     apiStatus,
+    accountEmail,
+    accountIsAnonymous,
+    accountBusy,
+    accountMessage,
+    accountError,
+    secureAccountEmail,
+    setSecureAccountEmail,
+    secureAccountPassword,
+    setSecureAccountPassword,
+    secureAccount,
+    signOutAccount,
     setApiStatus,
     authReady,
     setAuthReady,
