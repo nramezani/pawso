@@ -30,8 +30,7 @@ type Screen =
   | 'medications'
   | 'addMedication'
   | 'care'
-  | 'addCareTask'
-  | 'ask';
+  | 'addCareTask';
 
 type PetType = 'cat' | 'dog';
 type PetSex = 'female' | 'male';
@@ -102,21 +101,6 @@ type TaskCompletion = {
   id: string;
   task_id: string;
   completed_at: string;
-};
-
-type AskSource = {
-  id: string;
-  label: string;
-  source_type: string;
-  date?: string | null;
-  text: string;
-};
-
-type AskAnswer = {
-  answer: string;
-  source_ids: string[];
-  answer_type: 'record_summary' | 'record_lookup' | 'general_guidance' | 'insufficient_information';
-  safety_category: 'normal' | 'medical_caution' | 'urgent';
 };
 
 const API_BASE_URL = 'http://192.168.1.85:8000';
@@ -193,12 +177,6 @@ export default function App() {
   const [newCareNotes, setNewCareNotes] = useState('');
   const [newCareDate, setNewCareDate] = useState('');
   const [newCareTime, setNewCareTime] = useState('09:00');
-
-  const [askQuestion, setAskQuestion] = useState('');
-  const [askAnswer, setAskAnswer] = useState<AskAnswer | null>(null);
-  const [askSources, setAskSources] = useState<AskSource[]>([]);
-  const [askLoading, setAskLoading] = useState(false);
-  const [askError, setAskError] = useState('');
 
   useEffect(() => {
     checkBackend();
@@ -334,122 +312,6 @@ export default function App() {
     }));
 
     setTimelineEvents(events);
-  }
-
-  async function askPawso(questionOverride?: string) {
-    if (!currentPetId) return;
-
-    const question = (questionOverride ?? askQuestion).trim();
-    if (!question) return;
-
-    try {
-      setAskLoading(true);
-      setAskError('');
-      setAskAnswer(null);
-
-      const sources: AskSource[] = [];
-
-      for (const event of timelineEvents) {
-        sources.push({
-          id: `event:${event.id}`,
-          label: event.title,
-          source_type: event.source,
-          date: event.date,
-          text: `${event.type}. ${event.title}. ${event.detail}`.trim(),
-        });
-      }
-
-      for (const medication of medicationList) {
-        const scheduleTimes = medicationSchedules
-          .filter((schedule) => schedule.medication_id === medication.id)
-          .map((schedule) => schedule.time_of_day)
-          .join(', ');
-
-        sources.push({
-          id: `medication:${medication.id}`,
-          label: medication.name,
-          source_type: 'Confirmed medication record',
-          text: [
-            medication.name,
-            medication.dose,
-            medication.unit,
-            medication.instructions,
-            scheduleTimes ? `Schedule: ${scheduleTimes}` : null,
-          ]
-            .filter(Boolean)
-            .join(' · '),
-        });
-      }
-
-      for (const task of careTasks) {
-        sources.push({
-          id: `care:${task.id}`,
-          label: task.title,
-          source_type: 'Confirmed care task',
-          date: task.due_at,
-          text: [
-            task.title,
-            task.notes,
-            `Due: ${new Date(task.due_at).toLocaleString()}`,
-          ]
-            .filter(Boolean)
-            .join(' · '),
-        });
-      }
-
-      setAskSources(sources);
-
-      const response = await fetch(`${API_BASE_URL}/api/v1/ask`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          pet: {
-            id: currentPetId,
-            name: petName,
-            species: petType,
-            breed: breed || null,
-            conditions: conditions || null,
-            allergies: allergies || null,
-          },
-          question,
-          sources,
-        }),
-      });
-
-      const body = await response.json();
-
-      if (!response.ok) {
-        throw new Error(body.detail || body.message || 'Ask Pawso request failed.');
-      }
-
-      setAskQuestion(question);
-      setAskAnswer(body as AskAnswer);
-    } catch (error) {
-      console.log('Ask Pawso error:', error);
-      setAskError(
-        error instanceof Error ? error.message : 'Pawso could not answer right now.'
-      );
-    } finally {
-      setAskLoading(false);
-    }
-  }
-
-  function openAskScreen() {
-    setAskError('');
-    setScreen('ask');
-  }
-
-  function getAskSourceLabel(sourceId: string) {
-    const source = askSources.find((item) => item.id === sourceId);
-    if (!source) return sourceId;
-
-    const dateLabel = source.date
-      ? ` · ${new Date(source.date).toLocaleDateString()}`
-      : '';
-
-    return `${source.label}${dateLabel}`;
   }
 
   async function loadCareData(petId: string) {
@@ -2090,20 +1952,20 @@ export default function App() {
           </Text>
 
           <Text style={styles.aiTitle}>
-            Ask about {petName}
+            Build {petName}'s health timeline
           </Text>
 
           <Text style={styles.aiText}>
-            Pawso answers from {petName}'s confirmed health timeline,
-            medications, and care records.
+            Upload a veterinary record. Pawso will send the file to the
+            backend and organize the returned information for your review.
           </Text>
 
           <Pressable
             style={styles.outlineButton}
-            onPress={openAskScreen}
+            onPress={pickVetRecord}
           >
             <Text style={styles.outlineButtonText}>
-              ✨ Ask Pawso
+              📄 Upload vet record
             </Text>
           </Pressable>
         </View>
@@ -2140,12 +2002,6 @@ export default function App() {
             label="Care task"
             onPress={openCareScreen}
           />
-
-          <QuickAction
-            icon="✨"
-            label="Ask Pawso"
-            onPress={openAskScreen}
-          />
         </View>
 
         {timelineEvents.length > 0 && (
@@ -2154,11 +2010,6 @@ export default function App() {
             onPress={() => setScreen('timeline')}
           />
         )}
-
-        <SecondaryButton
-          title={`Ask Pawso about ${petName}`}
-          onPress={openAskScreen}
-        />
 
         <SecondaryButton
           title="Care & Reminders"
@@ -2179,134 +2030,6 @@ export default function App() {
           title={`View ${petName}'s profile`}
           onPress={() => setScreen('petProfile')}
         />
-      </Page>
-    );
-  }
-
-  if (screen === 'ask') {
-    const suggestedQuestions = [
-      `Summarize ${petName}'s health history.`,
-      'What follow-up did the vet recommend?',
-      `What medications are currently recorded for ${petName}?`,
-    ];
-
-    return (
-      <Page scroll keyboard>
-        <Header back={() => setScreen('today')} title="Ask Pawso" />
-
-        <View style={styles.askHero}>
-          <View style={styles.askHeroIcon}>
-            <Text style={styles.askHeroEmoji}>✨</Text>
-          </View>
-
-          <View style={{ flex: 1 }}>
-            <Text style={styles.documentsTitle}>Ask about {petName}</Text>
-            <Text style={styles.cardMuted}>
-              Answers are grounded in confirmed Pawso records. They are not a veterinary diagnosis.
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.askPrivacyCard}>
-          <Text style={styles.askPrivacyTitle}>Using {petName}'s Pawso memory</Text>
-          <Text style={styles.cardMuted}>
-            {timelineEvents.length} health events · {medicationList.length} medications · {careTasks.length} care tasks
-          </Text>
-        </View>
-
-        <Text style={styles.sectionTitle}>Try asking</Text>
-
-        <View style={styles.askSuggestions}>
-          {suggestedQuestions.map((question) => (
-            <Pressable
-              key={question}
-              style={styles.askSuggestionChip}
-              disabled={askLoading}
-              onPress={() => {
-                setAskQuestion(question);
-                askPawso(question);
-              }}
-            >
-              <Text style={styles.askSuggestionText}>{question}</Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <Text style={styles.sectionTitle}>Your question</Text>
-
-        <Input
-          value={askQuestion}
-          onChangeText={setAskQuestion}
-          placeholder={`Ask something about ${petName}…`}
-          multiline
-        />
-
-        <PrimaryButton
-          title={askLoading ? 'Checking Pawso Memory…' : 'Ask Pawso'}
-          disabled={askLoading || !askQuestion.trim()}
-          onPress={() => askPawso()}
-        />
-
-        {askError !== '' && (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Pawso could not answer</Text>
-            <Text style={styles.errorText}>{askError}</Text>
-          </View>
-        )}
-
-        {askLoading && (
-          <View style={styles.askLoadingCard}>
-            <ActivityIndicator size="small" color="#2F6F63" />
-            <Text style={styles.cardMuted}>
-              Reading confirmed records for {petName}…
-            </Text>
-          </View>
-        )}
-
-        {askAnswer && !askLoading && (
-          <View style={styles.askAnswerCard}>
-            <View style={styles.askAnswerHeader}>
-              <Text style={styles.askAnswerBadge}>PAWSO AI</Text>
-              <Text style={styles.askGroundedBadge}>Grounded in records</Text>
-            </View>
-
-            {askAnswer.safety_category === 'urgent' && (
-              <View style={styles.askUrgentCard}>
-                <Text style={styles.askUrgentTitle}>Urgent safety note</Text>
-                <Text style={styles.askUrgentText}>
-                  If {petName} is having an emergency or rapidly worsening symptoms, contact a veterinarian or emergency clinic now.
-                </Text>
-              </View>
-            )}
-
-            <Text style={styles.askAnswerText}>{askAnswer.answer}</Text>
-
-            {askAnswer.source_ids.length > 0 ? (
-              <>
-                <Text style={styles.askSourcesTitle}>Sources used</Text>
-
-                {askAnswer.source_ids.map((sourceId) => (
-                  <View key={sourceId} style={styles.askSourceRow}>
-                    <Text style={styles.askSourceIcon}>↗</Text>
-                    <Text style={styles.askSourceText}>
-                      {getAskSourceLabel(sourceId)}
-                    </Text>
-                  </View>
-                ))}
-              </>
-            ) : (
-              <Text style={styles.askNoSources}>
-                Pawso did not find a confirmed record that directly supports this answer.
-              </Text>
-            )}
-
-            <Text style={styles.safetyText}>
-              Pawso can organize and summarize records, but it cannot diagnose or change treatment.
-            </Text>
-          </View>
-        )}
-
-        <SecondaryButton title="Back to Today" onPress={() => setScreen('today')} />
       </Page>
     );
   }
@@ -3989,136 +3712,6 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 12,
     color: '#88938F',
-  },
-
-  askHero: {
-    marginTop: 28,
-    flexDirection: 'row',
-    gap: 14,
-    alignItems: 'center',
-  },
-  askHeroIcon: {
-    width: 54,
-    height: 54,
-    borderRadius: 18,
-    backgroundColor: '#E2F0EB',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  askHeroEmoji: {
-    fontSize: 26,
-  },
-  askPrivacyCard: {
-    marginTop: 18,
-    backgroundColor: '#F4F8F6',
-    borderRadius: 16,
-    padding: 15,
-    borderWidth: 1,
-    borderColor: '#DFEAE5',
-  },
-  askPrivacyTitle: {
-    color: '#284D45',
-    fontWeight: '800',
-    marginBottom: 4,
-  },
-  askSuggestions: {
-    gap: 9,
-  },
-  askSuggestionChip: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#DCE6E2',
-    borderRadius: 14,
-    paddingVertical: 11,
-    paddingHorizontal: 13,
-  },
-  askSuggestionText: {
-    color: '#385B53',
-    fontWeight: '700',
-    lineHeight: 19,
-  },
-  askLoadingCard: {
-    marginTop: 16,
-    padding: 16,
-    borderRadius: 16,
-    backgroundColor: '#F4F8F6',
-    flexDirection: 'row',
-    gap: 10,
-    alignItems: 'center',
-  },
-  askAnswerCard: {
-    marginTop: 18,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: '#DCE6E2',
-  },
-  askAnswerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 14,
-  },
-  askAnswerBadge: {
-    color: '#2F6F63',
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 0.8,
-  },
-  askGroundedBadge: {
-    color: '#59736C',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  askAnswerText: {
-    color: '#26332F',
-    fontSize: 16,
-    lineHeight: 24,
-  },
-  askSourcesTitle: {
-    marginTop: 18,
-    marginBottom: 8,
-    color: '#284D45',
-    fontWeight: '800',
-  },
-  askSourceRow: {
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'flex-start',
-    marginBottom: 7,
-  },
-  askSourceIcon: {
-    color: '#2F6F63',
-    fontWeight: '900',
-  },
-  askSourceText: {
-    flex: 1,
-    color: '#5E6E69',
-    lineHeight: 19,
-  },
-  askNoSources: {
-    marginTop: 16,
-    color: '#866B5E',
-    lineHeight: 20,
-  },
-  askUrgentCard: {
-    marginBottom: 14,
-    backgroundColor: '#FFF1ED',
-    borderRadius: 14,
-    padding: 13,
-    borderWidth: 1,
-    borderColor: '#E8C1B5',
-  },
-  askUrgentTitle: {
-    color: '#9A4F3D',
-    fontWeight: '900',
-    marginBottom: 4,
-  },
-  askUrgentText: {
-    color: '#74483C',
-    lineHeight: 20,
   },
 
   attentionCard: {
