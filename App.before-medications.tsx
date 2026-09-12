@@ -26,9 +26,7 @@ type Screen =
   | 'processing'
   | 'review'
   | 'timeline'
-  | 'documents'
-  | 'medications'
-  | 'addMedication';
+  | 'documents';
 
 type PetType = 'cat' | 'dog';
 type PetSex = 'female' | 'male';
@@ -52,38 +50,6 @@ type PetDocument = {
   storage_path: string | null;
   created_at: string;
   linked_events: number;
-};
-
-type Medication = {
-  id: string;
-  name: string;
-  dose: string | null;
-  unit: string | null;
-  instructions: string | null;
-  is_active: boolean;
-};
-
-type MedicationSchedule = {
-  id: string;
-  medication_id: string;
-  time_of_day: string;
-};
-
-type MedicationLog = {
-  id: string;
-  medication_id: string;
-  schedule_id: string | null;
-  scheduled_for: string;
-  status: 'given' | 'skipped' | 'missed';
-  logged_at: string;
-  note: string | null;
-};
-
-type TodayMedicationDose = {
-  medication: Medication;
-  schedule: MedicationSchedule;
-  scheduledFor: Date;
-  log: MedicationLog | null;
 };
 
 const API_BASE_URL = 'http://192.168.1.85:8000';
@@ -133,21 +99,6 @@ export default function App() {
   const [documentsLoading, setDocumentsLoading] = useState(false);
   const [documentsError, setDocumentsError] = useState('');
   const [openingDocumentId, setOpeningDocumentId] = useState<string | null>(null);
-
-  const [medicationList, setMedicationList] = useState<Medication[]>([]);
-  const [medicationSchedules, setMedicationSchedules] = useState<MedicationSchedule[]>([]);
-  const [medicationLogs, setMedicationLogs] = useState<MedicationLog[]>([]);
-  const [medicationsLoading, setMedicationsLoading] = useState(false);
-  const [medicationsError, setMedicationsError] = useState('');
-  const [isSavingMedication, setIsSavingMedication] = useState(false);
-  const [loggingDoseId, setLoggingDoseId] = useState<string | null>(null);
-
-  const [newMedicationName, setNewMedicationName] = useState('');
-  const [newMedicationDose, setNewMedicationDose] = useState('');
-  const [newMedicationUnit, setNewMedicationUnit] = useState('');
-  const [newMedicationInstructions, setNewMedicationInstructions] = useState('');
-  const [newMedicationTime1, setNewMedicationTime1] = useState('08:00');
-  const [newMedicationTime2, setNewMedicationTime2] = useState('');
 
   useEffect(() => {
     checkBackend();
@@ -241,7 +192,6 @@ export default function App() {
     setVetClinic(data.vet_clinic ?? '');
 
     await loadTimeline(data.id);
-    await loadMedicationData(data.id);
     setScreen('today');
   }
 
@@ -282,241 +232,6 @@ export default function App() {
     }));
 
     setTimelineEvents(events);
-  }
-
-  async function loadMedicationData(petId: string) {
-    try {
-      setMedicationsLoading(true);
-      setMedicationsError('');
-
-      const { data: meds, error: medsError } = await supabase
-        .from('medications')
-        .select('id, name, dose, unit, instructions, is_active')
-        .eq('pet_id', petId)
-        .eq('is_active', true)
-        .order('created_at', { ascending: true });
-
-      if (medsError) throw medsError;
-
-      const medicationIds = (meds ?? []).map((med) => med.id);
-
-      let schedules: MedicationSchedule[] = [];
-      let logs: MedicationLog[] = [];
-
-      if (medicationIds.length > 0) {
-        const { data: scheduleRows, error: schedulesError } = await supabase
-          .from('medication_schedules')
-          .select('id, medication_id, time_of_day')
-          .in('medication_id', medicationIds)
-          .order('time_of_day', { ascending: true });
-
-        if (schedulesError) throw schedulesError;
-        schedules = (scheduleRows ?? []) as MedicationSchedule[];
-
-        const start = new Date();
-        start.setHours(0, 0, 0, 0);
-
-        const end = new Date(start);
-        end.setDate(end.getDate() + 1);
-
-        const { data: logRows, error: logsError } = await supabase
-          .from('medication_logs')
-          .select('id, medication_id, schedule_id, scheduled_for, status, logged_at, note')
-          .eq('pet_id', petId)
-          .gte('scheduled_for', start.toISOString())
-          .lt('scheduled_for', end.toISOString());
-
-        if (logsError) throw logsError;
-        logs = (logRows ?? []) as MedicationLog[];
-      }
-
-      setMedicationList((meds ?? []) as Medication[]);
-      setMedicationSchedules(schedules);
-      setMedicationLogs(logs);
-    } catch (error) {
-      console.log('Load medication data error:', error);
-      setMedicationsError(
-        error instanceof Error ? error.message : 'Could not load medications.'
-      );
-    } finally {
-      setMedicationsLoading(false);
-    }
-  }
-
-  function buildScheduledDate(timeOfDay: string) {
-    const [hours, minutes] = timeOfDay.split(':').map(Number);
-    const date = new Date();
-    date.setHours(hours || 0, minutes || 0, 0, 0);
-    return date;
-  }
-
-  function getTodayMedicationDoses(): TodayMedicationDose[] {
-    const doses: TodayMedicationDose[] = [];
-
-    for (const schedule of medicationSchedules) {
-      const medication = medicationList.find(
-        (item) => item.id === schedule.medication_id
-      );
-
-      if (!medication) continue;
-
-      const scheduledFor = buildScheduledDate(schedule.time_of_day);
-      const log = medicationLogs.find(
-        (item) => item.schedule_id === schedule.id
-      ) ?? null;
-
-      doses.push({
-        medication,
-        schedule,
-        scheduledFor,
-        log,
-      });
-    }
-
-    return doses.sort(
-      (a, b) => a.scheduledFor.getTime() - b.scheduledFor.getTime()
-    );
-  }
-
-  function formatMedicationTime(date: Date) {
-    return date.toLocaleTimeString([], {
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-  }
-
-  async function openMedicationsScreen() {
-    if (!currentPetId) return;
-    await loadMedicationData(currentPetId);
-    setScreen('medications');
-  }
-
-  async function createMedication() {
-    if (!currentPetId || !newMedicationName.trim() || !newMedicationTime1.trim()) {
-      return;
-    }
-
-    try {
-      setIsSavingMedication(true);
-      setMedicationsError('');
-
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession();
-
-      if (sessionError) throw sessionError;
-      if (!session?.user) throw new Error('Pawso session is not ready.');
-
-      const { data: medicationRow, error: medicationError } = await supabase
-        .from('medications')
-        .insert({
-          pet_id: currentPetId,
-          user_id: session.user.id,
-          name: newMedicationName.trim(),
-          dose: newMedicationDose.trim() || null,
-          unit: newMedicationUnit.trim() || null,
-          instructions: newMedicationInstructions.trim() || null,
-          is_active: true,
-        })
-        .select('id')
-        .single();
-
-      if (medicationError) throw medicationError;
-
-      const times = [newMedicationTime1.trim(), newMedicationTime2.trim()]
-        .filter(Boolean)
-        .filter((value, index, array) => array.indexOf(value) === index);
-
-      const scheduleRows = times.map((time) => ({
-        medication_id: medicationRow.id,
-        pet_id: currentPetId,
-        user_id: session.user.id,
-        time_of_day: time,
-      }));
-
-      const { error: scheduleError } = await supabase
-        .from('medication_schedules')
-        .insert(scheduleRows);
-
-      if (scheduleError) throw scheduleError;
-
-      setNewMedicationName('');
-      setNewMedicationDose('');
-      setNewMedicationUnit('');
-      setNewMedicationInstructions('');
-      setNewMedicationTime1('08:00');
-      setNewMedicationTime2('');
-
-      await loadMedicationData(currentPetId);
-      setScreen('medications');
-    } catch (error) {
-      console.log('Create medication error:', error);
-      setMedicationsError(
-        error instanceof Error ? error.message : 'Could not save this medication.'
-      );
-    } finally {
-      setIsSavingMedication(false);
-    }
-  }
-
-  async function logMedicationDose(
-    dose: TodayMedicationDose,
-    status: 'given' | 'skipped'
-  ) {
-    if (!currentPetId) return;
-
-    try {
-      setLoggingDoseId(dose.schedule.id);
-      setMedicationsError('');
-
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession();
-
-      if (sessionError) throw sessionError;
-      if (!session?.user) throw new Error('Pawso session is not ready.');
-
-      const existingLog = medicationLogs.find(
-        (item) => item.schedule_id === dose.schedule.id
-      );
-
-      if (existingLog) {
-        const { error } = await supabase
-          .from('medication_logs')
-          .update({
-            status,
-            logged_at: new Date().toISOString(),
-          })
-          .eq('id', existingLog.id);
-
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('medication_logs')
-          .insert({
-            medication_id: dose.medication.id,
-            schedule_id: dose.schedule.id,
-            pet_id: currentPetId,
-            user_id: session.user.id,
-            scheduled_for: dose.scheduledFor.toISOString(),
-            status,
-            logged_at: new Date().toISOString(),
-          });
-
-        if (error) throw error;
-      }
-
-      await loadMedicationData(currentPetId);
-    } catch (error) {
-      console.log('Log medication dose error:', error);
-      setMedicationsError(
-        error instanceof Error ? error.message : 'Could not update this dose.'
-      );
-    } finally {
-      setLoggingDoseId(null);
-    }
   }
 
   async function loadDocuments(petId: string) {
@@ -1133,14 +848,6 @@ export default function App() {
     }
   }
 
-  const todayMedicationDoses = getTodayMedicationDoses();
-  const pendingMedicationDoses = todayMedicationDoses.filter(
-    (dose) => !dose.log
-  );
-  const completedMedicationDoses = todayMedicationDoses.filter(
-    (dose) => dose.log
-  );
-
   if (screen === 'welcome') {
     return (
       <Page>
@@ -1502,72 +1209,19 @@ export default function App() {
 
         <Text style={styles.sectionTitle}>Today</Text>
 
-        {medicationsLoading ? (
-          <View style={styles.successCard}>
-            <ActivityIndicator size="small" color="#2F6F63" />
-            <Text style={styles.cardMuted}>Loading today's care…</Text>
+        <View style={styles.successCard}>
+          <Text style={styles.successIcon}>✓</Text>
+
+          <View style={{ flex: 1 }}>
+            <Text style={styles.cardStrong}>
+              You're all caught up
+            </Text>
+
+            <Text style={styles.cardMuted}>
+              No care tasks are due yet.
+            </Text>
           </View>
-        ) : pendingMedicationDoses.length === 0 ? (
-          <View style={styles.successCard}>
-            <Text style={styles.successIcon}>✓</Text>
-
-            <View style={{ flex: 1 }}>
-              <Text style={styles.cardStrong}>You're all caught up</Text>
-              <Text style={styles.cardMuted}>
-                {todayMedicationDoses.length > 0
-                  ? 'All medication doses are logged for today.'
-                  : 'No care tasks are due yet.'}
-              </Text>
-            </View>
-          </View>
-        ) : (
-          pendingMedicationDoses.map((dose) => (
-            <View key={dose.schedule.id} style={styles.medicationDueCard}>
-              <View style={styles.medicationDueHeader}>
-                <View style={styles.medicationIcon}>
-                  <Text>💊</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.cardStrong}>{dose.medication.name}</Text>
-                  <Text style={styles.cardMuted}>
-                    {[dose.medication.dose, dose.medication.unit]
-                      .filter(Boolean)
-                      .join(' ') || 'Dose not specified'}
-                    {' · '}
-                    {formatMedicationTime(dose.scheduledFor)}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.medicationActionRow}>
-                <Pressable
-                  style={styles.givenButton}
-                  disabled={loggingDoseId === dose.schedule.id}
-                  onPress={() => logMedicationDose(dose, 'given')}
-                >
-                  <Text style={styles.givenButtonText}>
-                    {loggingDoseId === dose.schedule.id ? 'Saving…' : '✓ Given'}
-                  </Text>
-                </Pressable>
-
-                <Pressable
-                  style={styles.skipDoseButton}
-                  disabled={loggingDoseId === dose.schedule.id}
-                  onPress={() => logMedicationDose(dose, 'skipped')}
-                >
-                  <Text style={styles.skipDoseButtonText}>Skip</Text>
-                </Pressable>
-              </View>
-            </View>
-          ))
-        )}
-
-        {medicationsError !== '' && (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Medication error</Text>
-            <Text style={styles.errorText}>{medicationsError}</Text>
-          </View>
-        )}
+        </View>
 
         <Text style={styles.sectionTitle}>
           Pawso AI
@@ -1605,7 +1259,6 @@ export default function App() {
           <QuickAction
             icon="💊"
             label="Medication"
-            onPress={openMedicationsScreen}
           />
 
           <QuickAction
@@ -1631,11 +1284,6 @@ export default function App() {
             onPress={() => setScreen('timeline')}
           />
         )}
-
-        <SecondaryButton
-          title="Medications & Doses"
-          onPress={openMedicationsScreen}
-        />
 
         <SecondaryButton
           title="Documents & Medical Records"
@@ -1842,180 +1490,6 @@ export default function App() {
         <SecondaryButton
           title="Cancel"
           onPress={() => setScreen('today')}
-        />
-      </Page>
-    );
-  }
-
-  if (screen === 'medications') {
-    return (
-      <Page scroll>
-        <Header back={() => setScreen('today')} title="Medications" />
-
-        <View style={styles.medicationHero}>
-          <View style={styles.medicationHeroIcon}>
-            <Text style={styles.medicationHeroEmoji}>💊</Text>
-          </View>
-
-          <View style={{ flex: 1 }}>
-            <Text style={styles.documentsTitle}>{petName}'s medications</Text>
-            <Text style={styles.cardMuted}>
-              Track medication schedules and log each dose. Pawso never changes a dose or schedule on its own.
-            </Text>
-          </View>
-        </View>
-
-        <PrimaryButton
-          title="Add Medication"
-          onPress={() => setScreen('addMedication')}
-        />
-
-        {medicationsError !== '' && (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Medication error</Text>
-            <Text style={styles.errorText}>{medicationsError}</Text>
-          </View>
-        )}
-
-        {medicationsLoading ? (
-          <View style={styles.documentsLoading}>
-            <ActivityIndicator size="large" color="#2F6F63" />
-            <Text style={styles.cardMuted}>Loading medications…</Text>
-          </View>
-        ) : medicationList.length === 0 ? (
-          <View style={styles.emptyDocuments}>
-            <Text style={styles.bigEmoji}>💊</Text>
-            <Text style={styles.cardStrong}>No medications yet</Text>
-            <Text style={styles.cardMuted}>
-              Add a medication and its daily time to make it appear on Today.
-            </Text>
-          </View>
-        ) : (
-          medicationList.map((medication) => {
-            const schedules = medicationSchedules.filter(
-              (schedule) => schedule.medication_id === medication.id
-            );
-
-            return (
-              <View key={medication.id} style={styles.documentCard}>
-                <View style={styles.medicationDueHeader}>
-                  <View style={styles.medicationIcon}>
-                    <Text>💊</Text>
-                  </View>
-
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.documentCardTitle}>{medication.name}</Text>
-                    <Text style={styles.documentCardMeta}>
-                      {[medication.dose, medication.unit].filter(Boolean).join(' ') ||
-                        'Dose not specified'}
-                    </Text>
-                  </View>
-                </View>
-
-                {medication.instructions ? (
-                  <Text style={styles.medicationInstructions}>
-                    {medication.instructions}
-                  </Text>
-                ) : null}
-
-                <View style={styles.scheduleWrap}>
-                  {schedules.map((schedule) => (
-                    <View key={schedule.id} style={styles.scheduleChip}>
-                      <Text style={styles.scheduleChipText}>
-                        {formatMedicationTime(buildScheduledDate(schedule.time_of_day))}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            );
-          })
-        )}
-
-        <SecondaryButton title="Back to Today" onPress={() => setScreen('today')} />
-      </Page>
-    );
-  }
-
-  if (screen === 'addMedication') {
-    return (
-      <Page scroll keyboard>
-        <Header back={() => setScreen('medications')} title="Add Medication" />
-
-        <Text style={styles.pageTitle}>Add medication</Text>
-        <Text style={styles.pageSubtitle}>
-          Enter the medication exactly as prescribed. Pawso will only schedule what you confirm here.
-        </Text>
-
-        <Label text="Medication name *" />
-        <Input
-          value={newMedicationName}
-          onChangeText={setNewMedicationName}
-          placeholder="e.g. Clavamox"
-        />
-
-        <View style={styles.medicationDoseRow}>
-          <View style={{ flex: 1 }}>
-            <Label text="Dose" />
-            <Input
-              value={newMedicationDose}
-              onChangeText={setNewMedicationDose}
-              placeholder="e.g. 1"
-            />
-          </View>
-
-          <View style={{ flex: 1 }}>
-            <Label text="Unit" />
-            <Input
-              value={newMedicationUnit}
-              onChangeText={setNewMedicationUnit}
-              placeholder="e.g. mL"
-            />
-          </View>
-        </View>
-
-        <Label text="Instructions" />
-        <Input
-          value={newMedicationInstructions}
-          onChangeText={setNewMedicationInstructions}
-          placeholder="e.g. Give with food"
-          multiline
-        />
-
-        <Text style={styles.sectionTitle}>Daily schedule</Text>
-        <Text style={styles.cardMuted}>
-          Use 24-hour time for now, for example 08:00 or 20:00.
-        </Text>
-
-        <Label text="Time 1 *" />
-        <Input
-          value={newMedicationTime1}
-          onChangeText={setNewMedicationTime1}
-          placeholder="08:00"
-        />
-
-        <Label text="Time 2 (optional)" />
-        <Input
-          value={newMedicationTime2}
-          onChangeText={setNewMedicationTime2}
-          placeholder="20:00"
-        />
-
-        {medicationsError !== '' && (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Could not save medication</Text>
-            <Text style={styles.errorText}>{medicationsError}</Text>
-          </View>
-        )}
-
-        <PrimaryButton
-          title={isSavingMedication ? 'Saving Medication…' : 'Save Medication'}
-          disabled={
-            isSavingMedication ||
-            !newMedicationName.trim() ||
-            !newMedicationTime1.trim()
-          }
-          onPress={createMedication}
         />
       </Page>
     );
@@ -3199,99 +2673,6 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 12,
     color: '#88938F',
-  },
-
-  medicationDueCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 17,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E5E9E7',
-  },
-  medicationDueHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  medicationIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 13,
-    backgroundColor: '#E2F0EB',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  medicationActionRow: {
-    marginTop: 15,
-    flexDirection: 'row',
-    gap: 10,
-  },
-  givenButton: {
-    flex: 1,
-    backgroundColor: '#2F6F63',
-    paddingVertical: 12,
-    borderRadius: 13,
-    alignItems: 'center',
-  },
-  givenButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-  },
-  skipDoseButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 13,
-    borderWidth: 1,
-    borderColor: '#D8E0DD',
-    alignItems: 'center',
-  },
-  skipDoseButtonText: {
-    color: '#66736F',
-    fontWeight: '800',
-  },
-  medicationHero: {
-    marginTop: 28,
-    flexDirection: 'row',
-    gap: 14,
-    alignItems: 'center',
-  },
-  medicationHeroIcon: {
-    width: 54,
-    height: 54,
-    borderRadius: 16,
-    backgroundColor: '#E2F0EB',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  medicationHeroEmoji: {
-    fontSize: 25,
-  },
-  medicationInstructions: {
-    marginTop: 12,
-    color: '#66736F',
-    lineHeight: 20,
-  },
-  scheduleWrap: {
-    marginTop: 14,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  scheduleChip: {
-    backgroundColor: '#E2F0EB',
-    borderRadius: 14,
-    paddingVertical: 7,
-    paddingHorizontal: 11,
-  },
-  scheduleChipText: {
-    color: '#2F6F63',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  medicationDoseRow: {
-    flexDirection: 'row',
-    gap: 12,
   },
 
   documentsHero: {
