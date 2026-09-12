@@ -16,6 +16,8 @@ export default function App() {
 
   const [petName, setPetName] = useState('');
   const [petType, setPetType] = useState<'cat' | 'dog' | null>(null);
+  const [petAge, setPetAge] = useState('');
+  const [petSex, setPetSex] = useState<'female' | 'male' | null>(null);
 
   const canContinue = petName.trim() !== '' && petType !== null;
 
@@ -32,6 +34,18 @@ export default function App() {
           <Text style={styles.subtitle}>
             Your {petType} profile has been started.
           </Text>
+
+          {petAge.trim() !== '' && (
+            <Text style={styles.petDetail}>
+              Age / date of birth: {petAge}
+            </Text>
+          )}
+
+          {petSex && (
+            <Text style={styles.petDetail}>
+              Sex: {petSex === 'female' ? 'Female' : 'Male'}
+            </Text>
+          )}
         </View>
       </SafeAreaView>
     );
@@ -61,18 +75,18 @@ export default function App() {
 
           <Text style={styles.label}>What kind of pet?</Text>
 
-          <View style={styles.petTypeRow}>
+          <View style={styles.optionRow}>
             <Pressable
               style={[
-                styles.petTypeButton,
-                petType === 'cat' && styles.petTypeButtonSelected,
+                styles.optionButton,
+                petType === 'cat' && styles.optionButtonSelected,
               ]}
               onPress={() => setPetType('cat')}
             >
               <Text
                 style={[
-                  styles.petTypeText,
-                  petType === 'cat' && styles.petTypeTextSelected,
+                  styles.optionText,
+                  petType === 'cat' && styles.optionTextSelected,
                 ]}
               >
                 🐱 Cat
@@ -81,18 +95,70 @@ export default function App() {
 
             <Pressable
               style={[
-                styles.petTypeButton,
-                petType === 'dog' && styles.petTypeButtonSelected,
+                styles.optionButton,
+                petType === 'dog' && styles.optionButtonSelected,
               ]}
               onPress={() => setPetType('dog')}
             >
               <Text
                 style={[
-                  styles.petTypeText,
-                  petType === 'dog' && styles.petTypeTextSelected,
+                  styles.optionText,
+                  petType === 'dog' && styles.optionTextSelected,
                 ]}
               >
                 🐶 Dog
+              </Text>
+            </Pressable>
+          </View>
+
+          <Text style={styles.label}>Age or date of birth</Text>
+
+          <TextInput
+            placeholder="e.g. 4 years or May 2022"
+            placeholderTextColor="#9AA5A1"
+            style={styles.inputNoMargin}
+            value={petAge}
+            onChangeText={setPetAge}
+          />
+
+          <Text style={styles.helperText}>
+            It's okay if you only know the approximate age.
+          </Text>
+
+          <Text style={styles.label}>Sex</Text>
+
+          <View style={styles.optionRow}>
+            <Pressable
+              style={[
+                styles.optionButton,
+                petSex === 'female' && styles.optionButtonSelected,
+              ]}
+              onPress={() => setPetSex('female')}
+            >
+              <Text
+                style={[
+                  styles.optionText,
+                  petSex === 'female' && styles.optionTextSelected,
+                ]}
+              >
+                Female
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.optionButton,
+                petSex === 'male' && styles.optionButtonSelected,
+              ]}
+              onPress={() => setPetSex('male')}
+            >
+              <Text
+                style={[
+                  styles.optionText,
+                  petSex === 'male' && styles.optionTextSelected,
+                ]}
+              >
+                Male
               </Text>
             </Pressable>
           </View>
@@ -188,6 +254,17 @@ const styles = StyleSheet.create({
     color: '#1F2A27',
   },
 
+  inputNoMargin: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D8E0DD',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 17,
+    color: '#1F2A27',
+  },
+
   label: {
     marginTop: 28,
     marginBottom: 12,
@@ -196,12 +273,18 @@ const styles = StyleSheet.create({
     color: '#1F2A27',
   },
 
-  petTypeRow: {
+  helperText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#7A8783',
+  },
+
+  optionRow: {
     flexDirection: 'row',
     gap: 12,
   },
 
-  petTypeButton: {
+  optionButton: {
     flex: 1,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
@@ -211,18 +294,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  petTypeButtonSelected: {
+  optionButtonSelected: {
     backgroundColor: '#E2F0EB',
     borderColor: '#2F6F63',
   },
 
-  petTypeText: {
+  optionText: {
     fontSize: 17,
     fontWeight: '600',
     color: '#66736F',
   },
 
-  petTypeTextSelected: {
+  optionTextSelected: {
     color: '#2F6F63',
   },
 
@@ -254,5 +337,11 @@ const styles = StyleSheet.create({
     color: '#2F6F63',
     fontSize: 16,
     fontWeight: '600',
+  },
+
+  petDetail: {
+    marginTop: 20,
+    fontSize: 16,
+    color: '#66736F',
   },
 });
