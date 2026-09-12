@@ -12,6 +12,14 @@ import { Linking } from 'react-native';
 
 import { supabase } from '../../lib/supabase';
 import { API_BASE_URL } from '../config';
+import {
+  clearPawsoLocalNotifications,
+  getLocalNotificationPermission,
+  getLocalReminderPreference,
+  requestLocalNotificationPermission,
+  setLocalReminderPreference,
+  syncPawsoLocalNotifications,
+} from '../services/notifications';
 import { navigateToScreen } from '../navigation/navigationRef';
 import type {
   Screen,
@@ -113,11 +121,132 @@ function usePawsoState() {
   const [askSources, setAskSources] = useState<AskSource[]>([]);
   const [askLoading, setAskLoading] = useState(false);
   const [askError, setAskError] = useState('');
+  const [notificationPermission, setNotificationPermission] = useState<
+    'granted' | 'denied' | 'undetermined'
+  >('undetermined');
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [notificationSyncing, setNotificationSyncing] = useState(false);
+  const [scheduledNotificationCount, setScheduledNotificationCount] = useState(0);
+  const [notificationError, setNotificationError] = useState('');
 
   useEffect(() => {
     checkBackend();
     initializeSupabase();
   }, []);
+
+  async function refreshNotificationState(petRows?: PetSummary[]) {
+    try {
+      const [enabled, permission] = await Promise.all([
+        getLocalReminderPreference(),
+        getLocalNotificationPermission(),
+      ]);
+
+      setNotificationsEnabled(enabled);
+      setNotificationPermission(
+        permission === 'granted'
+          ? 'granted'
+          : permission === 'denied'
+          ? 'denied'
+          : 'undetermined'
+      );
+
+      if (enabled && permission === 'granted') {
+        const rows = petRows ?? pets;
+        if (rows.length > 0) {
+          const count = await syncPawsoLocalNotifications(rows);
+          setScheduledNotificationCount(count);
+        }
+      }
+    } catch (error) {
+      console.log('Notification state error:', error);
+      setNotificationError(
+        error instanceof Error
+          ? error.message
+          : 'Could not prepare reminders.'
+      );
+    }
+  }
+
+  async function enableNotifications() {
+    try {
+      setNotificationSyncing(true);
+      setNotificationError('');
+
+      const permission = await requestLocalNotificationPermission();
+      setNotificationPermission(
+        permission === 'granted'
+          ? 'granted'
+          : permission === 'denied'
+          ? 'denied'
+          : 'undetermined'
+      );
+
+      if (permission !== 'granted') {
+        await setLocalReminderPreference(false);
+        setNotificationsEnabled(false);
+        setScheduledNotificationCount(0);
+        return;
+      }
+
+      await setLocalReminderPreference(true);
+      setNotificationsEnabled(true);
+
+      const count = await syncPawsoLocalNotifications(pets);
+      setScheduledNotificationCount(count);
+    } catch (error) {
+      console.log('Enable notifications error:', error);
+      setNotificationError(
+        error instanceof Error
+          ? error.message
+          : 'Could not enable reminders.'
+      );
+    } finally {
+      setNotificationSyncing(false);
+    }
+  }
+
+  async function disableNotifications() {
+    try {
+      setNotificationSyncing(true);
+      setNotificationError('');
+      await setLocalReminderPreference(false);
+      await clearPawsoLocalNotifications();
+      setNotificationsEnabled(false);
+      setScheduledNotificationCount(0);
+    } catch (error) {
+      console.log('Disable notifications error:', error);
+      setNotificationError(
+        error instanceof Error
+          ? error.message
+          : 'Could not disable reminders.'
+      );
+    } finally {
+      setNotificationSyncing(false);
+    }
+  }
+
+  async function syncNotificationsIfEnabled(petRows?: PetSummary[]) {
+    try {
+      const enabled = await getLocalReminderPreference();
+      if (!enabled) return;
+
+      const permission = await getLocalNotificationPermission();
+      if (permission !== 'granted') return;
+
+      const rows = petRows ?? pets;
+      if (rows.length === 0) return;
+
+      const count = await syncPawsoLocalNotifications(rows);
+      setScheduledNotificationCount(count);
+    } catch (error) {
+      console.log('Notification sync error:', error);
+      setNotificationError(
+        error instanceof Error
+          ? error.message
+          : 'Could not refresh reminders.'
+      );
+    }
+  }
 
   async function initializeSupabase() {
     try {
@@ -407,6 +536,8 @@ function usePawsoState() {
       refreshAllPetsToday(rows),
     ]);
 
+    await refreshNotificationState(rows);
+
     setTodayView(rows.length > 1 ? 'all' : 'pet');
     setScreen('today');
   }
@@ -668,6 +799,7 @@ function usePawsoState() {
 
       await loadCareData(currentPetId);
       await refreshAllPetsToday();
+      await syncNotificationsIfEnabled();
       setScreen('care');
     } catch (error) {
       console.log('Create care task error:', error);
@@ -712,6 +844,7 @@ function usePawsoState() {
 
       await loadCareData(currentPetId);
       await refreshAllPetsToday();
+      await syncNotificationsIfEnabled();
     } catch (error) {
       console.log('Complete care task error:', error);
       setCareError(
@@ -924,6 +1057,7 @@ function usePawsoState() {
 
       await loadMedicationData(currentPetId);
       await refreshAllPetsToday();
+      await syncNotificationsIfEnabled();
       setScreen('medications');
     } catch (error) {
       console.log('Create medication error:', error);
@@ -1788,6 +1922,15 @@ function usePawsoState() {
     setAskLoading,
     askError,
     setAskError,
+    notificationPermission,
+    notificationsEnabled,
+    notificationSyncing,
+    scheduledNotificationCount,
+    notificationError,
+    refreshNotificationState,
+    enableNotifications,
+    disableNotifications,
+    syncNotificationsIfEnabled,
     initializeSupabase,
     loadExistingPet,
     loadPets,

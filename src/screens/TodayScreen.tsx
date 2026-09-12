@@ -45,6 +45,13 @@ export function TodayScreen() {
     openDocumentsScreen,
     timelineEvents,
     setScreen,
+    notificationPermission,
+    notificationsEnabled,
+    notificationSyncing,
+    scheduledNotificationCount,
+    notificationError,
+    enableNotifications,
+    disableNotifications,
   } = usePawso();
 
   const showAllPets = pets.length > 1 && todayView === 'all';
@@ -102,6 +109,63 @@ export function TodayScreen() {
         </Text>
         <Text style={styles.apiRefresh}>Tap to refresh</Text>
       </Pressable>
+
+      <View style={styles.infoCard}>
+        <View style={styles.reminderHeaderRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.cardStrong}>🔔 Pawso reminders</Text>
+            <Text style={styles.cardMuted}>
+              {notificationsEnabled && notificationPermission === 'granted'
+                ? `${scheduledNotificationCount} local reminder${
+                    scheduledNotificationCount === 1 ? '' : 's'
+                  } scheduled across your pets.`
+                : notificationPermission === 'denied'
+                ? 'Notifications are blocked in your device settings.'
+                : 'Get medication and care-task reminders on this device.'}
+            </Text>
+          </View>
+
+          <Pressable
+            style={[
+              styles.reminderToggleButton,
+              notificationsEnabled &&
+                notificationPermission === 'granted' &&
+                styles.reminderToggleButtonEnabled,
+            ]}
+            disabled={notificationSyncing}
+            onPress={
+              notificationsEnabled
+                ? disableNotifications
+                : enableNotifications
+            }
+          >
+            <Text
+              style={[
+                styles.reminderToggleText,
+                notificationsEnabled &&
+                  notificationPermission === 'granted' &&
+                  styles.reminderToggleTextEnabled,
+              ]}
+            >
+              {notificationSyncing
+                ? 'Working…'
+                : notificationsEnabled
+                ? 'On'
+                : 'Enable'}
+            </Text>
+          </Pressable>
+        </View>
+
+        {notificationError ? (
+          <Text style={styles.errorText}>{notificationError}</Text>
+        ) : null}
+
+        <Text style={styles.reminderFinePrint}>
+          Medication times and care-task due dates are scheduled directly from
+          your confirmed Pawso records. Pawso does not change medication timing
+          or dosing.
+        </Text>
+      </View>
 
       {uploadError !== '' ? (
         <View style={styles.errorCard}>

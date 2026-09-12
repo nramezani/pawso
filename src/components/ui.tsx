@@ -1427,4 +1427,36 @@ export const styles = StyleSheet.create({
     color: '#88938F',
     fontSize: 12,
   },
+
+  reminderHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  reminderToggleButton: {
+    borderWidth: 1,
+    borderColor: '#B9C8C1',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: '#FFFFFF',
+  },
+  reminderToggleButtonEnabled: {
+    backgroundColor: '#1F6B57',
+    borderColor: '#1F6B57',
+  },
+  reminderToggleText: {
+    color: '#48615A',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  reminderToggleTextEnabled: {
+    color: '#FFFFFF',
+  },
+  reminderFinePrint: {
+    marginTop: 10,
+    color: '#73837D',
+    fontSize: 12,
+    lineHeight: 17,
+  },
 });
