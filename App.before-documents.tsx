@@ -7,7 +7,6 @@ import { supabase } from './lib/supabase';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
-  Linking,
   Platform,
   Pressable,
   SafeAreaView,
@@ -25,8 +24,7 @@ type Screen =
   | 'today'
   | 'processing'
   | 'review'
-  | 'timeline'
-  | 'documents';
+  | 'timeline';
 
 type PetType = 'cat' | 'dog';
 type PetSex = 'female' | 'male';
@@ -39,17 +37,6 @@ type TimelineEvent = {
   title: string;
   detail: string;
   source: string;
-};
-
-type PetDocument = {
-  id: string;
-  filename: string;
-  content_type: string | null;
-  size_bytes: number | null;
-  status: string;
-  storage_path: string | null;
-  created_at: string;
-  linked_events: number;
 };
 
 const API_BASE_URL = 'http://192.168.1.85:8000';
@@ -95,10 +82,6 @@ export default function App() {
   const [followUp, setFollowUp] = useState('');
 
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
-  const [petDocuments, setPetDocuments] = useState<PetDocument[]>([]);
-  const [documentsLoading, setDocumentsLoading] = useState(false);
-  const [documentsError, setDocumentsError] = useState('');
-  const [openingDocumentId, setOpeningDocumentId] = useState<string | null>(null);
 
   useEffect(() => {
     checkBackend();
@@ -232,94 +215,6 @@ export default function App() {
     }));
 
     setTimelineEvents(events);
-  }
-
-  async function loadDocuments(petId: string) {
-    try {
-      setDocumentsLoading(true);
-      setDocumentsError('');
-
-      const { data: documents, error: documentsQueryError } = await supabase
-        .from('documents')
-        .select('id, filename, content_type, size_bytes, status, storage_path, created_at')
-        .eq('pet_id', petId)
-        .order('created_at', { ascending: false });
-
-      if (documentsQueryError) throw documentsQueryError;
-
-      const { data: linkedEvents, error: linkedEventsError } = await supabase
-        .from('medical_events')
-        .select('id, document_id')
-        .eq('pet_id', petId)
-        .not('document_id', 'is', null);
-
-      if (linkedEventsError) throw linkedEventsError;
-
-      const counts = new Map<string, number>();
-      for (const event of linkedEvents ?? []) {
-        if (event.document_id) {
-          counts.set(event.document_id, (counts.get(event.document_id) ?? 0) + 1);
-        }
-      }
-
-      setPetDocuments((documents ?? []).map((document) => ({
-        ...document,
-        linked_events: counts.get(document.id) ?? 0,
-      })));
-    } catch (error) {
-      console.log('Load documents error:', error);
-      setDocumentsError(
-        error instanceof Error ? error.message : 'Could not load medical records.'
-      );
-    } finally {
-      setDocumentsLoading(false);
-    }
-  }
-
-  async function openDocumentsScreen() {
-    if (!currentPetId) return;
-    setScreen('documents');
-    await loadDocuments(currentPetId);
-  }
-
-  async function openOriginalDocument(document: PetDocument) {
-    if (!document.storage_path) {
-      setDocumentsError('The original file is not available for this record.');
-      return;
-    }
-
-    try {
-      setOpeningDocumentId(document.id);
-      setDocumentsError('');
-
-      const { data, error } = await supabase.storage
-        .from('vet-records')
-        .createSignedUrl(document.storage_path, 60);
-
-      if (error) throw error;
-      if (!data?.signedUrl) throw new Error('Could not create a secure document link.');
-
-      await Linking.openURL(data.signedUrl);
-    } catch (error) {
-      console.log('Open original document error:', error);
-      setDocumentsError(
-        error instanceof Error ? error.message : 'Could not open the original veterinary record.'
-      );
-    } finally {
-      setOpeningDocumentId(null);
-    }
-  }
-
-  function formatDocumentDate(value: string) {
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? 'Date unavailable' : date.toLocaleDateString();
-  }
-
-  function formatDocumentSize(size: number | null) {
-    if (size === null || size === undefined) return 'Size unavailable';
-    return size < 1024 * 1024
-      ? `${(size / 1024).toFixed(1)} KB`
-      : `${(size / (1024 * 1024)).toFixed(1)} MB`;
   }
 
   function normalizeEventDate(value: string) {
@@ -1286,11 +1181,6 @@ export default function App() {
         )}
 
         <SecondaryButton
-          title="Documents & Medical Records"
-          onPress={openDocumentsScreen}
-        />
-
-        <SecondaryButton
           title={`View ${petName}'s profile`}
           onPress={() => setScreen('petProfile')}
         />
@@ -1491,116 +1381,6 @@ export default function App() {
           title="Cancel"
           onPress={() => setScreen('today')}
         />
-      </Page>
-    );
-  }
-
-  if (screen === 'documents') {
-    return (
-      <Page scroll>
-        <Header back={() => setScreen('today')} title="Medical Records" />
-
-        <View style={styles.documentsHero}>
-          <View style={styles.documentHeroIcon}>
-            <Text style={styles.documentHeroEmoji}>📄</Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.documentsTitle}>{petName}'s documents</Text>
-            <Text style={styles.cardMuted}>
-              Original veterinary records are stored privately and linked to the health history they created.
-            </Text>
-          </View>
-        </View>
-
-        <Pressable style={styles.outlineButton} onPress={pickVetRecord}>
-          <Text style={styles.outlineButtonText}>＋ Upload veterinary record</Text>
-        </Pressable>
-
-        {documentsError !== '' && (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Medical records error</Text>
-            <Text style={styles.errorText}>{documentsError}</Text>
-          </View>
-        )}
-
-        {documentsLoading ? (
-          <View style={styles.documentsLoading}>
-            <ActivityIndicator size="large" color="#2F6F63" />
-            <Text style={styles.cardMuted}>Loading medical records…</Text>
-          </View>
-        ) : petDocuments.length === 0 ? (
-          <View style={styles.emptyDocuments}>
-            <Text style={styles.bigEmoji}>📁</Text>
-            <Text style={styles.cardStrong}>No medical records yet</Text>
-            <Text style={styles.cardMuted}>
-              Upload a veterinary PDF or image to start {petName}'s document library.
-            </Text>
-          </View>
-        ) : (
-          petDocuments.map((document) => (
-            <View key={document.id} style={styles.documentCard}>
-              <View style={styles.documentCardHeader}>
-                <View style={styles.documentIconBox}>
-                  <Text style={styles.documentCardEmoji}>
-                    {document.content_type?.includes('pdf') ? '📕' : '🖼️'}
-                  </Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.documentCardTitle} numberOfLines={2}>
-                    {document.filename}
-                  </Text>
-                  <Text style={styles.documentCardMeta}>
-                    {formatDocumentDate(document.created_at)} · {formatDocumentSize(document.size_bytes)}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.documentStatusRow}>
-                <View style={[
-                  styles.documentStatusBadge,
-                  document.status === 'confirmed'
-                    ? styles.documentStatusConfirmed
-                    : styles.documentStatusPending,
-                ]}>
-                  <Text style={[
-                    styles.documentStatusText,
-                    document.status === 'confirmed'
-                      ? styles.documentStatusTextConfirmed
-                      : styles.documentStatusTextPending,
-                  ]}>
-                    {document.status === 'confirmed'
-                      ? '✓ Confirmed'
-                      : document.status.replaceAll('_', ' ')}
-                  </Text>
-                </View>
-
-                <Text style={styles.linkedEventsText}>
-                  {document.linked_events} {document.linked_events === 1 ? 'timeline event' : 'timeline events'}
-                </Text>
-              </View>
-
-              <Pressable
-                style={[
-                  styles.documentOpenButton,
-                  (!document.storage_path || openingDocumentId === document.id) &&
-                    styles.documentOpenButtonDisabled,
-                ]}
-                disabled={!document.storage_path || openingDocumentId === document.id}
-                onPress={() => openOriginalDocument(document)}
-              >
-                <Text style={styles.documentOpenButtonText}>
-                  {openingDocumentId === document.id
-                    ? 'Opening secure file…'
-                    : document.storage_path
-                    ? 'Open original securely'
-                    : 'Original file unavailable'}
-                </Text>
-              </Pressable>
-            </View>
-          ))
-        )}
-
-        <SecondaryButton title="Back to Today" onPress={() => setScreen('today')} />
       </Page>
     );
   }
@@ -2674,54 +2454,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#88938F',
   },
-
-  documentsHero: {
-    marginTop: 28,
-    marginBottom: 8,
-    flexDirection: 'row',
-    gap: 14,
-    alignItems: 'center',
-  },
-  documentHeroIcon: {
-    width: 54, height: 54, borderRadius: 16, backgroundColor: '#E2F0EB',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  documentHeroEmoji: { fontSize: 25 },
-  documentsTitle: { fontSize: 23, fontWeight: '800', color: '#1F2A27' },
-  documentsLoading: { paddingVertical: 50, alignItems: 'center', gap: 12 },
-  emptyDocuments: {
-    marginTop: 24, backgroundColor: '#FFFFFF', borderRadius: 18, padding: 28,
-    alignItems: 'center', borderWidth: 1, borderColor: '#E5E9E7',
-  },
-  documentCard: {
-    marginTop: 14, backgroundColor: '#FFFFFF', borderRadius: 18, padding: 17,
-    borderWidth: 1, borderColor: '#E5E9E7',
-  },
-  documentCardHeader: { flexDirection: 'row', gap: 12, alignItems: 'center' },
-  documentIconBox: {
-    width: 46, height: 46, borderRadius: 13, backgroundColor: '#F2F5F3',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  documentCardEmoji: { fontSize: 22 },
-  documentCardTitle: { fontSize: 15, fontWeight: '800', color: '#1F2A27' },
-  documentCardMeta: { marginTop: 5, fontSize: 12, color: '#88938F' },
-  documentStatusRow: {
-    marginTop: 15, flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between', gap: 10,
-  },
-  documentStatusBadge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 },
-  documentStatusConfirmed: { backgroundColor: '#E2F0EB' },
-  documentStatusPending: { backgroundColor: '#FFF5DD' },
-  documentStatusText: { fontSize: 11, fontWeight: '800', textTransform: 'capitalize' },
-  documentStatusTextConfirmed: { color: '#2F6F63' },
-  documentStatusTextPending: { color: '#8A682E' },
-  linkedEventsText: { flex: 1, textAlign: 'right', fontSize: 12, color: '#66736F' },
-  documentOpenButton: {
-    marginTop: 15, borderWidth: 1, borderColor: '#2F6F63', borderRadius: 13,
-    paddingVertical: 12, alignItems: 'center',
-  },
-  documentOpenButtonDisabled: { opacity: 0.4 },
-  documentOpenButtonText: { color: '#2F6F63', fontWeight: '800', fontSize: 13 },
 
   emptyTimeline: {
     alignItems: 'center',
