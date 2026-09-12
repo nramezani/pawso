@@ -2,7 +2,6 @@ import { StatusBar } from 'expo-status-bar';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as DocumentPicker from 'expo-document-picker';
 import { useEffect, useState } from 'react';
-import { supabase } from './lib/supabase';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -44,11 +43,6 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>('welcome');
 
   const [apiStatus, setApiStatus] = useState('Checking backend...');
-  const [authReady, setAuthReady] = useState(false);
-  const [authError, setAuthError] = useState('');
-  const [databaseError, setDatabaseError] = useState('');
-  const [isSavingPet, setIsSavingPet] = useState(false);
-  const [currentPetId, setCurrentPetId] = useState<string | null>(null);
 
   const [petName, setPetName] = useState('');
   const [petType, setPetType] = useState<PetType | null>(null);
@@ -80,173 +74,7 @@ export default function App() {
 
   useEffect(() => {
     checkBackend();
-    initializeSupabase();
   }, []);
-
-  async function initializeSupabase() {
-    try {
-      setAuthError('');
-
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession();
-
-      if (sessionError) {
-        throw sessionError;
-      }
-
-      let activeSession = session;
-
-      if (!activeSession) {
-        const { data, error } = await supabase.auth.signInAnonymously();
-
-        if (error) {
-          throw error;
-        }
-
-        activeSession = data.session;
-      }
-
-      if (!activeSession?.user) {
-        throw new Error('Could not create a Pawso session.');
-      }
-
-      await loadExistingPet(activeSession.user.id);
-    } catch (error) {
-      console.log('Supabase initialization error:', error);
-
-      setAuthError(
-        error instanceof Error
-          ? error.message
-          : 'Could not connect Pawso to its database.'
-      );
-    } finally {
-      setAuthReady(true);
-    }
-  }
-
-  async function loadExistingPet(userId: string) {
-    const { data, error } = await supabase
-      .from('pets')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-    if (error) {
-      throw error;
-    }
-
-    if (!data) {
-      return;
-    }
-
-    setCurrentPetId(data.id);
-    setPetName(data.name ?? '');
-    setPetType((data.species as PetType) ?? null);
-    setBreed(data.breed ?? '');
-    setPetAge(data.approximate_age ?? '');
-    setPetSex((data.sex as PetSex) ?? null);
-
-    if (data.spayed_neutered === true) {
-      setAlteredStatus('yes');
-    } else if (data.spayed_neutered === false) {
-      setAlteredStatus('no');
-    } else {
-      setAlteredStatus(null);
-    }
-
-    setWeight(
-      data.weight_kg !== null && data.weight_kg !== undefined
-        ? `${data.weight_kg} kg`
-        : ''
-    );
-    setMicrochip(data.microchip_number ?? '');
-    setConditions(data.conditions ?? '');
-    setAllergies(data.allergies ?? '');
-    setMedications(data.medications ?? '');
-    setVetClinic(data.vet_clinic ?? '');
-
-    setScreen('today');
-  }
-
-  function parseWeightKg(value: string) {
-    if (!value.trim()) {
-      return null;
-    }
-
-    const match = value.replace(',', '.').match(/\d+(\.\d+)?/);
-
-    return match ? Number(match[0]) : null;
-  }
-
-  async function createPetProfile() {
-    if (!canCreateProfile || !petType) {
-      return;
-    }
-
-    try {
-      setIsSavingPet(true);
-      setDatabaseError('');
-
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession();
-
-      if (sessionError) {
-        throw sessionError;
-      }
-
-      if (!session?.user) {
-        throw new Error('Pawso session is not ready. Please try again.');
-      }
-
-      const { data, error } = await supabase
-        .from('pets')
-        .insert({
-          user_id: session.user.id,
-          name: petName.trim(),
-          species: petType,
-          breed: breed.trim() || null,
-          approximate_age: petAge.trim() || null,
-          sex: petSex,
-          spayed_neutered:
-            alteredStatus === 'yes'
-              ? true
-              : alteredStatus === 'no'
-              ? false
-              : null,
-          weight_kg: parseWeightKg(weight),
-          microchip_number: microchip.trim() || null,
-          conditions: conditions.trim() || null,
-          allergies: allergies.trim() || null,
-          medications: medications.trim() || null,
-          vet_clinic: vetClinic.trim() || null,
-        })
-        .select()
-        .single();
-
-      if (error) {
-        throw error;
-      }
-
-      setCurrentPetId(data.id);
-      setScreen('petProfile');
-    } catch (error) {
-      console.log('Create pet error:', error);
-
-      setDatabaseError(
-        error instanceof Error
-          ? error.message
-          : 'Could not save this pet.'
-      );
-    } finally {
-      setIsSavingPet(false);
-    }
-  }
 
   async function checkBackend() {
     try {
@@ -413,36 +241,6 @@ export default function App() {
     }
 
     setScreen('timeline');
-  }
-
-  if (!authReady) {
-    return (
-      <Page>
-        <View style={styles.processingPage}>
-          <ActivityIndicator size="large" color="#2F6F63" />
-          <Text style={styles.processingTitle}>Opening Pawso</Text>
-          <Text style={styles.processingStep}>Connecting securely…</Text>
-        </View>
-      </Page>
-    );
-  }
-
-  if (authError) {
-    return (
-      <Page>
-        <View style={styles.processingPage}>
-          <Text style={styles.processingTitle}>Pawso could not sign in</Text>
-          <Text style={styles.errorText}>{authError}</Text>
-          <PrimaryButton
-            title="Try Again"
-            onPress={() => {
-              setAuthReady(false);
-              initializeSupabase();
-            }}
-          />
-        </View>
-      </Page>
-    );
   }
 
   if (screen === 'welcome') {
@@ -632,17 +430,10 @@ export default function App() {
           placeholder="Clinic name"
         />
 
-        {databaseError !== '' && (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Could not save pet</Text>
-            <Text style={styles.errorText}>{databaseError}</Text>
-          </View>
-        )}
-
         <PrimaryButton
-          title={isSavingPet ? 'Saving Pet…' : 'Create Pet Profile'}
-          disabled={!canCreateProfile || isSavingPet}
-          onPress={createPetProfile}
+          title="Create Pet Profile"
+          disabled={!canCreateProfile}
+          onPress={() => setScreen('petProfile')}
         />
       </Page>
     );
@@ -669,14 +460,6 @@ export default function App() {
             {breed ? ` · ${breed}` : ''}
           </Text>
         </View>
-
-        {currentPetId && (
-          <View style={styles.cloudSavedCard}>
-            <Text style={styles.cloudSavedText}>
-              ✓ Saved securely to Pawso
-            </Text>
-          </View>
-        )}
 
         <Card title="About">
           <Info
@@ -1009,7 +792,7 @@ export default function App() {
         />
 
         <Text style={styles.warningText}>
-          ⚠️ Please check — Pawso preserves uncertainty and does not diagnose.
+          ⚠ Please check — Pawso preserves uncertainty and does not diagnose.
         </Text>
 
         <Text style={styles.sectionTitle}>
@@ -1397,7 +1180,7 @@ function ReviewField({
           }
         >
           {warning
-            ? '⚠️ Please check'
+            ? '⚠ Please check'
             : '✓ Clear'}
         </Text>
       </View>
@@ -1608,21 +1391,6 @@ const styles = StyleSheet.create({
     color: '#2F6F63',
     fontSize: 15,
     fontWeight: '700',
-  },
-
-  cloudSavedCard: {
-    alignSelf: 'center',
-    marginBottom: 18,
-    backgroundColor: '#E2F0EB',
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 18,
-  },
-
-  cloudSavedText: {
-    color: '#2F6F63',
-    fontWeight: '700',
-    fontSize: 13,
   },
 
   profileHeader: {
