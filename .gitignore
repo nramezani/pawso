@@ -39,3 +39,12 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+# Pawso backend
+backend/.venv/
+backend/__pycache__/
+backend/.env
+*.pyc
+
+# Secrets
+.env
+.env.local
