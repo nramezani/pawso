@@ -16,6 +16,7 @@ export type MainTabParamList = {
 export type RootStackParamList = {
   Welcome: undefined;
   AddPet: undefined;
+  PetProfile: undefined;
   MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
   Processing: undefined;
   Review: undefined;
@@ -51,11 +52,14 @@ export function navigateToScreen(screen: Screen) {
     case 'addPet':
       navigateWhenReady('AddPet');
       return;
+    case 'pets':
+      navigateWhenReady('MainTabs', { screen: 'Pets' });
+      return;
     case 'today':
       navigateWhenReady('MainTabs', { screen: 'Today' });
       return;
     case 'petProfile':
-      navigateWhenReady('MainTabs', { screen: 'Pets' });
+      navigateWhenReady('PetProfile');
       return;
     case 'ask':
       navigateWhenReady('MainTabs', { screen: 'Ask' });

@@ -195,7 +195,7 @@ export function PetProfileScreen() {
 
 return (
       <Page scroll>
-        <Header title="Pawso" />
+        <Header back={() => setScreen('pets')} title="Pawso" />
 
         <View style={styles.profileHeader}>
           <View style={styles.avatar}>

@@ -28,6 +28,8 @@ import type {
   TaskCompletion,
   AskSource,
   AskAnswer,
+  PetSummary,
+  PetTodaySummary,
 } from '../types';
 
 function usePawsoState() {
@@ -40,6 +42,9 @@ function usePawsoState() {
   const [isSavingPet, setIsSavingPet] = useState(false);
   const [isConfirmingExtraction, setIsConfirmingExtraction] = useState(false);
   const [currentPetId, setCurrentPetId] = useState<string | null>(null);
+  const [pets, setPets] = useState<PetSummary[]>([]);
+  const [allPetsToday, setAllPetsToday] = useState<PetTodaySummary[]>([]);
+  const [todayView, setTodayView] = useState<'all' | 'pet'>('pet');
 
   const [petName, setPetName] = useState('');
   const [petType, setPetType] = useState<PetType | null>(null);
@@ -157,23 +162,7 @@ function usePawsoState() {
     }
   }
 
-  async function loadExistingPet(userId: string) {
-    const { data, error } = await supabase
-      .from('pets')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-    if (error) {
-      throw error;
-    }
-
-    if (!data) {
-      return;
-    }
-
+  function hydratePet(data: PetSummary) {
     setCurrentPetId(data.id);
     setPetName(data.name ?? '');
     setPetType((data.species as PetType) ?? null);
@@ -199,10 +188,226 @@ function usePawsoState() {
     setAllergies(data.allergies ?? '');
     setMedications(data.medications ?? '');
     setVetClinic(data.vet_clinic ?? '');
+  }
 
-    await loadTimeline(data.id);
-    await loadMedicationData(data.id);
-    await loadCareData(data.id);
+  async function loadPets(userId: string) {
+    const { data, error } = await supabase
+      .from('pets')
+      .select(
+        'id, name, species, breed, approximate_age, sex, spayed_neutered, weight_kg, microchip_number, conditions, allergies, medications, vet_clinic, created_at'
+      )
+      .eq('user_id', userId)
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+
+    const rows = (data ?? []) as PetSummary[];
+    setPets(rows);
+    return rows;
+  }
+
+  async function refreshAllPetsToday(petRows?: PetSummary[]) {
+    try {
+      const rows = petRows ?? pets;
+      if (rows.length === 0) {
+        setAllPetsToday([]);
+        return;
+      }
+
+      const petIds = rows.map((pet) => pet.id);
+      const now = new Date();
+      const start = new Date(now);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 1);
+
+      const [
+        { data: careRows, error: careErrorValue },
+        { data: medicationRows, error: medicationErrorValue },
+      ] = await Promise.all([
+        supabase
+          .from('care_tasks')
+          .select('id, pet_id, due_at, is_active')
+          .in('pet_id', petIds)
+          .eq('is_active', true)
+          .lt('due_at', end.toISOString()),
+        supabase
+          .from('medications')
+          .select('id, pet_id, is_active')
+          .in('pet_id', petIds)
+          .eq('is_active', true),
+      ]);
+
+      if (careErrorValue) throw careErrorValue;
+      if (medicationErrorValue) throw medicationErrorValue;
+
+      const medicationIds = (medicationRows ?? []).map((item) => item.id);
+      let scheduleRows: Array<{ id: string; medication_id: string; pet_id: string; time_of_day: string }> = [];
+      let logRows: Array<{ schedule_id: string | null; pet_id: string; status: string }> = [];
+
+      if (medicationIds.length > 0) {
+        const [
+          { data: schedules, error: schedulesError },
+          { data: logs, error: logsError },
+        ] = await Promise.all([
+          supabase
+            .from('medication_schedules')
+            .select('id, medication_id, pet_id, time_of_day')
+            .in('medication_id', medicationIds),
+          supabase
+            .from('medication_logs')
+            .select('schedule_id, pet_id, status')
+            .in('pet_id', petIds)
+            .gte('scheduled_for', start.toISOString())
+            .lt('scheduled_for', end.toISOString()),
+        ]);
+
+        if (schedulesError) throw schedulesError;
+        if (logsError) throw logsError;
+        scheduleRows = schedules ?? [];
+        logRows = logs ?? [];
+      }
+
+      const medicationPetById = new Map(
+        (medicationRows ?? []).map((item) => [item.id, item.pet_id])
+      );
+      const completedScheduleIds = new Set(
+        logRows
+          .filter((log) => log.schedule_id)
+          .map((log) => log.schedule_id as string)
+      );
+
+      const summaries: PetTodaySummary[] = rows.map((pet) => {
+        const petCare = (careRows ?? []).filter((task) => task.pet_id === pet.id);
+        const dueCare = petCare.filter((task) => {
+          const due = new Date(task.due_at);
+          return due >= start && due < end;
+        });
+        const overdueCare = petCare.filter(
+          (task) => new Date(task.due_at).getTime() < now.getTime()
+        );
+
+        const petSchedules = scheduleRows.filter(
+          (schedule) => medicationPetById.get(schedule.medication_id) === pet.id
+        );
+        const pendingSchedules = petSchedules.filter(
+          (schedule) => !completedScheduleIds.has(schedule.id)
+        );
+        const overdueMedication = pendingSchedules.filter((schedule) => {
+          const [hours, minutes] = schedule.time_of_day.split(':').map(Number);
+          const scheduled = new Date(now);
+          scheduled.setHours(hours || 0, minutes || 0, 0, 0);
+          return scheduled.getTime() < now.getTime() - 30 * 60 * 1000;
+        });
+
+        return {
+          pet_id: pet.id,
+          name: pet.name,
+          species: pet.species,
+          care_due_today: dueCare.length,
+          medication_doses_today: petSchedules.length,
+          medication_doses_pending: pendingSchedules.length,
+          overdue_count: overdueCare.length + overdueMedication.length,
+        };
+      });
+
+      setAllPetsToday(summaries);
+    } catch (error) {
+      console.log('Load all pets Today summary error:', error);
+    }
+  }
+
+  async function selectPet(petId: string, destination?: Screen) {
+    try {
+      setDatabaseError('');
+      let pet = pets.find((item) => item.id === petId);
+
+      if (!pet) {
+        const { data, error } = await supabase
+          .from('pets')
+          .select(
+            'id, name, species, breed, approximate_age, sex, spayed_neutered, weight_kg, microchip_number, conditions, allergies, medications, vet_clinic, created_at'
+          )
+          .eq('id', petId)
+          .single();
+
+        if (error) throw error;
+        pet = data as PetSummary;
+      }
+
+      hydratePet(pet);
+      setAskAnswer(null);
+      setAskSources([]);
+      setAskError('');
+
+      await Promise.all([
+        loadTimeline(pet.id),
+        loadMedicationData(pet.id),
+        loadCareData(pet.id),
+      ]);
+
+      if (destination) setScreen(destination);
+    } catch (error) {
+      console.log('Select pet error:', error);
+      setDatabaseError(
+        error instanceof Error ? error.message : 'Could not switch pets.'
+      );
+    }
+  }
+
+  function startAddPet() {
+    setPetName('');
+    setPetType(null);
+    setBreed('');
+    setPetAge('');
+    setPetSex(null);
+    setAlteredStatus(null);
+    setWeight('');
+    setMicrochip('');
+    setConditions('');
+    setAllergies('');
+    setMedications('');
+    setVetClinic('');
+    setDatabaseError('');
+    setScreen('addPet');
+  }
+
+  async function cancelAddPet() {
+    if (currentPetId && pets.some((pet) => pet.id === currentPetId)) {
+      await selectPet(currentPetId, 'pets');
+      return;
+    }
+
+    if (pets.length > 0) {
+      await selectPet(pets[0].id, 'pets');
+      return;
+    }
+
+    setScreen('welcome');
+  }
+
+  async function loadExistingPet(userId: string) {
+    const rows = await loadPets(userId);
+
+    if (rows.length === 0) {
+      setTodayView('pet');
+      return;
+    }
+
+    const selected =
+      rows.find((pet) => pet.id === currentPetId) ??
+      rows[0];
+
+    hydratePet(selected);
+
+    await Promise.all([
+      loadTimeline(selected.id),
+      loadMedicationData(selected.id),
+      loadCareData(selected.id),
+      refreshAllPetsToday(rows),
+    ]);
+
+    setTodayView(rows.length > 1 ? 'all' : 'pet');
     setScreen('today');
   }
 
@@ -462,6 +667,7 @@ function usePawsoState() {
       setNewCareTime('09:00');
 
       await loadCareData(currentPetId);
+      await refreshAllPetsToday();
       setScreen('care');
     } catch (error) {
       console.log('Create care task error:', error);
@@ -505,6 +711,7 @@ function usePawsoState() {
       if (taskError) throw taskError;
 
       await loadCareData(currentPetId);
+      await refreshAllPetsToday();
     } catch (error) {
       console.log('Complete care task error:', error);
       setCareError(
@@ -716,6 +923,7 @@ function usePawsoState() {
       setNewMedicationTime2('');
 
       await loadMedicationData(currentPetId);
+      await refreshAllPetsToday();
       setScreen('medications');
     } catch (error) {
       console.log('Create medication error:', error);
@@ -776,6 +984,7 @@ function usePawsoState() {
       }
 
       await loadMedicationData(currentPetId);
+      await refreshAllPetsToday();
     } catch (error) {
       console.log('Log medication dose error:', error);
       setMedicationsError(
@@ -945,7 +1154,18 @@ function usePawsoState() {
         throw error;
       }
 
-      setCurrentPetId(data.id);
+      const createdPet = data as PetSummary;
+      hydratePet(createdPet);
+
+      const updatedPets = await loadPets(session.user.id);
+      await refreshAllPetsToday(updatedPets);
+      await Promise.all([
+        loadTimeline(createdPet.id),
+        loadMedicationData(createdPet.id),
+        loadCareData(createdPet.id),
+      ]);
+
+      setTodayView(updatedPets.length > 1 ? 'all' : 'pet');
       setScreen('petProfile');
     } catch (error) {
       console.log('Create pet error:', error);
@@ -1450,6 +1670,12 @@ function usePawsoState() {
     setIsConfirmingExtraction,
     currentPetId,
     setCurrentPetId,
+    pets,
+    setPets,
+    allPetsToday,
+    setAllPetsToday,
+    todayView,
+    setTodayView,
     petName,
     setPetName,
     petType,
@@ -1564,6 +1790,11 @@ function usePawsoState() {
     setAskError,
     initializeSupabase,
     loadExistingPet,
+    loadPets,
+    refreshAllPetsToday,
+    selectPet,
+    startAddPet,
+    cancelAddPet,
     loadTimeline,
     askPawso,
     openAskScreen,

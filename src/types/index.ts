@@ -1,6 +1,7 @@
 export type Screen =
   | 'welcome'
   | 'addPet'
+  | 'pets'
   | 'petProfile'
   | 'today'
   | 'processing'
@@ -99,3 +100,31 @@ export type AskAnswer = {
   safety_category: 'normal' | 'medical_caution' | 'urgent';
 };
 
+
+
+export type PetSummary = {
+  id: string;
+  name: string;
+  species: PetType;
+  breed: string | null;
+  approximate_age: string | null;
+  sex: PetSex | null;
+  spayed_neutered: boolean | null;
+  weight_kg: number | null;
+  microchip_number: string | null;
+  conditions: string | null;
+  allergies: string | null;
+  medications: string | null;
+  vet_clinic: string | null;
+  created_at: string;
+};
+
+export type PetTodaySummary = {
+  pet_id: string;
+  name: string;
+  species: PetType;
+  care_due_today: number;
+  medication_doses_today: number;
+  medication_doses_pending: number;
+  overdue_count: number;
+};

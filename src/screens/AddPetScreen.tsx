@@ -190,13 +190,15 @@ export function AddPetScreen() {
     laterMedicationDoses,
     overdueCareTasks,
     upcomingCareTasks,
-    followUpEvents
+    followUpEvents,
+    pets,
+    cancelAddPet
   } = usePawso();
 
 return (
       <Page scroll keyboard>
         <Header
-          back={() => setScreen('welcome')}
+          back={cancelAddPet}
           title="Pawso"
         />
 

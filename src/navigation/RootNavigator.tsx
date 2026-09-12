@@ -6,6 +6,7 @@ import { WelcomeScreen } from '../screens/WelcomeScreen';
 import { AddPetScreen } from '../screens/AddPetScreen';
 import { TodayScreen } from '../screens/TodayScreen';
 import { PetProfileScreen } from '../screens/PetProfileScreen';
+import { PetsScreen } from '../screens/PetsScreen';
 import { AskScreen } from '../screens/AskScreen';
 import { CareScreen } from '../screens/CareScreen';
 import { ProcessingScreen } from '../screens/ProcessingScreen';
@@ -58,7 +59,7 @@ function MainTabs() {
       })}
     >
       <Tab.Screen name="Today" component={TodayScreen} />
-      <Tab.Screen name="Pets" component={PetProfileScreen} />
+      <Tab.Screen name="Pets" component={PetsScreen} />
       <Tab.Screen name="Add" component={AddMenuScreen} />
       <Tab.Screen name="Ask" component={AskScreen} />
       <Tab.Screen name="Care" component={CareScreen} />
@@ -78,6 +79,7 @@ export function RootNavigator() {
     >
       <Stack.Screen name="Welcome" component={WelcomeScreen} />
       <Stack.Screen name="AddPet" component={AddPetScreen} />
+      <Stack.Screen name="PetProfile" component={PetProfileScreen} />
       <Stack.Screen name="MainTabs" component={MainTabs} />
       <Stack.Screen name="Processing" component={ProcessingScreen} />
       <Stack.Screen name="Review" component={ReviewScreen} />
