@@ -15,6 +15,9 @@ export default function App() {
   );
 
   const [petName, setPetName] = useState('');
+  const [petType, setPetType] = useState<'cat' | 'dog' | null>(null);
+
+  const canContinue = petName.trim() !== '' && petType !== null;
 
   if (screen === 'petSaved') {
     return (
@@ -27,7 +30,7 @@ export default function App() {
           <Text style={styles.title}>Welcome, {petName}! 🐾</Text>
 
           <Text style={styles.subtitle}>
-            Your pet profile has been started.
+            Your {petType} profile has been started.
           </Text>
         </View>
       </SafeAreaView>
@@ -56,12 +59,47 @@ export default function App() {
             onChangeText={setPetName}
           />
 
+          <Text style={styles.label}>What kind of pet?</Text>
+
+          <View style={styles.petTypeRow}>
+            <Pressable
+              style={[
+                styles.petTypeButton,
+                petType === 'cat' && styles.petTypeButtonSelected,
+              ]}
+              onPress={() => setPetType('cat')}
+            >
+              <Text
+                style={[
+                  styles.petTypeText,
+                  petType === 'cat' && styles.petTypeTextSelected,
+                ]}
+              >
+                🐱 Cat
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.petTypeButton,
+                petType === 'dog' && styles.petTypeButtonSelected,
+              ]}
+              onPress={() => setPetType('dog')}
+            >
+              <Text
+                style={[
+                  styles.petTypeText,
+                  petType === 'dog' && styles.petTypeTextSelected,
+                ]}
+              >
+                🐶 Dog
+              </Text>
+            </Pressable>
+          </View>
+
           <Pressable
-            style={[
-              styles.button,
-              petName.trim() === '' && styles.buttonDisabled,
-            ]}
-            disabled={petName.trim() === ''}
+            style={[styles.button, !canContinue && styles.buttonDisabled]}
+            disabled={!canContinue}
             onPress={() => setScreen('petSaved')}
           >
             <Text style={styles.buttonText}>Continue</Text>
@@ -148,6 +186,44 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     fontSize: 17,
     color: '#1F2A27',
+  },
+
+  label: {
+    marginTop: 28,
+    marginBottom: 12,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2A27',
+  },
+
+  petTypeRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+
+  petTypeButton: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D8E0DD',
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+
+  petTypeButtonSelected: {
+    backgroundColor: '#E2F0EB',
+    borderColor: '#2F6F63',
+  },
+
+  petTypeText: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#66736F',
+  },
+
+  petTypeTextSelected: {
+    color: '#2F6F63',
   },
 
   button: {
