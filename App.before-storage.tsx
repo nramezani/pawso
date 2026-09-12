@@ -1,7 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as DocumentPicker from 'expo-document-picker';
-import { decode } from 'base64-arraybuffer';
 import { useEffect, useState } from 'react';
 import { supabase } from './lib/supabase';
 import {
@@ -351,13 +350,11 @@ export default function App() {
     filename,
     contentType,
     sizeBytes,
-    localUri,
     extraction,
   }: {
     filename: string;
     contentType: string;
     sizeBytes: number | null;
-    localUri: string;
     extraction: {
       visit_date?: string | null;
       clinic?: string | null;
@@ -401,48 +398,6 @@ export default function App() {
 
     if (documentError) {
       throw documentError;
-    }
-
-    try {
-      const base64 = await FileSystem.readAsStringAsync(localUri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
-      const extensionMatch = filename.match(/\.([a-zA-Z0-9]+)$/);
-      const extension = extensionMatch?.[1]?.toLowerCase() || 'bin';
-
-      const storagePath =
-        `${session.user.id}/${currentPetId}/${documentRow.id}/original.${extension}`;
-
-      const { error: storageError } = await supabase.storage
-        .from('vet-records')
-        .upload(storagePath, decode(base64), {
-          contentType,
-          upsert: false,
-        });
-
-      if (storageError) {
-        await supabase
-          .from('documents')
-          .update({ status: 'failed' })
-          .eq('id', documentRow.id);
-
-        throw storageError;
-      }
-
-      const { error: documentStorageUpdateError } = await supabase
-        .from('documents')
-        .update({
-          storage_path: storagePath,
-        })
-        .eq('id', documentRow.id);
-
-      if (documentStorageUpdateError) {
-        throw documentStorageUpdateError;
-      }
-    } catch (storageError) {
-      console.log('Supabase Storage upload error:', storageError);
-      throw storageError;
     }
 
     const { data: extractionRow, error: extractionError } = await supabase
@@ -594,7 +549,6 @@ export default function App() {
         data.document?.size_bytes ??
         asset.size ??
         null,
-      localUri: asset.uri,
       extraction: data.extraction ?? {},
     });
 
@@ -1262,15 +1216,9 @@ export default function App() {
           )}
 
           {currentDocumentId && currentExtractionId && (
-            <>
-              <Text style={styles.uploadSuccessMeta}>
-                Original file stored securely
-              </Text>
-
-              <Text style={styles.uploadSuccessMeta}>
-                AI proposal saved for review
-              </Text>
-            </>
+            <Text style={styles.uploadSuccessMeta}>
+              AI proposal saved for review
+            </Text>
           )}
         </View>
 
