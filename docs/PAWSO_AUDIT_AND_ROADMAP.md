@@ -8,7 +8,7 @@ Current stage: Functional local MVP
 
 Pawso has a strong and unusually complete functional MVP. Its core product loop already connects pet profiles, veterinary records, owner-confirmed AI extraction, longitudinal memory, medications, care tasks, reminders, household collaboration, grounded questions, vet visit preparation, health check-ins, and Smart Care Plans.
 
-The application is suitable for continued internal testing. It is not ready for an external beta because its backend still runs on a local computer, AI endpoints are unauthenticated, the complete database schema cannot be recreated from the repository, native notification behavior is not fully tested, and automated tests and privacy controls are missing.
+The application is suitable for continued internal testing. Its production API is now hosted over HTTPS with authenticated, rate-limited AI endpoints, and the database can be recreated from repository migrations. It is not ready for an external beta because native notification behavior is not fully tested, automated coverage is still limited, and privacy and account controls are missing.
 
 The next milestone is Production Foundation and Security. New marketplace or community features should wait until the beta foundation is complete.
 
@@ -46,7 +46,7 @@ The next milestone is Production Foundation and Security. New marketplace or com
 
 ### P0 Backend deployment
 
-**Current state:** The mobile client uses `EXPO_PUBLIC_API_URL` with a local-network fallback. Testing depends on a developer computer and changing LAN IP address.
+**Current state:** Remediated. The mobile client defaults to the HTTPS Render deployment at `https://pawso.onrender.com`; local development can still override it with `EXPO_PUBLIC_API_URL`.
 
 **Required outcome:** Deploy FastAPI behind HTTPS with separate development and production environments, health monitoring, secret management, and a stable public API URL.
 
@@ -277,7 +277,7 @@ Pawso is ready for a small private beta when:
 - [x] Complete baseline database migration
 - [x] Authenticated and rate-limited AI API
 - [x] Deployment-ready backend container and runbook
-- [ ] Hosted production backend
+- [x] Hosted production backend
 - [ ] Native development builds
 - [ ] Automated test and CI foundation
 - [ ] Privacy and account controls

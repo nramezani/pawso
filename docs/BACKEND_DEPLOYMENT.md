@@ -4,6 +4,8 @@ The Pawso API is packaged as a provider-neutral Docker container. Any host that
 accepts a Dockerfile and supplies HTTPS can run it, including Render, Railway,
 Google Cloud Run, Azure Container Apps, and Fly.io.
 
+Current production deployment: `https://pawso.onrender.com`
+
 ## Required secrets
 
 Configure these as encrypted environment variables in the hosting dashboard.
@@ -67,3 +69,13 @@ Open `http://127.0.0.1:8000/ready`. It should return `status: ready`.
 - Use the hosting platform's log retention and alerting, but never log access
   tokens, uploaded documents, record contents, or OpenAI keys.
 - Roll back by redeploying the previous successful Git commit.
+
+## Verified Render deployment
+
+- Provider: Render
+- Source branch: `main`
+- Runtime: repository-root Dockerfile
+- Production URL: `https://pawso.onrender.com`
+- Readiness path: `/ready`
+- Initial production verification: health, readiness, authenticated Ask Pawso,
+  Smart Care Plan, and Vet Visit Prep passed on September 16, 2026.

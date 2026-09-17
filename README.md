@@ -29,7 +29,7 @@ Create a root `.env.local` file:
 ```text
 EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
-EXPO_PUBLIC_API_URL=http://YOUR-COMPUTER-IP:8000
+EXPO_PUBLIC_API_URL=https://pawso.onrender.com
 ```
 
 Start Expo:
@@ -83,6 +83,9 @@ The secured FastAPI backend includes a non-root Docker image and separate
 health and readiness endpoints. Follow the
 [backend deployment guide](docs/BACKEND_DEPLOYMENT.md) to deploy it behind
 HTTPS and point the Expo app to the hosted API.
+
+The production API is deployed at `https://pawso.onrender.com`. Its public
+health endpoints are `/health` and `/ready`.
 
 ## Project documentation
 
