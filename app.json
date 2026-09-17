@@ -1,15 +1,22 @@
+Warning: truncated output (original token count: 68003)
+Total output lines: 7229
+
 {
   "expo": {
-    "name": "pawso-temp",
+    "name": "Pawso",
     "slug": "pawso-temp",
+    "owner": "narara",
     "version": "1.0.0",
+    "scheme": "pawso",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.narara.pawso"
     },
     "android": {
+      "package": "com.narara.pawso",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -20,6 +27,20 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-dev-client",
+      [
+        "expo-notifications",
+        {
+          "color": "#6B4EFF"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "238eaa38-ce78-4157-88bc-09a3493d56f2"
+      }
     }
   }
 }
