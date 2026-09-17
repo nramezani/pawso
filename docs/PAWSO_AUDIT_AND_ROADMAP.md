@@ -277,7 +277,7 @@ Pawso is ready for a small private beta when:
 - [x] Symptom and Weight Health Check-Ins implemented and tested
 - [x] Smart Care Plans implemented and tested
 - [x] Reproducible backend setup
-- [ ] Complete baseline database migration
+- [x] Complete baseline database migration
 - [ ] Authenticated and rate-limited AI API
 - [ ] Hosted production backend
 - [ ] Native development builds
