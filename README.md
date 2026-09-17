@@ -78,6 +78,7 @@ cd backend
 ## Project documentation
 
 - [Product and technical audit](docs/PAWSO_AUDIT_AND_ROADMAP.md)
+- [Baseline Supabase schema](supabase/migrations/20260911_core_schema.sql)
 - [Household sharing migration](supabase/migrations/20260912_household_shared_care.sql)
 - [Household role permissions](supabase/migrations/20260912_household_role_permissions.sql)
 
