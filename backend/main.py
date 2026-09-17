@@ -15,10 +15,6 @@ from upload_validation import content_type_matches, detect_supported_file
 
 load_dotenv()
 
-client = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY")
-)
-
 app = FastAPI(
     title="Pawso API",
     version="0.3.0",
@@ -66,6 +62,29 @@ class VetRecordExtraction(BaseModel):
 def health_check():
     return {
         "status": "ok",
+        "service": "pawso-api",
+    }
+
+
+@app.get("/ready")
+def readiness_check():
+    required = (
+        "OPENAI_API_KEY",
+        "SUPABASE_URL",
+        "SUPABASE_PUBLISHABLE_KEY",
+    )
+    missing = [name for name in required if not os.getenv(name)]
+    if missing:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "not_ready",
+                "service": "pawso-api",
+                "missing_configuration": missing,
+            },
+        )
+    return {
+        "status": "ready",
         "service": "pawso-api",
     }
 
@@ -195,6 +214,7 @@ Never fill in information that is not actually present.
                 "detail": "high",
             }
 
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         response = client.responses.parse(
             model="gpt-5.6-luna",
             input=[
