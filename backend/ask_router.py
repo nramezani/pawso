@@ -49,6 +49,24 @@ class AskResponse(BaseModel):
     safety_category: Literal["normal", "medical_caution", "urgent"]
 
 
+class VetVisitPrepRequest(BaseModel):
+    pet: PetContext
+    reason_for_visit: str | None = Field(default=None, max_length=2000)
+    recent_changes: str | None = Field(default=None, max_length=4000)
+    sources: list[AskSource] = Field(default_factory=list, max_length=200)
+
+
+class VetVisitPrepResponse(BaseModel):
+    overview: str
+    priority_concerns: list[str]
+    current_medications: list[str]
+    recent_history: list[str]
+    follow_up_items: list[str]
+    questions_for_vet: list[str]
+    missing_information: list[str]
+    source_ids: list[str]
+
+
 URGENT_TERMS = (
     "difficulty breathing",
     "trouble breathing",
@@ -84,6 +102,21 @@ Rules:
 9. General educational guidance must be clearly described as general, not as a fact about this pet.
 10. Be concise, calm, and non-alarmist.
 11. If the question describes an obvious emergency, safety_category must be "urgent" and the answer should advise prompt veterinary/emergency evaluation without trying to diagnose.
+"""
+
+VET_VISIT_PREP_PROMPT = """You create a concise pre-visit briefing for a pet owner to review with a veterinarian.
+
+Rules:
+1. Use supplied confirmed records as the only source of pet-specific medical facts.
+2. The owner's reason for visit and recent changes are owner-reported, not confirmed diagnoses.
+3. Never diagnose, prescribe, recommend a dose change, or tell the owner to stop medication.
+4. Preserve uncertainty exactly. Suspected, possible, rule-out, and confirmed are not interchangeable.
+5. Do not invent dates, test results, medications, doses, symptoms, or veterinary instructions.
+6. Keep lists short, specific, and useful during an appointment.
+7. Questions for the vet may clarify recorded findings, follow-up, monitoring, or owner-reported changes, but must not assume an unrecorded diagnosis.
+8. Put important missing details in missing_information, such as onset, frequency, appetite, drinking, urination, stool, or medication response, only when relevant to the stated visit reason.
+9. source_ids must contain only IDs supplied in sources.
+10. The overview must clearly distinguish confirmed records from owner-reported information.
 """
 
 
@@ -140,4 +173,44 @@ def ask_pawso(payload: AskRequest):
         raise HTTPException(
             status_code=500,
             detail="Pawso could not answer from the pet record right now.",
+        )
+
+
+@router.post("/api/v1/vet-visit-prep", response_model=VetVisitPrepResponse)
+def prepare_vet_visit(payload: VetVisitPrepRequest):
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="OpenAI API key is not configured.")
+
+    context = {
+        "pet": payload.pet.model_dump(),
+        "owner_reported": {
+            "reason_for_visit": payload.reason_for_visit,
+            "recent_changes": payload.recent_changes,
+        },
+        "confirmed_sources": [source.model_dump() for source in payload.sources],
+    }
+
+    client = OpenAI(api_key=api_key)
+    try:
+        response = client.responses.parse(
+            model=MODEL,
+            input=[
+                {"role": "system", "content": VET_VISIT_PREP_PROMPT},
+                {"role": "user", "content": json.dumps(context, ensure_ascii=False)},
+            ],
+            text_format=VetVisitPrepResponse,
+        )
+        prep = response.output_parsed
+        if prep is None:
+            raise ValueError("The model did not return a structured briefing.")
+
+        allowed_ids = {source.id for source in payload.sources}
+        prep.source_ids = [source_id for source_id in prep.source_ids if source_id in allowed_ids]
+        return prep
+    except Exception as exc:
+        print(f"Vet Visit Prep error: {exc}")
+        raise HTTPException(
+            status_code=500,
+            detail="Pawso could not prepare the vet visit right now.",
         )

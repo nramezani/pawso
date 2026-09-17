@@ -29,7 +29,7 @@ export function AccountScreen() {
 
   return (
     <Page scroll>
-      <Header title="Account" onBack={() => setScreen('pets')} />
+      <Header title="Account" back={() => setScreen('pets')} />
 
       <Text style={styles.pageTitle}>
         {accountIsAnonymous ? 'Protect your Pawso account' : 'Your Pawso account'}

@@ -39,6 +39,7 @@ export function TodayScreen() {
     formatMedicationTime,
     formatDueLabel,
     openAskScreen,
+    openVetVisitPrep,
     openMedicationsScreen,
     pickVetRecord,
     openCareScreen,
@@ -553,6 +554,10 @@ export function TodayScreen() {
           <SecondaryButton
             title={`Ask Pawso about ${petName}`}
             onPress={openAskScreen}
+          />
+          <SecondaryButton
+            title={`Prepare for ${petName}'s vet visit`}
+            onPress={openVetVisitPrep}
           />
           <SecondaryButton title="Care & Reminders" onPress={openCareScreen} />
           <SecondaryButton

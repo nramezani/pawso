@@ -27,6 +27,7 @@ export type RootStackParamList = {
   AddCareTask: undefined;
   Account: undefined;
   Household: undefined;
+  VetVisitPrep: undefined;
 };
 
 export const navigationRef = createNavigationContainerRef<RootStackParamList>();
@@ -37,7 +38,7 @@ function navigateWhenReady(
   attempt = 0
 ) {
   if (navigationRef.isReady()) {
-    navigationRef.navigate(name as never, params as never);
+    (navigationRef.navigate as any)(name, params);
     return;
   }
 
@@ -95,6 +96,9 @@ export function navigateToScreen(screen: Screen) {
       return;
     case 'household':
       navigateWhenReady('Household');
+      return;
+    case 'vetVisitPrep':
+      navigateWhenReady('VetVisitPrep');
       return;
   }
 }

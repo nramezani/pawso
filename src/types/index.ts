@@ -13,6 +13,7 @@ export type Screen =
   | 'care'
   | 'addCareTask'
   | 'ask'
+  | 'vetVisitPrep'
   | 'account'
   | 'household';
 
@@ -111,6 +112,17 @@ export type AskAnswer = {
   source_ids: string[];
   answer_type: 'record_summary' | 'record_lookup' | 'general_guidance' | 'insufficient_information';
   safety_category: 'normal' | 'medical_caution' | 'urgent';
+};
+
+export type VetVisitPrep = {
+  overview: string;
+  priority_concerns: string[];
+  current_medications: string[];
+  recent_history: string[];
+  follow_up_items: string[];
+  questions_for_vet: string[];
+  missing_information: string[];
+  source_ids: string[];
 };
 
 
