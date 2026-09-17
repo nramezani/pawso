@@ -3,13 +3,15 @@ import os
 from typing import Literal
 
 from dotenv import load_dotenv
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
+from auth import require_user
+
 load_dotenv()
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_user)])
 
 MODEL = "gpt-5.6-luna"
 
