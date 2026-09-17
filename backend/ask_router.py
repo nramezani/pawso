@@ -7,30 +7,30 @@ from fastapi import APIRouter, Depends, HTTPException
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
-from auth import require_user
+from rate_limit import enforce_ai_limits
 
 load_dotenv()
 
-router = APIRouter(dependencies=[Depends(require_user)])
+router = APIRouter(dependencies=[Depends(enforce_ai_limits)])
 
 MODEL = "gpt-5.6-luna"
 
 
 class PetContext(BaseModel):
-    id: str
-    name: str
-    species: str | None = None
-    breed: str | None = None
-    conditions: str | None = None
-    allergies: str | None = None
+    id: str = Field(min_length=1, max_length=100)
+    name: str = Field(min_length=1, max_length=200)
+    species: str | None = Field(default=None, max_length=100)
+    breed: str | None = Field(default=None, max_length=200)
+    conditions: str | None = Field(default=None, max_length=4000)
+    allergies: str | None = Field(default=None, max_length=4000)
 
 
 class AskSource(BaseModel):
-    id: str
-    label: str
-    source_type: str
-    date: str | None = None
-    text: str
+    id: str = Field(min_length=1, max_length=200)
+    label: str = Field(min_length=1, max_length=500)
+    source_type: str = Field(min_length=1, max_length=200)
+    date: str | None = Field(default=None, max_length=100)
+    text: str = Field(min_length=1, max_length=10000)
 
 
 class AskRequest(BaseModel):

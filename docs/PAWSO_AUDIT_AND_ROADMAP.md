@@ -59,7 +59,7 @@ The next milestone is Production Foundation and Security. New marketplace or com
 
 ### P0 Backend authentication and abuse protection
 
-**Current state:** AI endpoints do not verify Supabase access tokens. The document extraction endpoint accepts requests without authentication. There is no rate limit or per-user AI quota. CORS allows all origins.
+**Current state:** Remediated for the single-instance MVP. Private AI endpoints verify Supabase access tokens, enforce configurable per-user minute and daily request limits, restrict CORS, cap request fields and uploads, validate file signatures, and return safe errors. A shared rate-limit store is still required before horizontally scaling the API.
 
 **Risk:** Anyone who discovers the API could consume OpenAI credits or submit arbitrary documents.
 
@@ -161,11 +161,8 @@ Support kg and lb, user locale date formats, time zones, daylight-saving changes
 
 ## Security findings
 
-- FastAPI currently allows every CORS origin.
-- AI endpoints have no authentication or authorization layer.
-- The API has no rate limiting or usage quotas.
-- Document extraction returns raw exception text in an error response.
-- File validation relies mainly on the reported content type rather than verified file signatures.
+- Production rate limits must move from process memory to a shared store before running multiple API instances.
+- Usage tracking currently counts requests rather than model tokens or monetary cost.
 - Security-definer database functions require a dedicated review of execute privileges, search paths, and caller validation.
 - A complete RLS integration test suite is not present.
 - Dependency audit reported moderate advisories but no high or critical advisories. Expo dependencies should be upgraded carefully; automated advice that downgrades Expo must not be applied blindly.
@@ -278,7 +275,7 @@ Pawso is ready for a small private beta when:
 - [x] Smart Care Plans implemented and tested
 - [x] Reproducible backend setup
 - [x] Complete baseline database migration
-- [ ] Authenticated and rate-limited AI API
+- [x] Authenticated and rate-limited AI API
 - [ ] Hosted production backend
 - [ ] Native development builds
 - [ ] Automated test and CI foundation

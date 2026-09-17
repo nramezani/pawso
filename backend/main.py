@@ -3,13 +3,14 @@ import os
 from typing import Literal
 
 from ask_router import router as ask_router
-from auth import AuthenticatedUser, require_user
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from openai import OpenAI
 from pydantic import BaseModel
+from rate_limit import enforce_ai_limits
+from upload_validation import content_type_matches, detect_supported_file
 
 
 load_dotenv()
@@ -40,7 +41,7 @@ app.add_middleware(
 )
 
 
-MAX_FILE_SIZE = 15 * 1024 * 1024
+MAX_FILE_SIZE = max(1, int(os.getenv("MAX_UPLOAD_SIZE_MB", "10"))) * 1024 * 1024
 
 
 class VetRecordExtraction(BaseModel):
@@ -72,7 +73,7 @@ def health_check():
 @app.post("/api/v1/documents/extract")
 async def extract_document(
     file: UploadFile = File(...),
-    _user: AuthenticatedUser = Depends(require_user),
+    _user=Depends(enforce_ai_limits),
 ):
     try:
         file_bytes = await file.read()
@@ -91,28 +92,35 @@ async def extract_document(
                 status_code=413,
                 content={
                     "status": "error",
-                    "message": "File is too large. Maximum size is 15 MB.",
+                    "message": (
+                        f"File is too large. Maximum size is "
+                        f"{MAX_FILE_SIZE // (1024 * 1024)} MB."
+                    ),
                 },
             )
 
-        content_type = (
-            file.content_type
-            or "application/octet-stream"
-        )
-
-        if (
-            content_type != "application/pdf"
-            and not content_type.startswith("image/")
-        ):
+        detected_file = detect_supported_file(file_bytes)
+        if detected_file is None:
             return JSONResponse(
                 status_code=400,
                 content={
                     "status": "error",
                     "message": (
-                        "Only PDF and image files are supported."
+                        "Only genuine PDF, JPEG, PNG, and WebP files are supported."
                     ),
                 },
             )
+
+        if not content_type_matches(file.content_type, detected_file):
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "status": "error",
+                    "message": "The file contents do not match its reported type.",
+                },
+            )
+
+        content_type = detected_file.content_type
 
         encoded = base64.b64encode(
             file_bytes

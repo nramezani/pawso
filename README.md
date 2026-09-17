@@ -51,6 +51,8 @@ Copy-Item .env.example .env
 ```
 
 Edit `backend/.env` and replace the placeholder OpenAI key. Never commit the real `.env` file.
+The example also contains the Supabase authentication settings and configurable
+AI request and upload limits used by the secured API.
 
 Start the API so a phone on the same network can connect:
 
