@@ -15,6 +15,7 @@ export type Screen =
   | 'ask'
   | 'vetVisitPrep'
   | 'healthCheckIn'
+  | 'smartCarePlan'
   | 'account'
   | 'household';
 
@@ -123,6 +124,14 @@ export type VetVisitPrep = {
   follow_up_items: string[];
   questions_for_vet: string[];
   missing_information: string[];
+  source_ids: string[];
+};
+
+export type SmartCareSuggestion = {
+  title: string;
+  reason: string;
+  notes: string;
+  task_type: 'follow_up' | 'monitoring' | 'routine_care';
   source_ids: string[];
 };
 

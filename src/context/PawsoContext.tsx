@@ -37,6 +37,7 @@ import type {
   AskSource,
   AskAnswer,
   VetVisitPrep,
+  SmartCareSuggestion,
   PetSummary,
   PetTodaySummary,
   HouseholdMember,
@@ -157,6 +158,10 @@ function usePawsoState() {
   const [checkInWeight, setCheckInWeight] = useState('');
   const [checkInSaving, setCheckInSaving] = useState(false);
   const [checkInError, setCheckInError] = useState('');
+  const [smartCareSuggestions, setSmartCareSuggestions] = useState<SmartCareSuggestion[]>([]);
+  const [smartCareSources, setSmartCareSources] = useState<AskSource[]>([]);
+  const [smartCareLoading, setSmartCareLoading] = useState(false);
+  const [smartCareError, setSmartCareError] = useState('');
   const [notificationPermission, setNotificationPermission] = useState<
     'granted' | 'denied' | 'undetermined'
   >('undetermined');
@@ -1159,6 +1164,81 @@ function usePawsoState() {
     } finally {
       setCheckInSaving(false);
     }
+  }
+
+  function openSmartCarePlan() {
+    setSmartCareError('');
+    setScreen('smartCarePlan');
+  }
+
+  async function generateSmartCarePlan() {
+    if (!currentPetId) return;
+    try {
+      setSmartCareLoading(true);
+      setSmartCareError('');
+      const sources: AskSource[] = timelineEvents.map((event) => ({
+        id: `event:${event.id}`,
+        label: event.title,
+        source_type: event.source,
+        date: event.date,
+        text: `${event.type}. ${event.title}. ${event.detail}`.trim(),
+      }));
+
+      for (const medication of medicationList) {
+        const times = medicationSchedules
+          .filter((schedule) => schedule.medication_id === medication.id)
+          .map((schedule) => schedule.time_of_day)
+          .join(', ');
+        sources.push({
+          id: `medication:${medication.id}`,
+          label: medication.name,
+          source_type: 'Confirmed medication record',
+          text: [medication.name, medication.dose, medication.unit, medication.instructions, times ? `Schedule: ${times}` : null]
+            .filter(Boolean).join(' · '),
+        });
+      }
+
+      for (const task of activeCareTasks) {
+        sources.push({
+          id: `care:${task.id}`,
+          label: task.title,
+          source_type: 'Existing care task',
+          date: task.due_at,
+          text: [task.title, task.notes, `Due: ${new Date(task.due_at).toLocaleString()}`].filter(Boolean).join(' · '),
+        });
+      }
+
+      setSmartCareSources(sources);
+      const response = await fetch(`${API_BASE_URL}/api/v1/smart-care-plan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pet: { id: currentPetId, name: petName, species: petType, breed: breed || null, conditions: conditions || null, allergies: allergies || null },
+          sources,
+        }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.detail || 'Smart Care Plan request failed.');
+      setSmartCareSuggestions(body.suggestions as SmartCareSuggestion[]);
+    } catch (error) {
+      console.log('Smart Care Plan error:', error);
+      setSmartCareError(error instanceof Error ? error.message : 'Could not create care suggestions.');
+    } finally {
+      setSmartCareLoading(false);
+    }
+  }
+
+  function acceptSmartCareSuggestion(suggestion: SmartCareSuggestion) {
+    setNewCareTitle(suggestion.title);
+    setNewCareNotes(`${suggestion.notes}\n\nPawso suggestion reason: ${suggestion.reason}`.trim());
+    setNewCareDate('');
+    setNewCareTime('09:00');
+    setScreen('addCareTask');
+  }
+
+  function getSmartCareSourceLabel(sourceId: string) {
+    const source = smartCareSources.find((item) => item.id === sourceId);
+    return source ? `${source.label}${source.date ? ` · ${source.date}` : ''}` : sourceId;
   }
 
   async function loadCareData(petId: string) {
@@ -2458,6 +2538,9 @@ function usePawsoState() {
     setCheckInWeight,
     checkInSaving,
     checkInError,
+    smartCareSuggestions,
+    smartCareLoading,
+    smartCareError,
     notificationPermission,
     notificationsEnabled,
     notificationSyncing,
@@ -2482,6 +2565,10 @@ function usePawsoState() {
     openVetVisitPrep,
     openHealthCheckIn,
     saveHealthCheckIn,
+    openSmartCarePlan,
+    generateSmartCarePlan,
+    acceptSmartCareSuggestion,
+    getSmartCareSourceLabel,
     loadCareData,
     parseCareDateTime,
     openCareScreen,

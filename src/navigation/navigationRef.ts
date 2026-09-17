@@ -29,6 +29,7 @@ export type RootStackParamList = {
   Household: undefined;
   VetVisitPrep: undefined;
   HealthCheckIn: undefined;
+  SmartCarePlan: undefined;
 };
 
 export const navigationRef = createNavigationContainerRef<RootStackParamList>();
@@ -103,6 +104,9 @@ export function navigateToScreen(screen: Screen) {
       return;
     case 'healthCheckIn':
       navigateWhenReady('HealthCheckIn');
+      return;
+    case 'smartCarePlan':
+      navigateWhenReady('SmartCarePlan');
       return;
   }
 }
