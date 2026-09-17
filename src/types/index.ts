@@ -14,6 +14,7 @@ export type Screen =
   | 'addCareTask'
   | 'ask'
   | 'vetVisitPrep'
+  | 'healthCheckIn'
   | 'account'
   | 'household';
 
