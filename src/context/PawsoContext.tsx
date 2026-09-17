@@ -36,6 +36,7 @@ import type {
   TaskCompletion,
   AskSource,
   AskAnswer,
+  VetVisitPrep,
   PetSummary,
   PetTodaySummary,
   HouseholdMember,
@@ -144,6 +145,11 @@ function usePawsoState() {
   const [askSources, setAskSources] = useState<AskSource[]>([]);
   const [askLoading, setAskLoading] = useState(false);
   const [askError, setAskError] = useState('');
+  const [visitReason, setVisitReason] = useState('');
+  const [visitChanges, setVisitChanges] = useState('');
+  const [vetVisitPrep, setVetVisitPrep] = useState<VetVisitPrep | null>(null);
+  const [vetVisitPrepLoading, setVetVisitPrepLoading] = useState(false);
+  const [vetVisitPrepError, setVetVisitPrepError] = useState('');
   const [notificationPermission, setNotificationPermission] = useState<
     'granted' | 'denied' | 'undetermined'
   >('undetermined');
@@ -971,6 +977,92 @@ function usePawsoState() {
       : '';
 
     return `${source.label}${dateLabel}`;
+  }
+
+  async function generateVetVisitPrep() {
+    if (!currentPetId) return;
+
+    try {
+      setVetVisitPrepLoading(true);
+      setVetVisitPrepError('');
+
+      const sources: AskSource[] = timelineEvents.map((event) => ({
+        id: `event:${event.id}`,
+        label: event.title,
+        source_type: event.source,
+        date: event.date,
+        text: `${event.type}. ${event.title}. ${event.detail}`.trim(),
+      }));
+
+      for (const medication of medicationList) {
+        const scheduleTimes = medicationSchedules
+          .filter((schedule) => schedule.medication_id === medication.id)
+          .map((schedule) => schedule.time_of_day)
+          .join(', ');
+
+        sources.push({
+          id: `medication:${medication.id}`,
+          label: medication.name,
+          source_type: 'Confirmed medication record',
+          text: [
+            medication.name,
+            medication.dose,
+            medication.unit,
+            medication.instructions,
+            scheduleTimes ? `Schedule: ${scheduleTimes}` : null,
+          ].filter(Boolean).join(' · '),
+        });
+      }
+
+      for (const task of careTasks) {
+        sources.push({
+          id: `care:${task.id}`,
+          label: task.title,
+          source_type: 'Confirmed care task',
+          date: task.due_at,
+          text: [task.title, task.notes, `Due: ${new Date(task.due_at).toLocaleString()}`]
+            .filter(Boolean)
+            .join(' · '),
+        });
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/v1/vet-visit-prep`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pet: {
+            id: currentPetId,
+            name: petName,
+            species: petType,
+            breed: breed || null,
+            conditions: conditions || null,
+            allergies: allergies || null,
+          },
+          reason_for_visit: visitReason.trim() || null,
+          recent_changes: visitChanges.trim() || null,
+          sources,
+        }),
+      });
+
+      const body = await response.json();
+      if (!response.ok) {
+        throw new Error(body.detail || body.message || 'Vet Visit Prep request failed.');
+      }
+
+      setVetVisitPrep(body as VetVisitPrep);
+    } catch (error) {
+      console.log('Vet Visit Prep error:', error);
+      setVetVisitPrepError(
+        error instanceof Error ? error.message : 'Pawso could not prepare the visit right now.'
+      );
+    } finally {
+      setVetVisitPrepLoading(false);
+    }
+  }
+
+  function openVetVisitPrep() {
+    setVetVisitPrepError('');
+    setScreen('vetVisitPrep');
   }
 
   async function loadCareData(petId: string) {
@@ -2251,6 +2343,14 @@ function usePawsoState() {
     setAskLoading,
     askError,
     setAskError,
+    visitReason,
+    setVisitReason,
+    visitChanges,
+    setVisitChanges,
+    vetVisitPrep,
+    setVetVisitPrep,
+    vetVisitPrepLoading,
+    vetVisitPrepError,
     notificationPermission,
     notificationsEnabled,
     notificationSyncing,
@@ -2271,6 +2371,8 @@ function usePawsoState() {
     askPawso,
     openAskScreen,
     getAskSourceLabel,
+    generateVetVisitPrep,
+    openVetVisitPrep,
     loadCareData,
     parseCareDateTime,
     openCareScreen,

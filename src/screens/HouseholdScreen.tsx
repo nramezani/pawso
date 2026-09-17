@@ -38,7 +38,7 @@ export function HouseholdScreen() {
 
   return (
     <Page scroll>
-      <Header title="Household" onBack={() => setScreen('account')} />
+      <Header title="Household" back={() => setScreen('account')} />
 
       <Text style={styles.pageTitle}>{householdName || 'My Pawso Household'}</Text>
       <Text style={styles.pageSubtitle}>
@@ -83,7 +83,7 @@ export function HouseholdScreen() {
           <Text style={styles.cardMuted}>
             Caregiver can manage routine care. Sitter can follow and complete assigned care only.
           </Text>
-          <View style={styles.optionRow}>
+          <View style={styles.row}>
             <OptionButton
               title="Caregiver"
               selected={inviteRole === 'caregiver'}
