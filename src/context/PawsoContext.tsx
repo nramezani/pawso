@@ -150,6 +150,13 @@ function usePawsoState() {
   const [vetVisitPrep, setVetVisitPrep] = useState<VetVisitPrep | null>(null);
   const [vetVisitPrepLoading, setVetVisitPrepLoading] = useState(false);
   const [vetVisitPrepError, setVetVisitPrepError] = useState('');
+  const [checkInType, setCheckInType] = useState<'symptom' | 'weight'>('symptom');
+  const [checkInDate, setCheckInDate] = useState(new Date().toISOString().slice(0, 10));
+  const [checkInTitle, setCheckInTitle] = useState('');
+  const [checkInDetails, setCheckInDetails] = useState('');
+  const [checkInWeight, setCheckInWeight] = useState('');
+  const [checkInSaving, setCheckInSaving] = useState(false);
+  const [checkInError, setCheckInError] = useState('');
   const [notificationPermission, setNotificationPermission] = useState<
     'granted' | 'denied' | 'undetermined'
   >('undetermined');
@@ -849,6 +856,10 @@ function usePawsoState() {
           ? 'Follow-up'
           : event.event_type === 'vet_visit'
           ? 'Veterinary visit'
+          : event.event_type === 'owner_symptom'
+          ? 'Owner observation'
+          : event.event_type === 'weight'
+          ? 'Weight'
           : event.event_type || 'Health event',
       title: event.title || 'Health event',
       detail: event.description || '',
@@ -1063,6 +1074,91 @@ function usePawsoState() {
   function openVetVisitPrep() {
     setVetVisitPrepError('');
     setScreen('vetVisitPrep');
+  }
+
+  function openHealthCheckIn(type: 'symptom' | 'weight') {
+    setCheckInType(type);
+    setCheckInDate(new Date().toISOString().slice(0, 10));
+    setCheckInTitle('');
+    setCheckInDetails('');
+    setCheckInWeight('');
+    setCheckInError('');
+    setScreen('healthCheckIn');
+  }
+
+  async function saveHealthCheckIn() {
+    if (!currentPetId) return;
+
+    const validDate = /^\d{4}-\d{2}-\d{2}$/.test(checkInDate.trim());
+    if (!validDate || Number.isNaN(new Date(`${checkInDate}T12:00:00`).getTime())) {
+      setCheckInError('Enter the date as YYYY-MM-DD.');
+      return;
+    }
+
+    const weightValue = Number(checkInWeight.trim());
+    if (checkInType === 'symptom' && !checkInTitle.trim()) {
+      setCheckInError('Add a short symptom or observation.');
+      return;
+    }
+    if (checkInType === 'weight' && (!Number.isFinite(weightValue) || weightValue <= 0)) {
+      setCheckInError('Enter a valid weight in kilograms.');
+      return;
+    }
+
+    try {
+      setCheckInSaving(true);
+      setCheckInError('');
+
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!session?.user) throw new Error('Pawso session is not ready. Please try again.');
+
+      const event = checkInType === 'symptom'
+        ? {
+            pet_id: currentPetId,
+            user_id: session.user.id,
+            event_type: 'owner_symptom',
+            event_date: checkInDate.trim(),
+            title: checkInTitle.trim(),
+            description: checkInDetails.trim() || 'No additional details provided.',
+            source_type: 'owner_note',
+          }
+        : {
+            pet_id: currentPetId,
+            user_id: session.user.id,
+            event_type: 'weight',
+            event_date: checkInDate.trim(),
+            title: `Weight recorded: ${weightValue} kg`,
+            description: checkInDetails.trim() || 'Owner-recorded weight.',
+            source_type: 'owner_note',
+          };
+
+      const { error: insertError } = await supabase.from('medical_events').insert(event);
+      if (insertError) throw insertError;
+
+      if (checkInType === 'weight') {
+        const { error: updateError } = await supabase
+          .from('pets')
+          .update({ weight_kg: weightValue })
+          .eq('id', currentPetId);
+        if (updateError) throw updateError;
+
+        setWeight(`${weightValue} kg`);
+        setPets((current) => current.map((pet) =>
+          pet.id === currentPetId ? { ...pet, weight_kg: weightValue } : pet
+        ));
+      }
+
+      await loadTimeline(currentPetId);
+      setScreen('timeline');
+    } catch (error) {
+      console.log('Health Check-In error:', error);
+      setCheckInError(
+        error instanceof Error ? error.message : 'Could not save this check-in.'
+      );
+    } finally {
+      setCheckInSaving(false);
+    }
   }
 
   async function loadCareData(petId: string) {
@@ -2351,6 +2447,17 @@ function usePawsoState() {
     setVetVisitPrep,
     vetVisitPrepLoading,
     vetVisitPrepError,
+    checkInType,
+    checkInDate,
+    setCheckInDate,
+    checkInTitle,
+    setCheckInTitle,
+    checkInDetails,
+    setCheckInDetails,
+    checkInWeight,
+    setCheckInWeight,
+    checkInSaving,
+    checkInError,
     notificationPermission,
     notificationsEnabled,
     notificationSyncing,
@@ -2373,6 +2480,8 @@ function usePawsoState() {
     getAskSourceLabel,
     generateVetVisitPrep,
     openVetVisitPrep,
+    openHealthCheckIn,
+    saveHealthCheckIn,
     loadCareData,
     parseCareDateTime,
     openCareScreen,

@@ -40,6 +40,7 @@ export function TodayScreen() {
     formatDueLabel,
     openAskScreen,
     openVetVisitPrep,
+    openHealthCheckIn,
     openMedicationsScreen,
     pickVetRecord,
     openCareScreen,
@@ -538,8 +539,20 @@ export function TodayScreen() {
               onPress={openMedicationsScreen}
             />
             {canManageMedical ? <QuickAction icon="📄" label="Record" onPress={pickVetRecord} /> : null}
-            <QuickAction icon="🩺" label="Symptom" />
-            <QuickAction icon="⚖️" label="Weight" />
+            {canManageMedical ? (
+              <>
+                <QuickAction
+                  icon="🩺"
+                  label="Symptom"
+                  onPress={() => openHealthCheckIn('symptom')}
+                />
+                <QuickAction
+                  icon="⚖️"
+                  label="Weight"
+                  onPress={() => openHealthCheckIn('weight')}
+                />
+              </>
+            ) : null}
             <QuickAction icon="📅" label="Care task" onPress={openCareScreen} />
             <QuickAction icon="✨" label="Ask Pawso" onPress={openAskScreen} />
           </View>
