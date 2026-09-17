@@ -77,9 +77,17 @@ cd backend
 .\.venv\Scripts\python.exe -m py_compile main.py ask_router.py
 ```
 
+## Production deployment
+
+The secured FastAPI backend includes a non-root Docker image and separate
+health and readiness endpoints. Follow the
+[backend deployment guide](docs/BACKEND_DEPLOYMENT.md) to deploy it behind
+HTTPS and point the Expo app to the hosted API.
+
 ## Project documentation
 
 - [Product and technical audit](docs/PAWSO_AUDIT_AND_ROADMAP.md)
+- [Backend deployment guide](docs/BACKEND_DEPLOYMENT.md)
 - [Baseline Supabase schema](supabase/migrations/20260911_core_schema.sql)
 - [Household sharing migration](supabase/migrations/20260912_household_shared_care.sql)
 - [Household role permissions](supabase/migrations/20260912_household_role_permissions.sql)
