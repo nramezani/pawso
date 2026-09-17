@@ -170,6 +170,19 @@ function usePawsoState() {
   const [scheduledNotificationCount, setScheduledNotificationCount] = useState(0);
   const [notificationError, setNotificationError] = useState('');
 
+  async function getApiAuthHeaders(contentType?: string) {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error) throw error;
+    if (!session?.access_token) {
+      throw new Error('Pawso session is not ready. Please sign in again.');
+    }
+
+    return {
+      Authorization: `Bearer ${session.access_token}`,
+      ...(contentType ? { 'Content-Type': contentType } : {}),
+    };
+  }
+
   useEffect(() => {
     checkBackend();
     initializeSupabase();
@@ -944,9 +957,7 @@ function usePawsoState() {
 
       const response = await fetch(`${API_BASE_URL}/api/v1/ask`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: await getApiAuthHeaders('application/json'),
         body: JSON.stringify({
           pet: {
             id: currentPetId,
@@ -1044,7 +1055,7 @@ function usePawsoState() {
 
       const response = await fetch(`${API_BASE_URL}/api/v1/vet-visit-prep`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getApiAuthHeaders('application/json'),
         body: JSON.stringify({
           pet: {
             id: currentPetId,
@@ -1211,7 +1222,7 @@ function usePawsoState() {
       setSmartCareSources(sources);
       const response = await fetch(`${API_BASE_URL}/api/v1/smart-care-plan`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getApiAuthHeaders('application/json'),
         body: JSON.stringify({
           pet: { id: currentPetId, name: petName, species: petType, breed: breed || null, conditions: conditions || null, allergies: allergies || null },
           sources,
@@ -2105,6 +2116,7 @@ function usePawsoState() {
         httpMethod: 'POST',
         uploadType: FileSystem.FileSystemUploadType.MULTIPART,
         fieldName: 'file',
+        headers: await getApiAuthHeaders(),
         mimeType:
           asset.mimeType || 'application/octet-stream',
       }

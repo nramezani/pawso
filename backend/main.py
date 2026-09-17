@@ -1,10 +1,11 @@
-from ask_router import router as ask_router
 import base64
 import os
 from typing import Literal
 
+from ask_router import router as ask_router
+from auth import AuthenticatedUser, require_user
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, UploadFile
+from fastapi import Depends, FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from openai import OpenAI
@@ -25,10 +26,17 @@ app.include_router(ask_router)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        origin.strip()
+        for origin in os.getenv(
+            "CORS_ALLOWED_ORIGINS",
+            "http://localhost:8081,http://localhost:19006",
+        ).split(",")
+        if origin.strip()
+    ],
     allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 
@@ -63,7 +71,8 @@ def health_check():
 
 @app.post("/api/v1/documents/extract")
 async def extract_document(
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    _user: AuthenticatedUser = Depends(require_user),
 ):
     try:
         file_bytes = await file.read()
@@ -245,6 +254,5 @@ Never fill in information that is not actually present.
                     "Pawso could not analyze this veterinary "
                     "record."
                 ),
-                "detail": str(exc),
             },
         )
