@@ -276,6 +276,7 @@ Pawso is ready for a small private beta when:
 - [x] Reproducible backend setup
 - [x] Complete baseline database migration
 - [x] Authenticated and rate-limited AI API
+- [x] Deployment-ready backend container and runbook
 - [ ] Hosted production backend
 - [ ] Native development builds
 - [ ] Automated test and CI foundation
