@@ -67,6 +67,23 @@ class VetVisitPrepResponse(BaseModel):
     source_ids: list[str]
 
 
+class SmartCarePlanRequest(BaseModel):
+    pet: PetContext
+    sources: list[AskSource] = Field(default_factory=list, max_length=200)
+
+
+class SmartCareSuggestion(BaseModel):
+    title: str
+    reason: str
+    notes: str
+    task_type: Literal["follow_up", "monitoring", "routine_care"]
+    source_ids: list[str]
+
+
+class SmartCarePlanResponse(BaseModel):
+    suggestions: list[SmartCareSuggestion] = Field(max_length=5)
+
+
 URGENT_TERMS = (
     "difficulty breathing",
     "trouble breathing",
@@ -117,6 +134,21 @@ Rules:
 8. Put important missing details in missing_information, such as onset, frequency, appetite, drinking, urination, stool, or medication response, only when relevant to the stated visit reason.
 9. source_ids must contain only IDs supplied in sources.
 10. The overview must clearly distinguish confirmed records from owner-reported information.
+"""
+
+SMART_CARE_PLAN_PROMPT = """You create optional pet-care task suggestions grounded only in supplied confirmed records.
+
+Rules:
+1. Suggest at most five useful, non-duplicate tasks.
+2. Every suggestion must be directly supported by one or more supplied source IDs.
+3. Never diagnose, prescribe, change medication instructions, invent a dose, or suggest stopping medication.
+4. Never invent a due date. The owner will choose scheduling after accepting a suggestion.
+5. Preserve uncertainty exactly and distinguish owner observations from veterinary instructions.
+6. Prefer explicit recorded follow-up instructions, monitoring already supported by the record, and ordinary non-medical care tasks.
+7. Do not turn an owner-reported symptom into a diagnosis or treatment recommendation.
+8. If the records do not support an actionable task, return an empty suggestions list.
+9. Keep titles concise and make the reason explain the supporting record.
+10. source_ids must contain only IDs present in the supplied sources.
 """
 
 
@@ -214,3 +246,41 @@ def prepare_vet_visit(payload: VetVisitPrepRequest):
             status_code=500,
             detail="Pawso could not prepare the vet visit right now.",
         )
+
+
+@router.post("/api/v1/smart-care-plan", response_model=SmartCarePlanResponse)
+def create_smart_care_plan(payload: SmartCarePlanRequest):
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="OpenAI API key is not configured.")
+
+    context = {
+        "pet": payload.pet.model_dump(),
+        "confirmed_sources": [source.model_dump() for source in payload.sources],
+    }
+    client = OpenAI(api_key=api_key)
+
+    try:
+        response = client.responses.parse(
+            model=MODEL,
+            input=[
+                {"role": "system", "content": SMART_CARE_PLAN_PROMPT},
+                {"role": "user", "content": json.dumps(context, ensure_ascii=False)},
+            ],
+            text_format=SmartCarePlanResponse,
+        )
+        plan = response.output_parsed
+        if plan is None:
+            raise ValueError("The model did not return a structured care plan.")
+
+        allowed_ids = {source.id for source in payload.sources}
+        plan.suggestions = [
+            suggestion
+            for suggestion in plan.suggestions
+            if suggestion.source_ids
+            and all(source_id in allowed_ids for source_id in suggestion.source_ids)
+        ][:5]
+        return plan
+    except Exception as exc:
+        print(f"Smart Care Plan error: {exc}")
+        raise HTTPException(status_code=500, detail="Pawso could not create care suggestions right now.")

@@ -41,6 +41,7 @@ export function TodayScreen() {
     openAskScreen,
     openVetVisitPrep,
     openHealthCheckIn,
+    openSmartCarePlan,
     openMedicationsScreen,
     pickVetRecord,
     openCareScreen,
@@ -572,6 +573,7 @@ export function TodayScreen() {
             title={`Prepare for ${petName}'s vet visit`}
             onPress={openVetVisitPrep}
           />
+          <SecondaryButton title="Smart Care Plan" onPress={openSmartCarePlan} />
           <SecondaryButton title="Care & Reminders" onPress={openCareScreen} />
           <SecondaryButton
             title="Medications & Doses"
