@@ -4,13 +4,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export function Page({
   children,
@@ -167,13 +167,19 @@ export function PrimaryButton({
 export function SecondaryButton({
   title,
   onPress,
+  disabled = false,
 }: {
   title: string;
   onPress: () => void;
+  disabled?: boolean;
 }) {
   return (
     <Pressable
-      style={styles.secondaryButton}
+      style={[
+        styles.secondaryButton,
+        disabled && styles.disabledButton,
+      ]}
+      disabled={disabled}
       onPress={onPress}
     >
       <Text style={styles.secondaryButtonText}>
@@ -300,13 +306,16 @@ export const styles = StyleSheet.create({
   },
 
   pageContent: {
-    padding: 22,
-    paddingBottom: 60,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 36,
   },
 
   pageContentFlex: {
     flex: 1,
-    padding: 22,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 24,
   },
 
   centerPage: {
@@ -741,11 +750,14 @@ export const styles = StyleSheet.create({
 
   quickGrid: {
     flexDirection: 'row',
-    gap: 8,
+    flexWrap: 'wrap',
+    gap: 10,
   },
 
   quickAction: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: '30%',
+    minWidth: 96,
     backgroundColor: '#FFFFFF',
     paddingVertical: 15,
     borderRadius: 14,
@@ -760,9 +772,10 @@ export const styles = StyleSheet.create({
 
   quickLabel: {
     marginTop: 6,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     color: '#66736F',
+    textAlign: 'center',
   },
 
   processingPage: {
