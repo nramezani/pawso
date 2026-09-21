@@ -693,8 +693,16 @@ function usePawsoState() {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
 
-      setAccountEmail('');
-      setAccountIsAnonymous(true);
+      const { data: anonymousData, error: anonymousError } =
+        await supabase.auth.signInAnonymously();
+      if (anonymousError) throw anonymousError;
+      if (!anonymousData.user) {
+        throw new Error('Pawso could not prepare a new temporary session.');
+      }
+
+      hydrateAccount(anonymousData.user);
+      const freshHouseholdId = await ensureHousehold();
+      setHouseholdId(freshHouseholdId);
       setPets([]);
       setCurrentPetId(null);
       setScreen('welcome');
