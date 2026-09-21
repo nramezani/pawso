@@ -1,6 +1,7 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text } from 'react-native';
+import { Platform, Text } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { WelcomeScreen } from '../screens/WelcomeScreen';
 import { AddPetScreen } from '../screens/AddPetScreen';
@@ -39,6 +40,9 @@ const tabIcons: Record<keyof MainTabParamList, string> = {
 };
 
 function MainTabs() {
+  const insets = useSafeAreaInsets();
+  const bottomInset = Math.max(insets.bottom, Platform.OS === 'android' ? 12 : 8);
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -46,12 +50,16 @@ function MainTabs() {
         tabBarActiveTintColor: '#2F6F63',
         tabBarInactiveTintColor: '#89928F',
         tabBarStyle: {
-          height: 66,
+          height: 58 + bottomInset,
           paddingTop: 6,
-          paddingBottom: 8,
+          paddingBottom: bottomInset,
           borderTopColor: '#E4E8E6',
           backgroundColor: '#FFFFFF',
         },
+        tabBarItemStyle: {
+          paddingVertical: 2,
+        },
+        tabBarHideOnKeyboard: true,
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: '700',
