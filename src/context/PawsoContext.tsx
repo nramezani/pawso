@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { Linking } from 'react-native';
+import * as Linking from 'expo-linking';
 
 import { supabase } from '../../lib/supabase';
 import { API_BASE_URL } from '../config';
@@ -520,7 +520,7 @@ function usePawsoState() {
       }
 
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: 'pawso://auth/callback',
+        redirectTo: Linking.createURL('auth/callback'),
       });
 
       if (error) throw error;
@@ -540,7 +540,7 @@ function usePawsoState() {
   }
 
   async function handleAuthCallback(url: string) {
-    if (!url.startsWith('pawso://auth/callback')) return;
+    if (!url.includes('/auth/callback')) return;
 
     try {
       const encodedParameters = url.includes('#')
