@@ -119,6 +119,9 @@ export function OptionButton({
 }) {
   return (
     <Pressable
+      accessibilityRole="radio"
+      accessibilityState={{ checked: selected }}
+      accessibilityLabel={title}
       style={[
         styles.optionButton,
         selected && styles.optionSelected,
@@ -149,6 +152,9 @@ export function PrimaryButton({
 }) {
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      accessibilityLabel={title}
       style={[
         styles.primaryButton,
         disabled &&
@@ -175,6 +181,9 @@ export function SecondaryButton({
 }) {
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      accessibilityLabel={title}
       style={[
         styles.secondaryButton,
         disabled && styles.disabledButton,
@@ -238,6 +247,8 @@ export function QuickAction({
 }) {
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
       style={styles.quickAction}
       onPress={onPress}
     >
@@ -444,6 +455,7 @@ export const styles = StyleSheet.create({
 
   optionButton: {
     flex: 1,
+    minHeight: 48,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#D8E0DD',
@@ -467,6 +479,7 @@ export const styles = StyleSheet.create({
   },
 
   primaryButton: {
+    minHeight: 52,
     marginTop: 30,
     backgroundColor: '#2F6F63',
     borderRadius: 16,
@@ -485,6 +498,7 @@ export const styles = StyleSheet.create({
   },
 
   secondaryButton: {
+    minHeight: 48,
     marginTop: 14,
     paddingVertical: 14,
     alignItems: 'center',
@@ -755,6 +769,7 @@ export const styles = StyleSheet.create({
   },
 
   quickAction: {
+    minHeight: 76,
     flexGrow: 1,
     flexBasis: '30%',
     minWidth: 96,
