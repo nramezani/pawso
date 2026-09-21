@@ -23,6 +23,18 @@ export function AccountScreen() {
     setSecureAccountEmail,
     secureAccountPassword,
     setSecureAccountPassword,
+    accountAuthMode,
+    setAccountAuthMode,
+    signInEmail,
+    setSignInEmail,
+    signInPassword,
+    setSignInPassword,
+    signInAccount,
+    requestPasswordReset,
+    accountRecoveryMode,
+    recoveryPassword,
+    setRecoveryPassword,
+    completePasswordRecovery,
     secureAccount,
     signOutAccount,
   } = usePawso();
@@ -52,7 +64,65 @@ export function AccountScreen() {
         </Text>
       </View>
 
-      {accountIsAnonymous ? (
+      {accountRecoveryMode ? (
+        <>
+          <Label text="New password" />
+          <Input
+            value={recoveryPassword}
+            onChangeText={setRecoveryPassword}
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder="At least 8 characters"
+          />
+          <PrimaryButton
+            title={accountBusy ? 'Updating password…' : 'Update password'}
+            disabled={accountBusy}
+            onPress={completePasswordRecovery}
+          />
+        </>
+      ) : accountIsAnonymous && accountAuthMode === 'signin' ? (
+        <>
+          <Label text="Email" />
+          <Input
+            value={signInEmail}
+            onChangeText={setSignInEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            autoCorrect={false}
+            placeholder="you@example.com"
+          />
+
+          <Label text="Password" />
+          <Input
+            value={signInPassword}
+            onChangeText={setSignInPassword}
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder="Your Pawso password"
+          />
+
+          <PrimaryButton
+            title={accountBusy ? 'Signing in…' : 'Sign in'}
+            disabled={accountBusy}
+            onPress={signInAccount}
+          />
+          <SecondaryButton
+            title={accountBusy ? 'Sending…' : 'Forgot password'}
+            disabled={accountBusy}
+            onPress={requestPasswordReset}
+          />
+          <SecondaryButton
+            title="Create a new Pawso account"
+            disabled={accountBusy}
+            onPress={() => {
+              setAccountAuthMode('secure');
+              setSecureAccountEmail(signInEmail);
+            }}
+          />
+        </>
+      ) : accountIsAnonymous ? (
         <>
           <Label text="Email" />
           <Input
@@ -78,6 +148,14 @@ export function AccountScreen() {
             title={accountBusy ? 'Securing account…' : 'Secure my Pawso account'}
             disabled={accountBusy}
             onPress={secureAccount}
+          />
+          <SecondaryButton
+            title="I already have a Pawso account"
+            disabled={accountBusy}
+            onPress={() => {
+              setAccountAuthMode('signin');
+              setSignInEmail(secureAccountEmail);
+            }}
           />
 
           <Text style={styles.reminderFinePrint}>
