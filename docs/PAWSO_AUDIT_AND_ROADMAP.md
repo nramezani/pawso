@@ -281,3 +281,54 @@ Pawso is ready for a small private beta when:
 - [ ] Native development builds
 - [ ] Automated test and CI foundation
 - [ ] Privacy and account controls
+
+
+## September 21, 2026 workflow and UI re-audit
+
+Two additional end-to-end reviews were completed: the owner/health-record
+journey and the returning-user/shared-care journey.
+
+### Confirmed improvements
+
+- Welcome now separates first-time and returning users.
+- Password sign-in and recovery are available from Account.
+- Pet onboarding hides optional health fields until requested.
+- Today removes duplicate shortcuts and keeps advanced actions secondary.
+- Household membership and invite controls use progressive disclosure.
+- Shared components respect safe areas, and the Android tab bar accounts for
+  the system navigation inset.
+- Shared buttons now support disabled states and accessible touch targets.
+
+### Newly discovered release blockers
+
+- The committed `app.json` contained console-output text and was not valid JSON.
+  It must remain protected by `npx expo config --json` in CI.
+- Password recovery requires `expo-linking`, which was installed locally but
+  must be committed to `package.json` and the lockfile.
+- Expo Go recovery requires an allowed `exp://**` redirect; native builds use
+  `pawso://auth/callback`.
+- Password recovery still requires a physical-device retest after the current
+  Supabase email rate limit clears.
+- Accessibility coverage is incomplete outside shared buttons. Dynamic type,
+  screen-reader order, input labels, and contrast require device QA.
+- The product still lacks edit/delete controls, recurring care tasks, medication
+  course dates, household member administration, privacy consent, export, and
+  account deletion.
+
+See [the end-to-end QA checklist](QA_CHECKLIST.md) for the durable retest queue.
+
+### Recommended next product work
+
+Do not add a marketplace or community yet. The most useful next feature is
+**recurring care routines** with daily/weekly/custom schedules, skip, snooze,
+pause, and end controls while preserving completion history. It strengthens
+Pawso's daily-use loop without increasing medical risk.
+
+After that, prioritize:
+
+1. Record editing, archiving, document deletion, and account deletion.
+2. Medication start/end dates and refill reminders.
+3. Weight and symptom trends with filters.
+4. A concise emergency pet card containing owner-approved allergies,
+   medications, conditions, veterinarian contact, and emergency contact.
+5. Exportable veterinarian and caregiver handoff summaries.

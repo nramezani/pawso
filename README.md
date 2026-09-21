@@ -90,6 +90,11 @@ health endpoints are `/health` and `/ready`.
 ## Project documentation
 
 - [Product and technical audit](docs/PAWSO_AUDIT_AND_ROADMAP.md)
+- [End-to-end QA checklist](docs/QA_CHECKLIST.md)
+- [Beta and business readiness plan](docs/BETA_READINESS_PLAN.md)
+- [Privacy policy draft](docs/PRIVACY_POLICY_DRAFT.md)
+- [Terms of use draft](docs/TERMS_OF_USE_DRAFT.md)
+- [Membership and pricing recommendation](docs/MEMBERSHIP_AND_PRICING.md)
 - [Backend deployment guide](docs/BACKEND_DEPLOYMENT.md)
 - [Baseline Supabase schema](supabase/migrations/20260911_core_schema.sql)
 - [Household sharing migration](supabase/migrations/20260912_household_shared_care.sql)
