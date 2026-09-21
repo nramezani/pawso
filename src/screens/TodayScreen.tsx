@@ -84,35 +84,37 @@ export function TodayScreen() {
 
       <Text style={styles.logo}>Pawso</Text>
 
+      {apiStatus !== 'Backend connected' ? (
       <Pressable
-        style={[
-          styles.apiStatus,
-          apiStatus === 'Backend connected'
-            ? styles.apiStatusConnected
-            : styles.apiStatusDisconnected,
-        ]}
-        onPress={checkBackend}
-      >
-        <View
           style={[
-            styles.apiDot,
+            styles.apiStatus,
             apiStatus === 'Backend connected'
-              ? styles.apiDotConnected
-              : styles.apiDotDisconnected,
+              ? styles.apiStatusConnected
+              : styles.apiStatusDisconnected,
           ]}
-        />
-        <Text
-          style={[
-            styles.apiStatusText,
-            apiStatus === 'Backend connected'
-              ? styles.apiStatusTextConnected
-              : styles.apiStatusTextDisconnected,
-          ]}
+          onPress={checkBackend}
         >
-          {apiStatus}
-        </Text>
-        <Text style={styles.apiRefresh}>Tap to refresh</Text>
-      </Pressable>
+          <View
+            style={[
+              styles.apiDot,
+              apiStatus === 'Backend connected'
+                ? styles.apiDotConnected
+                : styles.apiDotDisconnected,
+            ]}
+          />
+          <Text
+            style={[
+              styles.apiStatusText,
+              apiStatus === 'Backend connected'
+                ? styles.apiStatusTextConnected
+                : styles.apiStatusTextDisconnected,
+            ]}
+          >
+            {apiStatus}
+          </Text>
+          <Text style={styles.apiRefresh}>Tap to refresh</Text>
+        </Pressable>
+      ) : null}
 
       <View style={styles.infoCard}>
         <View style={styles.reminderHeaderRow}>
@@ -281,17 +283,6 @@ export function TodayScreen() {
 
           <PrimaryButton title="+ Add another pet" onPress={startAddPet} />
 
-          <Text style={styles.sectionTitle}>Quick access</Text>
-          <View style={styles.quickGrid}>
-            {pets.map((pet) => (
-              <QuickAction
-                key={pet.id}
-                icon={pet.species === 'dog' ? '🐶' : '🐱'}
-                label={pet.name}
-                onPress={() => openPetToday(pet.id)}
-              />
-            ))}
-          </View>
         </>
       ) : (
         <>
@@ -555,36 +546,25 @@ export function TodayScreen() {
               </>
             ) : null}
             <QuickAction icon="📅" label="Care task" onPress={openCareScreen} />
-            <QuickAction icon="✨" label="Ask Pawso" onPress={openAskScreen} />
           </View>
 
-          {timelineEvents.length > 0 && (
-            <PrimaryButton
-              title="View Health Timeline"
+          <Text style={styles.sectionTitle}>More for {petName}</Text>
+          {timelineEvents.length > 0 ? (
+            <SecondaryButton
+              title="Health timeline"
               onPress={() => setScreen('timeline')}
             />
-          )}
-
+          ) : null}
           <SecondaryButton
-            title={`Ask Pawso about ${petName}`}
-            onPress={openAskScreen}
-          />
-          <SecondaryButton
-            title={`Prepare for ${petName}'s vet visit`}
+            title="Prepare for a vet visit"
             onPress={openVetVisitPrep}
           />
-          <SecondaryButton title="Smart Care Plan" onPress={openSmartCarePlan} />
-          <SecondaryButton title="Care & Reminders" onPress={openCareScreen} />
           <SecondaryButton
-            title="Medications & Doses"
-            onPress={openMedicationsScreen}
+            title="Smart Care Plan"
+            onPress={openSmartCarePlan}
           />
           <SecondaryButton
-            title="Documents & Medical Records"
-            onPress={openDocumentsScreen}
-          />
-          <SecondaryButton
-            title={`View ${petName}'s profile`}
+            title="View pet profile"
             onPress={() => setScreen('petProfile')}
           />
         </>

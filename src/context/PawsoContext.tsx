@@ -56,6 +56,11 @@ function usePawsoState() {
   const [accountError, setAccountError] = useState('');
   const [secureAccountEmail, setSecureAccountEmail] = useState('');
   const [secureAccountPassword, setSecureAccountPassword] = useState('');
+  const [accountAuthMode, setAccountAuthMode] = useState<'secure' | 'signin'>('secure');
+  const [signInEmail, setSignInEmail] = useState('');
+  const [signInPassword, setSignInPassword] = useState('');
+  const [accountRecoveryMode, setAccountRecoveryMode] = useState(false);
+  const [recoveryPassword, setRecoveryPassword] = useState('');
   const [householdId, setHouseholdId] = useState<string | null>(null);
   const [householdName, setHouseholdName] = useState('My Pawso Household');
   const [householdRole, setHouseholdRole] = useState<'owner' | 'caregiver' | 'sitter' | null>(null);
@@ -186,6 +191,19 @@ function usePawsoState() {
   useEffect(() => {
     checkBackend();
     initializeSupabase();
+  }, []);
+
+  useEffect(() => {
+    const handleUrl = ({ url }: { url: string }) => {
+      handleAuthCallback(url);
+    };
+
+    Linking.getInitialURL().then((url) => {
+      if (url) handleAuthCallback(url);
+    });
+
+    const subscription = Linking.addEventListener('url', handleUrl);
+    return () => subscription.remove();
   }, []);
 
   async function refreshNotificationState(petRows?: PetSummary[]) {
@@ -450,6 +468,155 @@ function usePawsoState() {
     }
   }
 
+  async function signInAccount() {
+    try {
+      setAccountBusy(true);
+      setAccountError('');
+      setAccountMessage('');
+
+      const email = signInEmail.trim().toLowerCase();
+      if (!email || !email.includes('@')) {
+        throw new Error('Enter the email address for your Pawso account.');
+      }
+      if (!signInPassword) {
+        throw new Error('Enter your Pawso password.');
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password: signInPassword,
+      });
+
+      if (error) throw error;
+      if (!data.user) throw new Error('Pawso could not sign in to that account.');
+
+      hydrateAccount(data.user);
+      setSignInPassword('');
+      const activeHouseholdId = await ensureHousehold(
+        data.user.email?.split('@')[0]
+      );
+      await loadExistingPet(data.user.id, activeHouseholdId);
+      setAccountMessage('Signed in. Your Pawso records are ready.');
+      setScreen('pets');
+    } catch (error) {
+      console.log('Sign in error:', error);
+      setAccountError(
+        error instanceof Error ? error.message : 'Could not sign in.'
+      );
+    } finally {
+      setAccountBusy(false);
+    }
+  }
+
+  async function requestPasswordReset() {
+    try {
+      setAccountBusy(true);
+      setAccountError('');
+      setAccountMessage('');
+
+      const email = signInEmail.trim().toLowerCase();
+      if (!email || !email.includes('@')) {
+        throw new Error('Enter your Pawso email address first.');
+      }
+
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: 'pawso://auth/callback',
+      });
+
+      if (error) throw error;
+      setAccountMessage(
+        'Password reset email sent. Open the link on this phone to return to Pawso.'
+      );
+    } catch (error) {
+      console.log('Password reset error:', error);
+      setAccountError(
+        error instanceof Error
+          ? error.message
+          : 'Could not send the password reset email.'
+      );
+    } finally {
+      setAccountBusy(false);
+    }
+  }
+
+  async function handleAuthCallback(url: string) {
+    if (!url.startsWith('pawso://auth/callback')) return;
+
+    try {
+      const encodedParameters = url.includes('#')
+        ? url.split('#')[1]
+        : url.split('?')[1] ?? '';
+      const parameters = new URLSearchParams(encodedParameters);
+      const accessToken = parameters.get('access_token');
+      const refreshToken = parameters.get('refresh_token');
+      const type = parameters.get('type');
+
+      if (!accessToken || !refreshToken) {
+        throw new Error('The password recovery link is incomplete or expired.');
+      }
+
+      const { data, error } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+
+      if (error) throw error;
+      if (!data.user) throw new Error('Pawso could not restore the account.');
+
+      hydrateAccount(data.user);
+      if (type === 'recovery') {
+        setAccountRecoveryMode(true);
+        setAccountMessage('Enter a new password for your Pawso account.');
+        setScreen('account');
+      }
+    } catch (error) {
+      console.log('Auth callback error:', error);
+      setAccountError(
+        error instanceof Error
+          ? error.message
+          : 'Could not open the Pawso recovery link.'
+      );
+    }
+  }
+
+  async function completePasswordRecovery() {
+    try {
+      setAccountBusy(true);
+      setAccountError('');
+      setAccountMessage('');
+
+      if (recoveryPassword.length < 8) {
+        throw new Error('Use a password with at least 8 characters.');
+      }
+
+      const { data, error } = await supabase.auth.updateUser({
+        password: recoveryPassword,
+      });
+
+      if (error) throw error;
+      if (!data.user) throw new Error('Pawso could not update the password.');
+
+      hydrateAccount(data.user);
+      setRecoveryPassword('');
+      setAccountRecoveryMode(false);
+      const activeHouseholdId = await ensureHousehold(
+        data.user.email?.split('@')[0]
+      );
+      await loadExistingPet(data.user.id, activeHouseholdId);
+      setAccountMessage('Password updated. Your Pawso records are ready.');
+      setScreen('pets');
+    } catch (error) {
+      console.log('Complete password recovery error:', error);
+      setAccountError(
+        error instanceof Error
+          ? error.message
+          : 'Could not update the password.'
+      );
+    } finally {
+      setAccountBusy(false);
+    }
+  }
+
   async function secureAccount() {
     try {
       setAccountBusy(true);
@@ -526,8 +693,16 @@ function usePawsoState() {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
 
-      setAccountEmail('');
-      setAccountIsAnonymous(true);
+      const { data: anonymousData, error: anonymousError } =
+        await supabase.auth.signInAnonymously();
+      if (anonymousError) throw anonymousError;
+      if (!anonymousData.user) {
+        throw new Error('Pawso could not prepare a new temporary session.');
+      }
+
+      hydrateAccount(anonymousData.user);
+      const freshHouseholdId = await ensureHousehold();
+      setHouseholdId(freshHouseholdId);
       setPets([]);
       setCurrentPetId(null);
       setScreen('welcome');
@@ -2398,6 +2573,18 @@ function usePawsoState() {
     setSecureAccountEmail,
     secureAccountPassword,
     setSecureAccountPassword,
+    accountAuthMode,
+    setAccountAuthMode,
+    signInEmail,
+    setSignInEmail,
+    signInPassword,
+    setSignInPassword,
+    signInAccount,
+    requestPasswordReset,
+    accountRecoveryMode,
+    recoveryPassword,
+    setRecoveryPassword,
+    completePasswordRecovery,
     secureAccount,
     signOutAccount,
     setApiStatus,
