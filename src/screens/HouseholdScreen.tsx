@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
@@ -33,44 +34,48 @@ export function HouseholdScreen() {
     acceptHouseholdInvite,
     refreshHousehold,
   } = usePawso();
-
+  const [showJoin, setShowJoin] = useState(false);
   const canInvite = householdRole === 'owner';
 
   return (
-    <Page scroll>
+    <Page scroll keyboard>
       <Header title="Household" back={() => setScreen('account')} />
 
       <Text style={styles.pageTitle}>{householdName || 'My Pawso Household'}</Text>
       <Text style={styles.pageSubtitle}>
-        Share pet care without sharing passwords. Each caregiver uses their own
-        Pawso account.
+        Give each caregiver their own access—no shared passwords.
       </Text>
 
       <View style={styles.infoCard}>
         <Text style={styles.cardStrong}>Your role · {householdRole || 'member'}</Text>
         <Text style={styles.cardMuted}>
-          Owner manages pet and medical records. Caregiver can manage routine care.
-          Sitter can follow assigned care without editing medical records.
+          Owners manage everything. Caregivers manage routine care. Sitters can
+          follow and complete assigned care.
         </Text>
       </View>
 
-      <Text style={styles.sectionTitle}>Members</Text>
-      {householdMembers.map((member: any) => (
-        <View key={member.id} style={styles.documentCard}>
-          <Text style={styles.cardStrong}>{member.display_name}</Text>
-          <Text style={styles.cardMuted}>{member.role}</Text>
-        </View>
-      ))}
+      <Text style={styles.sectionTitle}>People with access</Text>
+      {householdMembers.length ? (
+        householdMembers.map((member: any) => (
+          <View key={member.id} style={styles.documentCard}>
+            <Text style={styles.cardStrong}>{member.display_name || 'Pawso member'}</Text>
+            <Text style={styles.cardMuted}>{member.role}</Text>
+          </View>
+        ))
+      ) : (
+        <Text style={styles.cardMuted}>No household members found yet.</Text>
+      )}
 
       <SecondaryButton
         title={householdBusy ? 'Refreshing…' : 'Refresh members'}
+        disabled={householdBusy}
         onPress={refreshHousehold}
       />
 
       {canInvite ? (
         <>
-          <Text style={styles.sectionTitle}>Invite a caregiver</Text>
-          <Label text="Email (optional for now)" />
+          <Text style={styles.sectionTitle}>Invite someone</Text>
+          <Label text="Email (optional)" />
           <Input
             value={inviteEmail}
             onChangeText={setInviteEmail}
@@ -79,10 +84,7 @@ export function HouseholdScreen() {
             placeholder="caregiver@example.com"
           />
 
-          <Label text="Role" />
-          <Text style={styles.cardMuted}>
-            Caregiver can manage routine care. Sitter can follow and complete assigned care only.
-          </Text>
+          <Label text="Access level" />
           <View style={styles.row}>
             <OptionButton
               title="Caregiver"
@@ -95,6 +97,9 @@ export function HouseholdScreen() {
               onPress={() => setInviteRole('sitter')}
             />
           </View>
+          <Text style={styles.cardMuted}>
+            Choose caregiver for regular help or sitter for temporary task access.
+          </Text>
 
           <PrimaryButton
             title={householdBusy ? 'Creating invite…' : 'Create invite code'}
@@ -104,41 +109,43 @@ export function HouseholdScreen() {
 
           {inviteCode ? (
             <View style={styles.infoCard}>
-              <Text style={styles.cardStrong}>Invite code</Text>
-              <Text selectable style={styles.inviteCodeText}>
-                {inviteCode}
-              </Text>
-              <Text style={styles.cardMuted}>
-                Share this code privately. It expires after 7 days and can be
-                accepted once.
-              </Text>
+              <Text style={styles.cardStrong}>Share this invite code privately</Text>
+              <Text selectable style={styles.inviteCodeText}>{inviteCode}</Text>
+              <Text style={styles.cardMuted}>It expires after 7 days and can be used once.</Text>
             </View>
           ) : null}
         </>
       ) : null}
 
-      <Text style={styles.sectionTitle}>Join a household</Text>
-      <Label text="Your display name" />
-      <Input
-        value={memberDisplayName}
-        onChangeText={setMemberDisplayName}
-        placeholder="Nara"
+      <SecondaryButton
+        title={showJoin ? 'Hide join form' : 'Have an invite code?'}
+        onPress={() => setShowJoin((value) => !value)}
       />
 
-      <Label text="Invite code" />
-      <Input
-        value={joinCode}
-        onChangeText={setJoinCode}
-        autoCapitalize="none"
-        autoCorrect={false}
-        placeholder="Paste invite code"
-      />
-
-      <PrimaryButton
-        title={householdBusy ? 'Joining…' : 'Join household'}
-        disabled={householdBusy}
-        onPress={acceptHouseholdInvite}
-      />
+      {showJoin ? (
+        <>
+          <Text style={styles.sectionTitle}>Join another household</Text>
+          <Label text="Your display name" />
+          <Input
+            value={memberDisplayName}
+            onChangeText={setMemberDisplayName}
+            placeholder="Nara"
+          />
+          <Label text="Invite code" />
+          <Input
+            value={joinCode}
+            onChangeText={setJoinCode}
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder="Paste invite code"
+          />
+          <PrimaryButton
+            title={householdBusy ? 'Joining…' : 'Join household'}
+            disabled={householdBusy || !joinCode.trim()}
+            onPress={acceptHouseholdInvite}
+          />
+        </>
+      ) : null}
 
       {householdError ? (
         <View style={styles.errorCard}>
@@ -146,14 +153,6 @@ export function HouseholdScreen() {
           <Text style={styles.errorText}>{householdError}</Text>
         </View>
       ) : null}
-
-      <View style={styles.infoCard}>
-        <Text style={styles.cardStrong}>Privacy note</Text>
-        <Text style={styles.cardMuted}>
-          This milestone uses invite codes rather than automated email delivery.
-          Do not post an invite code publicly.
-        </Text>
-      </View>
     </Page>
   );
 }
