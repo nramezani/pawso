@@ -187,6 +187,42 @@ function usePawsoState() {
     };
   }
 
+  function getApiErrorMessage(body: any, fallback: string) {
+    const detail = body?.detail ?? body?.message;
+
+    if (typeof detail === 'string' && detail.trim()) {
+      return detail;
+    }
+
+    if (Array.isArray(detail)) {
+      const messages = detail
+        .map((item) => {
+          if (typeof item === 'string') return item;
+          if (!item || typeof item !== 'object') return '';
+          const location = Array.isArray(item.loc)
+            ? item.loc.filter((part: unknown) => part !== 'body').join(' → ')
+            : '';
+          const message = typeof item.msg === 'string' ? item.msg : '';
+          return [location, message].filter(Boolean).join(': ');
+        })
+        .filter(Boolean);
+
+      if (messages.length > 0) {
+        return messages.join('\n');
+      }
+    }
+
+    if (detail && typeof detail === 'object') {
+      try {
+        return JSON.stringify(detail);
+      } catch {
+        return fallback;
+      }
+    }
+
+    return fallback;
+  }
+
   useEffect(() => {
     checkBackend();
     initializeSupabase();
@@ -1149,7 +1185,7 @@ function usePawsoState() {
       const body = await response.json();
 
       if (!response.ok) {
-        throw new Error(body.detail || body.message || 'Ask Pawso request failed.');
+        throw new Error(getApiErrorMessage(body, `Ask Pawso request failed (${response.status}).`));
       }
 
       setAskQuestion(question);
@@ -1247,7 +1283,7 @@ function usePawsoState() {
 
       const body = await response.json();
       if (!response.ok) {
-        throw new Error(body.detail || body.message || 'Vet Visit Prep request failed.');
+        throw new Error(getApiErrorMessage(body, `Vet Visit Prep request failed (${response.status}).`));
       }
 
       setVetVisitPrep(body as VetVisitPrep);
