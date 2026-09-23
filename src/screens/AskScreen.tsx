@@ -227,6 +227,8 @@ const suggestedQuestions = [
               key={question}
               style={styles.askSuggestionChip}
               disabled={askLoading}
+              accessibilityRole="button"
+              accessibilityLabel={`Ask: ${question}`}
               onPress={() => {
                 setAskQuestion(question);
                 askPawso(question);

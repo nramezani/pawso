@@ -43,6 +43,9 @@ export function PetsScreen() {
                 styles.petListCard,
                 selected && styles.petListCardSelected,
               ]}
+              accessibilityRole="button"
+              accessibilityLabel={`View ${pet.name}'s profile`}
+              accessibilityState={{ selected }}
             >
               <View style={styles.petListAvatar}>
                 <Text style={{ fontSize: 28 }}>{emoji}</Text>
@@ -73,6 +76,8 @@ export function PetsScreen() {
         <Pressable
           style={styles.infoCard}
           onPress={() => setScreen('account')}
+          accessibilityRole="button"
+          accessibilityLabel="Account and household settings"
         >
           <Text style={styles.cardStrong}>👤 Account & household</Text>
           <Text style={styles.cardMuted}>
