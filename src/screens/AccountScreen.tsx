@@ -75,9 +75,16 @@ export function AccountScreen() {
             autoCorrect={false}
             placeholder="At least 8 characters"
           />
+          <Text style={styles.reminderFinePrint}>
+            {recoveryPassword.length === 0
+              ? 'Use at least 8 characters.'
+              : recoveryPassword.length < 8
+              ? `${8 - recoveryPassword.length} more character${8 - recoveryPassword.length === 1 ? '' : 's'} needed.`
+              : '✓ Password length is ready.'}
+          </Text>
           <PrimaryButton
             title={accountBusy ? 'Updating password…' : 'Update password'}
-            disabled={accountBusy}
+            disabled={accountBusy || recoveryPassword.length < 8}
             onPress={completePasswordRecovery}
           />
         </>
