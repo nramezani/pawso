@@ -131,8 +131,7 @@ function usePawsoState() {
   const [newMedicationDose, setNewMedicationDose] = useState('');
   const [newMedicationUnit, setNewMedicationUnit] = useState('');
   const [newMedicationInstructions, setNewMedicationInstructions] = useState('');
-  const [newMedicationTime1, setNewMedicationTime1] = useState('08:00');
-  const [newMedicationTime2, setNewMedicationTime2] = useState('');
+  const [newMedicationTimes, setNewMedicationTimes] = useState<string[]>(['08:00']);
 
   const [careTasks, setCareTasks] = useState<CareTask[]>([]);
   const [taskCompletions, setTaskCompletions] = useState<TaskCompletion[]>([]);
@@ -1736,7 +1735,18 @@ function usePawsoState() {
   }
 
   async function createMedication() {
-    if (!currentPetId || !newMedicationName.trim() || !newMedicationTime1.trim()) {
+    if (!currentPetId || !newMedicationName.trim()) {
+      return;
+    }
+
+    const times = newMedicationTimes
+      .map((time) => time.trim())
+      .filter(Boolean)
+      .filter((value, index, array) => array.indexOf(value) === index);
+
+    const validTime = /^([01]\\d|2[0-3]):[0-5]\\d$/;
+    if (times.length === 0 || times.some((time) => !validTime.test(time))) {
+      setMedicationsError('Add at least one valid time in 24-hour format, such as 08:00.');
       return;
     }
 
@@ -1768,10 +1778,6 @@ function usePawsoState() {
 
       if (medicationError) throw medicationError;
 
-      const times = [newMedicationTime1.trim(), newMedicationTime2.trim()]
-        .filter(Boolean)
-        .filter((value, index, array) => array.indexOf(value) === index);
-
       const scheduleRows = times.map((time) => ({
         medication_id: medicationRow.id,
         pet_id: currentPetId,
@@ -1789,8 +1795,7 @@ function usePawsoState() {
       setNewMedicationDose('');
       setNewMedicationUnit('');
       setNewMedicationInstructions('');
-      setNewMedicationTime1('08:00');
-      setNewMedicationTime2('');
+      setNewMedicationTimes(['08:00']);
 
       await loadMedicationData(currentPetId);
       await refreshAllPetsToday();
@@ -2684,10 +2689,8 @@ function usePawsoState() {
     setNewMedicationUnit,
     newMedicationInstructions,
     setNewMedicationInstructions,
-    newMedicationTime1,
-    setNewMedicationTime1,
-    newMedicationTime2,
-    setNewMedicationTime2,
+    newMedicationTimes,
+    setNewMedicationTimes,
     careTasks,
     setCareTasks,
     taskCompletions,
