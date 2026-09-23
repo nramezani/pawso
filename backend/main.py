@@ -2,12 +2,12 @@ import base64
 import os
 from typing import Literal
 
+from ai_client import MAX_OUTPUT_TOKENS, MODEL, call_structured, get_client
 from ask_router import router as ask_router
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from openai import OpenAI
 from pydantic import BaseModel
 from rate_limit import enforce_ai_limits
 from upload_validation import content_type_matches, detect_supported_file
@@ -15,9 +15,19 @@ from upload_validation import content_type_matches, detect_supported_file
 
 load_dotenv()
 
+# Disable the auto-generated OpenAPI docs/schema in production so the full
+# API surface (request/response models, endpoint list) isn't publicly
+# browsable at /docs, /redoc, /openapi.json. Set ENVIRONMENT=production in
+# the deployment platform's env vars; anything else (including unset, for
+# local dev) keeps docs enabled.
+IS_PRODUCTION = os.getenv("ENVIRONMENT", "development").lower() == "production"
+
 app = FastAPI(
     title="Pawso API",
     version="0.3.0",
+    docs_url=None if IS_PRODUCTION else "/docs",
+    redoc_url=None if IS_PRODUCTION else "/redoc",
+    openapi_url=None if IS_PRODUCTION else "/openapi.json",
 )
 app.include_router(ask_router)
 
@@ -86,6 +96,7 @@ def readiness_check():
     return {
         "status": "ready",
         "service": "pawso-api",
+        "model": MODEL,
     }
 
 
@@ -193,6 +204,14 @@ Pay special attention to:
 Never fill in information that is not actually present.
 """
 
+        # "auto" lets the model choose low/high detail based on the image;
+        # "high" (the previous hardcoded value) is the most expensive vision
+        # tier and was being forced on every extraction regardless of
+        # whether the document actually needed that fidelity. Override via
+        # OPENAI_IMAGE_DETAIL if a specific document type is shown to need
+        # forced high-detail OCR.
+        image_detail = os.getenv("OPENAI_IMAGE_DETAIL", "auto")
+
         if content_type == "application/pdf":
             document_part = {
                 "type": "input_file",
@@ -201,7 +220,7 @@ Never fill in information that is not actually present.
                     "data:application/pdf;base64,"
                     + encoded
                 ),
-                "detail": "high",
+                "detail": image_detail,
             }
 
         else:
@@ -211,32 +230,29 @@ Never fill in information that is not actually present.
                     f"data:{content_type};base64,"
                     f"{encoded}"
                 ),
-                "detail": "high",
+                "detail": image_detail,
             }
 
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        response = client.responses.parse(
-            model="gpt-5.6-luna",
-            input=[
-                {
-                    "role": "system",
-                    "content": system_prompt,
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "input_text",
-                            "text": user_text,
-                        },
-                        document_part,
-                    ],
-                },
-            ],
-            text_format=VetRecordExtraction,
-        )
+        try:
+            client = get_client()
+        except RuntimeError as exc:
+            return JSONResponse(
+                status_code=500,
+                content={"status": "error", "message": str(exc)},
+            )
 
-        extraction = response.output_parsed
+        extraction = call_structured(
+            client,
+            system_prompt=system_prompt,
+            user_content=[
+                {
+                    "type": "input_text",
+                    "text": user_text,
+                },
+                document_part,
+            ],
+            response_model=VetRecordExtraction,
+        )
 
         if extraction is None:
             raise RuntimeError(

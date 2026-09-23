@@ -1,5 +1,30 @@
--- Pawso household/shared-care foundation
--- Run once in Supabase SQL Editor.
+-- Pawso household/shared-care foundation, with role-tiered permissions.
+--
+-- This file used to be split into two same-day migrations
+-- (20260912_household_shared_care.sql + 20260912_household_role_permissions.sql).
+-- Filename lexicographic ordering ("household_role_permissions" sorts before
+-- "household_shared_care") meant the role-tightening migration ran BEFORE
+-- the migration that creates the tables/functions it depends on, so on any
+-- fresh/reproducible database it failed outright with
+-- `relation "public.households" does not exist`. Where it *did* apply out
+-- of order against an existing project, the two files created
+-- differently-named permissive policies for the same table+operation
+-- (Postgres OR's multiple permissive RLS policies together), silently
+-- leaving the broader "any household member" policy active alongside the
+-- intended "owner/caregiver only" one -- e.g. a `sitter` could insert/update
+-- medications, medical events, and vet-record files even though the app UI
+-- hides those actions for that role.
+--
+-- Merged into a single, correctly-ordered file so there is no possible
+-- ordering ambiguity going forward, and so the final policy set per table
+-- is defined exactly once. Every `drop policy if exists` below includes
+-- every name either of the two original files could have created, so this
+-- migration converges to the same correct end state whether it's applied
+-- to a brand-new database or one that already ran the old files (in either
+-- order).
+--
+-- Run once in Supabase SQL Editor, or via `supabase db push` /
+-- `supabase migration up`.
 
 create extension if not exists pgcrypto;
 
@@ -51,7 +76,8 @@ create index if not exists household_members_user_id_idx on public.household_mem
 create index if not exists household_members_household_id_idx on public.household_members(household_id);
 create index if not exists household_invitations_code_idx on public.household_invitations(invite_code);
 
--- Helper functions used by RLS.
+-- Helper functions used by RLS. Membership check plus a per-table-role
+-- lookup used to gate write access below.
 create or replace function public.is_household_member(target_household uuid)
 returns boolean
 language sql
@@ -92,6 +118,55 @@ set search_path = public
 as $$
   select household_id from public.pets where id = target_pet;
 $$;
+
+create or replace function public.household_role(target_household uuid)
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select hm.role
+  from public.household_members hm
+  where hm.household_id = target_household
+    and hm.user_id = auth.uid()
+  limit 1;
+$$;
+
+create or replace function public.can_view_household_medical(target_household uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(public.household_role(target_household) in ('owner','caregiver'), false);
+$$;
+
+create or replace function public.can_manage_household_medical(target_household uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(public.household_role(target_household) = 'owner', false);
+$$;
+
+create or replace function public.can_manage_household_care(target_household uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(public.household_role(target_household) in ('owner','caregiver'), false);
+$$;
+
+grant execute on function public.household_role(uuid) to authenticated;
+grant execute on function public.can_view_household_medical(uuid) to authenticated;
+grant execute on function public.can_manage_household_medical(uuid) to authenticated;
+grant execute on function public.can_manage_household_care(uuid) to authenticated;
 
 -- Ensure every current Pawso user has at least one household and migrate existing pets.
 do $$
@@ -284,6 +359,10 @@ grant execute on function public.ensure_household_for_current_user(text) to auth
 grant execute on function public.create_household_invitation(uuid,text,text) to authenticated;
 grant execute on function public.accept_household_invitation(text,text) to authenticated;
 
+grant select, update on table public.households to authenticated;
+grant select, update, delete on table public.household_members to authenticated;
+grant select on table public.household_invitations to authenticated;
+
 alter table public.households enable row level security;
 alter table public.household_members enable row level security;
 alter table public.household_invitations enable row level security;
@@ -326,104 +405,142 @@ on public.household_invitations for select
 to authenticated
 using (public.is_household_owner(household_id));
 
--- Shared pet access. Existing owner policies may remain; these are additive.
+-- ============================================================================
+-- Final, role-tiered policies for pet-linked tables.
+--
+-- Each block drops every policy name either original migration could have
+-- created for that table+operation (so this converges correctly regardless
+-- of migration history), then creates exactly one final policy per
+-- operation. Role tiers used below:
+--   - is_household_member        -> any role (owner, caregiver, sitter)
+--   - can_view_household_medical -> owner or caregiver (not sitter)
+--   - can_manage_household_medical -> owner only
+--   - can_manage_household_care    -> owner or caregiver (not sitter)
+-- ============================================================================
+
+-- pets
 drop policy if exists "household members can view pets" on public.pets;
-create policy "household members can view pets"
-on public.pets for select
-to authenticated
-using (
-  household_id is not null
-  and public.is_household_member(household_id)
-);
-
 drop policy if exists "household members can add pets" on public.pets;
-create policy "household members can add pets"
-on public.pets for insert
-to authenticated
-with check (
-  user_id = auth.uid()
-  and household_id is not null
-  and public.is_household_member(household_id)
-);
-
 drop policy if exists "household members can update pets" on public.pets;
-create policy "household members can update pets"
-on public.pets for update
-to authenticated
-using (public.is_household_member(household_id))
-with check (public.is_household_member(household_id));
+drop policy if exists "household owners can add pets" on public.pets;
+drop policy if exists "household owners can update pets" on public.pets;
 
--- Pet-linked table policies.
+create policy "household members can view pets"
+on public.pets for select to authenticated
+using (household_id is not null and public.is_household_member(household_id));
+
+create policy "household owners can add pets"
+on public.pets for insert to authenticated
+with check (user_id = auth.uid() and public.household_role(household_id) = 'owner');
+
+create policy "household owners can update pets"
+on public.pets for update to authenticated
+using (public.household_role(household_id) = 'owner')
+with check (public.household_role(household_id) = 'owner');
+
+-- documents
 drop policy if exists "household members can view documents" on public.documents;
-create policy "household members can view documents"
-on public.documents for select to authenticated
-using (public.is_household_member(public.pet_household(pet_id)));
-
 drop policy if exists "household members can add documents" on public.documents;
-create policy "household members can add documents"
+drop policy if exists "household members can update documents" on public.documents;
+drop policy if exists "household medical members can view documents" on public.documents;
+drop policy if exists "household owners can add documents" on public.documents;
+drop policy if exists "household owners can update documents" on public.documents;
+
+create policy "household medical members can view documents"
+on public.documents for select to authenticated
+using (public.can_view_household_medical(public.pet_household(pet_id)));
+
+create policy "household owners can add documents"
 on public.documents for insert to authenticated
 with check (
   user_id = auth.uid()
-  and public.is_household_member(public.pet_household(pet_id))
+  and public.can_manage_household_medical(public.pet_household(pet_id))
 );
 
-drop policy if exists "household members can update documents" on public.documents;
-create policy "household members can update documents"
+create policy "household owners can update documents"
 on public.documents for update to authenticated
-using (public.is_household_member(public.pet_household(pet_id)))
-with check (public.is_household_member(public.pet_household(pet_id)));
+using (public.can_manage_household_medical(public.pet_household(pet_id)))
+with check (public.can_manage_household_medical(public.pet_household(pet_id)));
 
+-- medical_events
 drop policy if exists "household members can view medical events" on public.medical_events;
-create policy "household members can view medical events"
-on public.medical_events for select to authenticated
-using (public.is_household_member(public.pet_household(pet_id)));
-
 drop policy if exists "household members can add medical events" on public.medical_events;
-create policy "household members can add medical events"
+drop policy if exists "household owners can update medical events" on public.medical_events;
+drop policy if exists "household medical members can view medical events" on public.medical_events;
+drop policy if exists "household owners can add medical events" on public.medical_events;
+
+create policy "household medical members can view medical events"
+on public.medical_events for select to authenticated
+using (public.can_view_household_medical(public.pet_household(pet_id)));
+
+create policy "household owners can add medical events"
 on public.medical_events for insert to authenticated
 with check (
   user_id = auth.uid()
-  and public.is_household_member(public.pet_household(pet_id))
+  and public.can_manage_household_medical(public.pet_household(pet_id))
 );
 
+create policy "household owners can update medical events"
+on public.medical_events for update to authenticated
+using (public.can_manage_household_medical(public.pet_household(pet_id)))
+with check (public.can_manage_household_medical(public.pet_household(pet_id)));
+
+-- medications
 drop policy if exists "household members can view medications" on public.medications;
+drop policy if exists "household members can add medications" on public.medications;
+drop policy if exists "household members can update medications" on public.medications;
+drop policy if exists "household owners can add medications" on public.medications;
+drop policy if exists "household owners can update medications" on public.medications;
+
 create policy "household members can view medications"
 on public.medications for select to authenticated
 using (public.is_household_member(public.pet_household(pet_id)));
 
-drop policy if exists "household members can add medications" on public.medications;
-create policy "household members can add medications"
+create policy "household owners can add medications"
 on public.medications for insert to authenticated
 with check (
   user_id = auth.uid()
-  and public.is_household_member(public.pet_household(pet_id))
+  and public.can_manage_household_medical(public.pet_household(pet_id))
 );
 
-drop policy if exists "household members can update medications" on public.medications;
-create policy "household members can update medications"
+create policy "household owners can update medications"
 on public.medications for update to authenticated
-using (public.is_household_member(public.pet_household(pet_id)))
-with check (public.is_household_member(public.pet_household(pet_id)));
+using (public.can_manage_household_medical(public.pet_household(pet_id)))
+with check (public.can_manage_household_medical(public.pet_household(pet_id)));
 
+-- medication_schedules
 drop policy if exists "household members can view medication schedules" on public.medication_schedules;
+drop policy if exists "household members can add medication schedules" on public.medication_schedules;
+drop policy if exists "household owners can update medication schedules" on public.medication_schedules;
+drop policy if exists "household owners can add medication schedules" on public.medication_schedules;
+
 create policy "household members can view medication schedules"
 on public.medication_schedules for select to authenticated
 using (public.is_household_member(public.pet_household(pet_id)));
 
-drop policy if exists "household members can add medication schedules" on public.medication_schedules;
-create policy "household members can add medication schedules"
+create policy "household owners can add medication schedules"
 on public.medication_schedules for insert to authenticated
 with check (
   user_id = auth.uid()
-  and public.is_household_member(public.pet_household(pet_id))
+  and public.can_manage_household_medical(public.pet_household(pet_id))
 );
 
+create policy "household owners can update medication schedules"
+on public.medication_schedules for update to authenticated
+using (public.can_manage_household_medical(public.pet_household(pet_id)))
+with check (public.can_manage_household_medical(public.pet_household(pet_id)));
+
+-- medication_logs (any member may log a dose given/skipped; only the
+-- member who logged it -- not any household member -- may edit it)
 drop policy if exists "household members can view medication logs" on public.medication_logs;
+drop policy if exists "household members can add medication logs" on public.medication_logs;
+drop policy if exists "household members can update medication logs" on public.medication_logs;
+drop policy if exists "household members can update own medication logs" on public.medication_logs;
+
 create policy "household members can view medication logs"
 on public.medication_logs for select to authenticated
 using (public.is_household_member(public.pet_household(pet_id)));
 
-drop policy if exists "household members can add medication logs" on public.medication_logs;
 create policy "household members can add medication logs"
 on public.medication_logs for insert to authenticated
 with check (
@@ -431,37 +548,49 @@ with check (
   and public.is_household_member(public.pet_household(pet_id))
 );
 
-drop policy if exists "household members can update medication logs" on public.medication_logs;
-create policy "household members can update medication logs"
+create policy "household members can update own medication logs"
 on public.medication_logs for update to authenticated
-using (public.is_household_member(public.pet_household(pet_id)))
-with check (public.is_household_member(public.pet_household(pet_id)));
-
-drop policy if exists "household members can view care tasks" on public.care_tasks;
-create policy "household members can view care tasks"
-on public.care_tasks for select to authenticated
-using (public.is_household_member(public.pet_household(pet_id)));
-
-drop policy if exists "household members can add care tasks" on public.care_tasks;
-create policy "household members can add care tasks"
-on public.care_tasks for insert to authenticated
+using (
+  user_id = auth.uid()
+  and public.is_household_member(public.pet_household(pet_id))
+)
 with check (
   user_id = auth.uid()
   and public.is_household_member(public.pet_household(pet_id))
 );
 
+-- care_tasks (owner/caregiver may create and update; sitter may only view
+-- and complete via task_completions below)
+drop policy if exists "household members can view care tasks" on public.care_tasks;
+drop policy if exists "household members can add care tasks" on public.care_tasks;
 drop policy if exists "household members can update care tasks" on public.care_tasks;
-create policy "household members can update care tasks"
-on public.care_tasks for update to authenticated
-using (public.is_household_member(public.pet_household(pet_id)))
-with check (public.is_household_member(public.pet_household(pet_id)));
+drop policy if exists "household care managers can add care tasks" on public.care_tasks;
+drop policy if exists "household care managers can update care tasks" on public.care_tasks;
 
+create policy "household members can view care tasks"
+on public.care_tasks for select to authenticated
+using (public.is_household_member(public.pet_household(pet_id)));
+
+create policy "household care managers can add care tasks"
+on public.care_tasks for insert to authenticated
+with check (
+  user_id = auth.uid()
+  and public.can_manage_household_care(public.pet_household(pet_id))
+);
+
+create policy "household care managers can update care tasks"
+on public.care_tasks for update to authenticated
+using (public.can_manage_household_care(public.pet_household(pet_id)))
+with check (public.can_manage_household_care(public.pet_household(pet_id)));
+
+-- task_completions (any member may mark a task complete)
 drop policy if exists "household members can view task completions" on public.task_completions;
+drop policy if exists "household members can add task completions" on public.task_completions;
+
 create policy "household members can view task completions"
 on public.task_completions for select to authenticated
 using (public.is_household_member(public.pet_household(pet_id)));
 
-drop policy if exists "household members can add task completions" on public.task_completions;
 create policy "household members can add task completions"
 on public.task_completions for insert to authenticated
 with check (
@@ -469,49 +598,60 @@ with check (
   and public.is_household_member(public.pet_household(pet_id))
 );
 
--- AI extraction rows inherit access through the linked document.
+-- ai_extractions (inherits access through the linked document)
 drop policy if exists "household members can view ai extractions" on public.ai_extractions;
-create policy "household members can view ai extractions"
+drop policy if exists "household members can add ai extractions" on public.ai_extractions;
+drop policy if exists "household members can update ai extractions" on public.ai_extractions;
+drop policy if exists "household medical members can view ai extractions" on public.ai_extractions;
+drop policy if exists "household owners can add ai extractions" on public.ai_extractions;
+drop policy if exists "household owners can update ai extractions" on public.ai_extractions;
+
+create policy "household medical members can view ai extractions"
 on public.ai_extractions for select to authenticated
 using (
   exists (
     select 1 from public.documents d
     where d.id = ai_extractions.document_id
-      and public.is_household_member(public.pet_household(d.pet_id))
+      and public.can_view_household_medical(public.pet_household(d.pet_id))
   )
 );
 
-drop policy if exists "household members can add ai extractions" on public.ai_extractions;
-create policy "household members can add ai extractions"
+create policy "household owners can add ai extractions"
 on public.ai_extractions for insert to authenticated
 with check (
   exists (
     select 1 from public.documents d
     where d.id = ai_extractions.document_id
-      and public.is_household_member(public.pet_household(d.pet_id))
+      and public.can_manage_household_medical(public.pet_household(d.pet_id))
   )
 );
 
-drop policy if exists "household members can update ai extractions" on public.ai_extractions;
-create policy "household members can update ai extractions"
+create policy "household owners can update ai extractions"
 on public.ai_extractions for update to authenticated
 using (
   exists (
     select 1 from public.documents d
     where d.id = ai_extractions.document_id
-      and public.is_household_member(public.pet_household(d.pet_id))
+      and public.can_manage_household_medical(public.pet_household(d.pet_id))
   )
 )
 with check (
   exists (
     select 1 from public.documents d
     where d.id = ai_extractions.document_id
-      and public.is_household_member(public.pet_household(d.pet_id))
+      and public.can_manage_household_medical(public.pet_household(d.pet_id))
   )
 );
 
+-- extracted_fields (inherits access through ai_extractions -> documents)
 drop policy if exists "household members can view extracted fields" on public.extracted_fields;
-create policy "household members can view extracted fields"
+drop policy if exists "household members can add extracted fields" on public.extracted_fields;
+drop policy if exists "household members can update extracted fields" on public.extracted_fields;
+drop policy if exists "household medical members can view extracted fields" on public.extracted_fields;
+drop policy if exists "household owners can add extracted fields" on public.extracted_fields;
+drop policy if exists "household owners can update extracted fields" on public.extracted_fields;
+
+create policy "household medical members can view extracted fields"
 on public.extracted_fields for select to authenticated
 using (
   exists (
@@ -519,12 +659,11 @@ using (
     from public.ai_extractions ae
     join public.documents d on d.id = ae.document_id
     where ae.id = extracted_fields.extraction_id
-      and public.is_household_member(public.pet_household(d.pet_id))
+      and public.can_view_household_medical(public.pet_household(d.pet_id))
   )
 );
 
-drop policy if exists "household members can add extracted fields" on public.extracted_fields;
-create policy "household members can add extracted fields"
+create policy "household owners can add extracted fields"
 on public.extracted_fields for insert to authenticated
 with check (
   exists (
@@ -532,12 +671,11 @@ with check (
     from public.ai_extractions ae
     join public.documents d on d.id = ae.document_id
     where ae.id = extracted_fields.extraction_id
-      and public.is_household_member(public.pet_household(d.pet_id))
+      and public.can_manage_household_medical(public.pet_household(d.pet_id))
   )
 );
 
-drop policy if exists "household members can update extracted fields" on public.extracted_fields;
-create policy "household members can update extracted fields"
+create policy "household owners can update extracted fields"
 on public.extracted_fields for update to authenticated
 using (
   exists (
@@ -545,7 +683,7 @@ using (
     from public.ai_extractions ae
     join public.documents d on d.id = ae.document_id
     where ae.id = extracted_fields.extraction_id
-      and public.is_household_member(public.pet_household(d.pet_id))
+      and public.can_manage_household_medical(public.pet_household(d.pet_id))
   )
 )
 with check (
@@ -554,32 +692,35 @@ with check (
     from public.ai_extractions ae
     join public.documents d on d.id = ae.document_id
     where ae.id = extracted_fields.extraction_id
-      and public.is_household_member(public.pet_household(d.pet_id))
+      and public.can_manage_household_medical(public.pet_household(d.pet_id))
   )
 );
 
 -- Shared access to private vet-record files.
 -- Current path shape is user_id/pet_id/document_id/original.ext.
 drop policy if exists "household members can read vet records" on storage.objects;
-create policy "household members can read vet records"
+drop policy if exists "household members can upload vet records" on storage.objects;
+drop policy if exists "household medical members can read vet records" on storage.objects;
+drop policy if exists "household owners can upload vet records" on storage.objects;
+
+create policy "household medical members can read vet records"
 on storage.objects for select
 to authenticated
 using (
   bucket_id = 'vet-records'
   and array_length(storage.foldername(name), 1) >= 2
-  and public.is_household_member(
+  and public.can_view_household_medical(
     public.pet_household(((storage.foldername(name))[2])::uuid)
   )
 );
 
-drop policy if exists "household members can upload vet records" on storage.objects;
-create policy "household members can upload vet records"
+create policy "household owners can upload vet records"
 on storage.objects for insert
 to authenticated
 with check (
   bucket_id = 'vet-records'
   and array_length(storage.foldername(name), 1) >= 2
-  and public.is_household_member(
+  and public.can_manage_household_medical(
     public.pet_household(((storage.foldername(name))[2])::uuid)
   )
 );

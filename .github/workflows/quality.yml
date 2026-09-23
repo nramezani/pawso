@@ -10,6 +10,18 @@ permissions:
   contents: read
 
 jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan for committed secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   mobile:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -22,7 +34,9 @@ jobs:
       - name: Install mobile dependencies
         run: npm install --ignore-scripts
       - name: TypeScript
-        run: npm exec -- tsc --noEmit
+        run: npm run typecheck
+      - name: Lint (errors only; warning backlog tracked separately)
+        run: npm run lint
       - name: Validate Expo configuration
         run: npx expo config --json > /dev/null
 
@@ -42,4 +56,10 @@ jobs:
       - name: Install backend dependencies
         run: python -m pip install -r requirements.txt
       - name: Compile backend
-        run: python -m py_compile main.py ask_router.py
+        run: python -m py_compile main.py ask_router.py auth.py rate_limit.py upload_validation.py
+      - name: Run backend tests
+        run: python -m unittest discover -s tests -v
+      - name: Dependency vulnerability scan
+        run: |
+          python -m pip install pip-audit
+          pip-audit -r requirements.txt

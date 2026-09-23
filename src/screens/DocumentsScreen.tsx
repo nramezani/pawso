@@ -113,10 +113,6 @@ export function DocumentsScreen() {
     setNewMedicationUnit,
     newMedicationInstructions,
     setNewMedicationInstructions,
-    newMedicationTime1,
-    setNewMedicationTime1,
-    newMedicationTime2,
-    setNewMedicationTime2,
     careTasks,
     setCareTasks,
     taskCompletions,
@@ -212,7 +208,12 @@ return (
         </View>
 
         {canManageMedical ? (
-          <Pressable style={styles.outlineButton} onPress={pickVetRecord}>
+          <Pressable
+            style={styles.outlineButton}
+            onPress={pickVetRecord}
+            accessibilityRole="button"
+            accessibilityLabel="Upload veterinary record"
+          >
             <Text style={styles.outlineButtonText}>＋ Upload veterinary record</Text>
           </Pressable>
         ) : canViewMedical ? (
@@ -301,6 +302,11 @@ return (
                     styles.documentOpenButtonDisabled,
                 ]}
                 disabled={!document.storage_path || openingDocumentId === document.id}
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${document.filename}`}
+                accessibilityState={{
+                  disabled: !document.storage_path || openingDocumentId === document.id,
+                }}
                 onPress={() => openOriginalDocument(document)}
               >
                 <Text style={styles.documentOpenButtonText}>

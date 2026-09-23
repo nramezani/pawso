@@ -93,6 +93,8 @@ export function TodayScreen() {
               : styles.apiStatusDisconnected,
           ]}
           onPress={checkBackend}
+          accessibilityRole="button"
+          accessibilityLabel={`API status: ${apiStatus}. Tap to refresh.`}
         >
           <View
             style={[
@@ -139,6 +141,12 @@ export function TodayScreen() {
                 styles.reminderToggleButtonEnabled,
             ]}
             disabled={notificationSyncing}
+            accessibilityRole="switch"
+            accessibilityLabel="Pawso reminders"
+            accessibilityState={{
+              checked: notificationsEnabled && notificationPermission === 'granted',
+              disabled: notificationSyncing,
+            }}
             onPress={
               notificationsEnabled
                 ? disableNotifications
@@ -188,6 +196,9 @@ export function TodayScreen() {
               showAllPets && styles.todayScopeButtonSelected,
             ]}
             onPress={() => setTodayView('all')}
+            accessibilityRole="tab"
+            accessibilityLabel="Show all pets"
+            accessibilityState={{ selected: showAllPets }}
           >
             <Text
               style={[
@@ -205,6 +216,9 @@ export function TodayScreen() {
               !showAllPets && styles.todayScopeButtonSelected,
             ]}
             onPress={() => setTodayView('pet')}
+            accessibilityRole="tab"
+            accessibilityLabel={`Show ${petName} only`}
+            accessibilityState={{ selected: !showAllPets }}
           >
             <Text
               style={[
@@ -242,6 +256,8 @@ export function TodayScreen() {
                   summary.overdue_count > 0 && styles.allPetsCardAttention,
                 ]}
                 onPress={() => openPetToday(summary.pet_id)}
+                accessibilityRole="button"
+                accessibilityLabel={`View ${summary.name}'s today`}
               >
                 <View style={styles.petListAvatar}>
                   <Text style={{ fontSize: 27 }}>{emoji}</Text>
@@ -312,6 +328,8 @@ export function TodayScreen() {
                   style={styles.givenButton}
                   disabled={loggingDoseId === dose.schedule.id}
                   onPress={() => logMedicationDose(dose, 'given')}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Mark ${dose.medication.name} as given`}
                 >
                   <Text style={styles.givenButtonText}>
                     {loggingDoseId === dose.schedule.id ? 'Saving…' : '✓ Given'}
@@ -321,6 +339,8 @@ export function TodayScreen() {
                   style={styles.skipDoseButton}
                   disabled={loggingDoseId === dose.schedule.id}
                   onPress={() => logMedicationDose(dose, 'skipped')}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Skip ${dose.medication.name} dose`}
                 >
                   <Text style={styles.skipDoseButtonText}>Skip</Text>
                 </Pressable>
@@ -340,6 +360,8 @@ export function TodayScreen() {
                 style={styles.completeCareButton}
                 disabled={completingTaskId === task.id}
                 onPress={() => completeCareTask(task)}
+                accessibilityRole="button"
+                accessibilityLabel={`Mark ${task.title} complete`}
               >
                 <Text style={styles.completeCareButtonText}>
                   {completingTaskId === task.id
@@ -387,6 +409,8 @@ export function TodayScreen() {
                   style={styles.givenButton}
                   disabled={loggingDoseId === dose.schedule.id}
                   onPress={() => logMedicationDose(dose, 'given')}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Mark ${dose.medication.name} as given`}
                 >
                   <Text style={styles.givenButtonText}>✓ Given</Text>
                   {dose.log?.actor_name ? (
@@ -399,6 +423,8 @@ export function TodayScreen() {
                   style={styles.skipDoseButton}
                   disabled={loggingDoseId === dose.schedule.id}
                   onPress={() => logMedicationDose(dose, 'skipped')}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Skip ${dose.medication.name} dose`}
                 >
                   <Text style={styles.skipDoseButtonText}>Skip</Text>
                 </Pressable>
@@ -442,6 +468,8 @@ export function TodayScreen() {
                   style={styles.completeCareButton}
                   disabled={completingTaskId === task.id}
                   onPress={() => completeCareTask(task)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Mark ${task.title} complete`}
                 >
                   <Text style={styles.completeCareButtonText}>
                     {completingTaskId === task.id
@@ -518,7 +546,12 @@ export function TodayScreen() {
               Pawso answers from {petName}'s confirmed health timeline,
               medications, and care records.
             </Text>
-            <Pressable style={styles.outlineButton} onPress={openAskScreen}>
+            <Pressable
+              style={styles.outlineButton}
+              onPress={openAskScreen}
+              accessibilityRole="button"
+              accessibilityLabel="Ask Pawso"
+            >
               <Text style={styles.outlineButtonText}>✨ Ask Pawso</Text>
             </Pressable>
           </View>

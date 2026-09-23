@@ -99,7 +99,7 @@ export function Input(props: any) {
   return (
     <TextInput
       {...props}
-      placeholderTextColor="#9AA5A1"
+      placeholderTextColor="#7C8783"
       style={[
         styles.input,
         props.multiline && styles.textArea,
@@ -578,7 +578,7 @@ export const styles = StyleSheet.create({
 
   infoLabel: {
     fontSize: 12,
-    color: '#88938F',
+    color: '#5E6B67',
   },
 
   infoValue: {
@@ -656,7 +656,7 @@ export const styles = StyleSheet.create({
   apiRefresh: {
     marginLeft: 'auto',
     fontSize: 11,
-    color: '#88938F',
+    color: '#5E6B67',
   },
 
   errorCard: {
@@ -823,12 +823,12 @@ export const styles = StyleSheet.create({
 
   documentMeta: {
     marginTop: 6,
-    color: '#88938F',
+    color: '#5E6B67',
   },
 
   safetyText: {
     marginTop: 24,
-    color: '#88938F',
+    color: '#5E6B67',
     textAlign: 'center',
     lineHeight: 20,
   },
@@ -940,7 +940,7 @@ export const styles = StyleSheet.create({
 
   sourceText: {
     fontSize: 12,
-    color: '#88938F',
+    color: '#5E6B67',
   },
 
   warningText: {
@@ -1003,7 +1003,7 @@ export const styles = StyleSheet.create({
 
   timelineDate: {
     fontSize: 12,
-    color: '#88938F',
+    color: '#5E6B67',
   },
 
   timelineType: {
@@ -1030,7 +1030,7 @@ export const styles = StyleSheet.create({
   timelineSource: {
     marginTop: 12,
     fontSize: 12,
-    color: '#88938F',
+    color: '#5E6B67',
   },
 
   askHero: {
@@ -1338,7 +1338,7 @@ export const styles = StyleSheet.create({
   },
   documentCardEmoji: { fontSize: 22 },
   documentCardTitle: { fontSize: 15, fontWeight: '800', color: '#1F2A27' },
-  documentCardMeta: { marginTop: 5, fontSize: 12, color: '#88938F' },
+  documentCardMeta: { marginTop: 5, fontSize: 12, color: '#5E6B67' },
   documentStatusRow: {
     marginTop: 15, flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between', gap: 10,
@@ -1452,7 +1452,7 @@ export const styles = StyleSheet.create({
   },
   allPetsMeta: {
     marginTop: 6,
-    color: '#88938F',
+    color: '#5E6B67',
     fontSize: 12,
   },
 

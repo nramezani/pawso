@@ -1,4 +1,4 @@
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
 import {
@@ -112,10 +112,6 @@ export function CareScreen() {
     setNewMedicationUnit,
     newMedicationInstructions,
     setNewMedicationInstructions,
-    newMedicationTime1,
-    setNewMedicationTime1,
-    newMedicationTime2,
-    setNewMedicationTime2,
     careTasks,
     setCareTasks,
     taskCompletions,
@@ -157,6 +153,8 @@ export function CareScreen() {
     openCareScreen,
     createCareTask,
     completeCareTask,
+    deleteCareTask,
+    deletingTaskId,
     formatDueLabel,
     getMedicationUrgency,
     loadMedicationData,
@@ -250,6 +248,32 @@ return (
                   <Text style={styles.documentCardTitle}>{task.title}</Text>
                   <Text style={styles.documentCardMeta}>{formatDueLabel(task.due_at)}</Text>
                 </View>
+
+                {canManageCare ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Delete ${task.title}`}
+                    disabled={deletingTaskId === task.id}
+                    onPress={() =>
+                      Alert.alert(
+                        'Delete care task?',
+                        `This removes "${task.title}". This cannot be undone.`,
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          {
+                            text: 'Delete',
+                            style: 'destructive',
+                            onPress: () => deleteCareTask(task),
+                          },
+                        ]
+                      )
+                    }
+                  >
+                    <Text style={{ fontSize: 18, opacity: deletingTaskId === task.id ? 0.4 : 1 }}>
+                      🗑️
+                    </Text>
+                  </Pressable>
+                ) : null}
               </View>
 
               {task.notes ? <Text style={styles.medicationInstructions}>{task.notes}</Text> : null}

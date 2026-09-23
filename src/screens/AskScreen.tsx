@@ -111,10 +111,6 @@ export function AskScreen() {
     setNewMedicationUnit,
     newMedicationInstructions,
     setNewMedicationInstructions,
-    newMedicationTime1,
-    setNewMedicationTime1,
-    newMedicationTime2,
-    setNewMedicationTime2,
     careTasks,
     setCareTasks,
     taskCompletions,
@@ -231,6 +227,8 @@ const suggestedQuestions = [
               key={question}
               style={styles.askSuggestionChip}
               disabled={askLoading}
+              accessibilityRole="button"
+              accessibilityLabel={`Ask: ${question}`}
               onPress={() => {
                 setAskQuestion(question);
                 askPawso(question);
