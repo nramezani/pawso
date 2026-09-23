@@ -1,23 +1,40 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Notifications from 'expo-notifications';
+import Constants, { AppOwnership } from 'expo-constants';
 import { Platform } from 'react-native';
 
 import { supabase } from '../../lib/supabase';
 
 const ENABLED_KEY = 'pawso.localRemindersEnabled';
 const CHANNEL_ID = 'pawso-care-reminders';
+let notificationHandlerConfigured = false;
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+async function getNotifications() {
+  if (Constants.appOwnership === AppOwnership.Expo) {
+    return null;
+  }
+
+  const Notifications = await import('expo-notifications');
+
+  if (!notificationHandlerConfigured) {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+    notificationHandlerConfigured = true;
+  }
+
+  return Notifications;
+}
 
 async function ensureAndroidChannel() {
   if (Platform.OS !== 'android') return;
+
+  const Notifications = await getNotifications();
+  if (!Notifications) return;
 
   await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
     name: 'Pawso care reminders',
@@ -35,12 +52,18 @@ export async function setLocalReminderPreference(enabled: boolean) {
 }
 
 export async function getLocalNotificationPermission() {
+  const Notifications = await getNotifications();
+  if (!Notifications) return 'denied' as const;
+
   const permission = await Notifications.getPermissionsAsync();
   return permission.status;
 }
 
 export async function requestLocalNotificationPermission() {
   await ensureAndroidChannel();
+
+  const Notifications = await getNotifications();
+  if (!Notifications) return 'denied' as const;
 
   const current = await Notifications.getPermissionsAsync();
   if (current.status === 'granted') return current.status;
@@ -50,12 +73,18 @@ export async function requestLocalNotificationPermission() {
 }
 
 export async function clearPawsoLocalNotifications() {
+  const Notifications = await getNotifications();
+  if (!Notifications) return;
+
   await Notifications.cancelAllScheduledNotificationsAsync();
 }
 
 export async function syncPawsoLocalNotifications(
   pets: Array<{ id: string; name: string }>
 ) {
+  const Notifications = await getNotifications();
+  if (!Notifications) return 0;
+
   await ensureAndroidChannel();
 
   const enabled = await getLocalReminderPreference();
