@@ -1,6 +1,7 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Platform, Text } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { WelcomeScreen } from '../screens/WelcomeScreen';
@@ -31,12 +32,20 @@ import type {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
-const tabIcons: Record<keyof MainTabParamList, string> = {
-  Today: '🏠',
-  Pets: '🐾',
-  Add: '＋',
-  Ask: '✨',
-  Care: '✓',
+// Vector icons (via @expo/vector-icons) instead of raw emoji: emoji glyphs
+// render inconsistently across iOS/Android/OS versions and ignore the
+// tabBarActiveTintColor tint (most emoji fonts render fixed multicolor
+// glyphs, not tintable outlines), so the active/inactive tab color only
+// ever visibly applied to the label text underneath, not the icon itself.
+const tabIcons: Record<
+  keyof MainTabParamList,
+  { focused: keyof typeof Ionicons.glyphMap; unfocused: keyof typeof Ionicons.glyphMap }
+> = {
+  Today: { focused: 'home', unfocused: 'home-outline' },
+  Pets: { focused: 'paw', unfocused: 'paw-outline' },
+  Add: { focused: 'add-circle', unfocused: 'add-circle-outline' },
+  Ask: { focused: 'sparkles', unfocused: 'sparkles-outline' },
+  Care: { focused: 'checkmark-circle', unfocused: 'checkmark-circle-outline' },
 };
 
 function MainTabs() {
@@ -64,10 +73,12 @@ function MainTabs() {
           fontSize: 11,
           fontWeight: '700',
         },
-        tabBarIcon: ({ color }) => (
-          <Text style={{ color, fontSize: route.name === 'Add' ? 24 : 18 }}>
-            {tabIcons[route.name]}
-          </Text>
+        tabBarIcon: ({ color, focused }) => (
+          <Ionicons
+            name={focused ? tabIcons[route.name].focused : tabIcons[route.name].unfocused}
+            size={route.name === 'Add' ? 30 : 22}
+            color={color}
+          />
         ),
       })}
     >
