@@ -125,6 +125,7 @@ function usePawsoState() {
   const [medicationsLoading, setMedicationsLoading] = useState(false);
   const [medicationsError, setMedicationsError] = useState('');
   const [isSavingMedication, setIsSavingMedication] = useState(false);
+  const [deletingMedicationId, setDeletingMedicationId] = useState<string | null>(null);
   const [loggingDoseId, setLoggingDoseId] = useState<string | null>(null);
 
   const [newMedicationName, setNewMedicationName] = useState('');
@@ -139,6 +140,7 @@ function usePawsoState() {
   const [careError, setCareError] = useState('');
   const [savingCareTask, setSavingCareTask] = useState(false);
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
+  const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
 
   const [newCareTitle, setNewCareTitle] = useState('');
   const [newCareNotes, setNewCareNotes] = useState('');
@@ -1647,6 +1649,30 @@ function usePawsoState() {
     }
   }
 
+  async function deleteCareTask(task: CareTask) {
+    if (!currentPetId) return;
+
+    try {
+      setDeletingTaskId(task.id);
+      setCareError('');
+
+      const { error } = await supabase.from('care_tasks').delete().eq('id', task.id);
+
+      if (error) throw error;
+
+      await loadCareData(currentPetId);
+      await refreshAllPetsToday();
+      await syncNotificationsIfEnabled();
+    } catch (error) {
+      console.log('Delete care task error:', error);
+      setCareError(
+        error instanceof Error ? error.message : 'Could not delete this care task.'
+      );
+    } finally {
+      setDeletingTaskId(null);
+    }
+  }
+
   function formatDueLabel(value: string) {
     const due = new Date(value);
     const now = new Date();
@@ -1864,6 +1890,33 @@ function usePawsoState() {
       );
     } finally {
       setIsSavingMedication(false);
+    }
+  }
+
+  async function deleteMedication(medication: Medication) {
+    if (!currentPetId) return;
+
+    try {
+      setDeletingMedicationId(medication.id);
+      setMedicationsError('');
+
+      // medication_schedules/medication_logs reference medications with
+      // "on delete cascade" (see 20260911_core_schema.sql), so deleting the
+      // medication row also removes its schedules and dose history.
+      const { error } = await supabase.from('medications').delete().eq('id', medication.id);
+
+      if (error) throw error;
+
+      await loadMedicationData(currentPetId);
+      await refreshAllPetsToday();
+      await syncNotificationsIfEnabled();
+    } catch (error) {
+      console.log('Delete medication error:', error);
+      setMedicationsError(
+        error instanceof Error ? error.message : 'Could not delete this medication.'
+      );
+    } finally {
+      setDeletingMedicationId(null);
     }
   }
 
@@ -2832,6 +2885,8 @@ function usePawsoState() {
     openCareScreen,
     createCareTask,
     completeCareTask,
+    deleteCareTask,
+    deletingTaskId,
     formatDueLabel,
     getMedicationUrgency,
     loadMedicationData,
@@ -2840,6 +2895,8 @@ function usePawsoState() {
     formatMedicationTime,
     openMedicationsScreen,
     createMedication,
+    deleteMedication,
+    deletingMedicationId,
     logMedicationDose,
     loadDocuments,
     openDocumentsScreen,

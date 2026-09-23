@@ -1,4 +1,4 @@
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
 import {
@@ -91,6 +91,8 @@ export function MedicationsScreen() {
     openingDocumentId,
     setOpeningDocumentId,
     medicationList,
+    deleteMedication,
+    deletingMedicationId,
     setMedicationList,
     medicationSchedules,
     setMedicationSchedules,
@@ -261,6 +263,32 @@ return (
                         'Dose not specified'}
                     </Text>
                   </View>
+
+                  {canManageMedical ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Delete ${medication.name}`}
+                      disabled={deletingMedicationId === medication.id}
+                      onPress={() =>
+                        Alert.alert(
+                          'Delete medication?',
+                          `This removes "${medication.name}" and its schedule and dose history. This cannot be undone.`,
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            {
+                              text: 'Delete',
+                              style: 'destructive',
+                              onPress: () => deleteMedication(medication),
+                            },
+                          ]
+                        )
+                      }
+                    >
+                      <Text style={{ fontSize: 18, opacity: deletingMedicationId === medication.id ? 0.4 : 1 }}>
+                        🗑️
+                      </Text>
+                    </Pressable>
+                  ) : null}
                 </View>
 
                 {medication.instructions ? (
