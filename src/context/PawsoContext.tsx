@@ -223,6 +223,23 @@ function usePawsoState() {
     return fallback;
   }
 
+  function sanitizeAskSource(source: AskSource): AskSource {
+    const shorten = (value: string, maxLength: number, fallback: string) => {
+      const normalized = value.trim() || fallback;
+      if (normalized.length <= maxLength) return normalized;
+      return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
+    };
+
+    return {
+      ...source,
+      id: shorten(source.id, 200, 'source'),
+      label: shorten(source.label, 500, 'Health record'),
+      source_type: shorten(source.source_type, 200, 'Pawso record'),
+      date: source.date ? shorten(source.date, 100, '') : undefined,
+      text: shorten(source.text, 10000, 'No additional record details.'),
+    };
+  }
+
   useEffect(() => {
     checkBackend();
     initializeSupabase();
@@ -1163,7 +1180,8 @@ function usePawsoState() {
         });
       }
 
-      setAskSources(sources);
+      const safeSources = sources.map(sanitizeAskSource);
+      setAskSources(safeSources);
 
       const response = await fetch(`${API_BASE_URL}/api/v1/ask`, {
         method: 'POST',
@@ -1178,7 +1196,7 @@ function usePawsoState() {
             allergies: allergies || null,
           },
           question,
-          sources,
+          sources: safeSources,
         }),
       });
 
@@ -1263,6 +1281,7 @@ function usePawsoState() {
         });
       }
 
+      const safeSources = sources.map(sanitizeAskSource);
       const response = await fetch(`${API_BASE_URL}/api/v1/vet-visit-prep`, {
         method: 'POST',
         headers: await getApiAuthHeaders('application/json'),
@@ -1277,7 +1296,7 @@ function usePawsoState() {
           },
           reason_for_visit: visitReason.trim() || null,
           recent_changes: visitChanges.trim() || null,
-          sources,
+          sources: safeSources,
         }),
       });
 
@@ -1429,13 +1448,14 @@ function usePawsoState() {
         });
       }
 
-      setSmartCareSources(sources);
+      const safeSources = sources.map(sanitizeAskSource);
+      setSmartCareSources(safeSources);
       const response = await fetch(`${API_BASE_URL}/api/v1/smart-care-plan`, {
         method: 'POST',
         headers: await getApiAuthHeaders('application/json'),
         body: JSON.stringify({
           pet: { id: currentPetId, name: petName, species: petType, breed: breed || null, conditions: conditions || null, allergies: allergies || null },
-          sources,
+          sources: safeSources,
         }),
       });
       const body = await response.json();
