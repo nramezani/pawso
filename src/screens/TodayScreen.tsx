@@ -549,12 +549,14 @@ export function TodayScreen() {
           </View>
 
           <Text style={styles.sectionTitle}>More for {petName}</Text>
-          {timelineEvents.length > 0 ? (
-            <SecondaryButton
-              title="Health timeline"
-              onPress={() => setScreen('timeline')}
-            />
-          ) : null}
+          <SecondaryButton
+            title="Health timeline"
+            onPress={() => setScreen('timeline')}
+          />
+          <SecondaryButton
+            title="Veterinary documents"
+            onPress={openDocumentsScreen}
+          />
           <SecondaryButton
             title="Prepare for a vet visit"
             onPress={openVetVisitPrep}
