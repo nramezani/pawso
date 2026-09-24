@@ -527,7 +527,6 @@ function usePawsoState() {
             headers: await getApiAuthHeaders('application/json'),
             body: JSON.stringify({
               household_id: householdId,
-              household_name: householdName,
               email: inviteEmail.trim().toLowerCase(),
               role: inviteRole,
               invite_code: createdCode,
