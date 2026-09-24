@@ -10,6 +10,7 @@ export function PetsScreen() {
     selectPet,
     startAddPet,
     databaseError,
+    householdMembers,
     setScreen,
   } = usePawso();
 
@@ -75,13 +76,15 @@ export function PetsScreen() {
       <View style={{ marginTop: 12 }}>
         <Pressable
           style={styles.infoCard}
-          onPress={() => setScreen('account')}
+          onPress={() => setScreen('household')}
           accessibilityRole="button"
-          accessibilityLabel="Account and household settings"
+          accessibilityLabel="Manage people and pet access"
         >
-          <Text style={styles.cardStrong}>👤 Account & household</Text>
+          <Text style={styles.cardStrong}>People & access</Text>
           <Text style={styles.cardMuted}>
-            Secure your Pawso account before inviting caregivers.
+            {householdMembers.length === 1
+              ? 'Only you currently have access. Invite a caregiver or sitter.'
+              : `${householdMembers.length} people have access. Manage caregivers and sitters.`}
           </Text>
         </Pressable>
       </View>
