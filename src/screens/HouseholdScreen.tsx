@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Linking, Share, Text, View } from 'react-native';
+import { Alert, Linking, Share, Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
 import {
@@ -19,6 +19,7 @@ export function HouseholdScreen() {
     householdName,
     householdRole,
     householdMembers,
+    householdInvitations,
     householdBusy,
     householdError,
     inviteEmail,
@@ -33,6 +34,8 @@ export function HouseholdScreen() {
     createHouseholdInvite,
     acceptHouseholdInvite,
     refreshHousehold,
+    removeHouseholdMember,
+    cancelHouseholdInvitation,
   } = usePawso();
   const [showJoin, setShowJoin] = useState(false);
   const [shareError, setShareError] = useState('');
@@ -45,6 +48,36 @@ ${inviteCode}
 
 This one-time code expires after 7 days.`
     : '';
+
+  function confirmRemoveMember(member: any) {
+    Alert.alert(
+      'Remove access?',
+      `${member.display_name || 'This person'} will immediately lose access to this household and its pets. Existing care history will remain.`,
+      [
+        { text: 'Keep access', style: 'cancel' },
+        {
+          text: 'Remove access',
+          style: 'destructive',
+          onPress: () => removeHouseholdMember(member.id),
+        },
+      ]
+    );
+  }
+
+  function confirmCancelInvitation(invitation: any) {
+    Alert.alert(
+      'Cancel invitation?',
+      `The invite for ${invitation.invited_email || 'this recipient'} will stop working.`,
+      [
+        { text: 'Keep invitation', style: 'cancel' },
+        {
+          text: 'Cancel invitation',
+          style: 'destructive',
+          onPress: () => cancelHouseholdInvitation(invitation.id),
+        },
+      ]
+    );
+  }
 
   async function shareInvitation() {
     if (!invitationMessage) return;
@@ -81,7 +114,7 @@ This one-time code expires after 7 days.`
 
   return (
     <Page scroll keyboard>
-      <Header title="Household" back={() => setScreen('account')} />
+      <Header title="People & access" back={() => setScreen('account')} />
 
       <Text style={styles.pageTitle}>{householdName || 'My Pawso Household'}</Text>
       <Text style={styles.pageSubtitle}>
@@ -139,6 +172,13 @@ This one-time code expires after 7 days.`
           <View key={member.id} style={styles.documentCard}>
             <Text style={styles.cardStrong}>{member.display_name || 'Pawso member'}</Text>
             <Text style={styles.cardMuted}>{member.role}</Text>
+            {canInvite && member.role !== 'owner' ? (
+              <SecondaryButton
+                title="Remove access"
+                disabled={householdBusy}
+                onPress={() => confirmRemoveMember(member)}
+              />
+            ) : null}
           </View>
         ))
       ) : (
@@ -150,6 +190,27 @@ This one-time code expires after 7 days.`
         disabled={householdBusy}
         onPress={refreshHousehold}
       />
+
+      {canInvite && householdInvitations.length > 0 ? (
+        <>
+          <Text style={styles.sectionTitle}>Pending invitations</Text>
+          {householdInvitations.map((invitation: any) => (
+            <View key={invitation.id} style={styles.documentCard}>
+              <Text style={styles.cardStrong}>
+                {invitation.invited_email || 'Invitation code'}
+              </Text>
+              <Text style={styles.cardMuted}>
+                {invitation.role} · expires {new Date(invitation.expires_at).toLocaleDateString()}
+              </Text>
+              <SecondaryButton
+                title="Cancel invitation"
+                disabled={householdBusy}
+                onPress={() => confirmCancelInvitation(invitation)}
+              />
+            </View>
+          ))}
+        </>
+      ) : null}
 
       {canInvite ? (
         <>
