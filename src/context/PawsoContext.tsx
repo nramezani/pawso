@@ -813,6 +813,40 @@ function usePawsoState() {
     }
   }
 
+  async function deleteAccount() {
+    try {
+      setAccountBusy(true);
+      setAccountError('');
+      setAccountMessage('');
+
+      const response = await fetch(`${API_BASE_URL}/api/v1/account`, {
+        method: 'DELETE',
+        headers: await getApiAuthHeaders(),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(getApiErrorMessage(body, 'Could not delete your Pawso account.'));
+      }
+
+      await supabase.auth.signOut();
+      setAccountEmail('');
+      setAccountIsAnonymous(true);
+      setPets([]);
+      setCurrentPetId(null);
+      setHouseholdId(null);
+      setHouseholdMembers([]);
+      setHouseholdInvitations([]);
+      setScreen('welcome');
+    } catch (error) {
+      console.log('Delete account error:', error);
+      setAccountError(
+        error instanceof Error ? error.message : 'Could not delete your Pawso account.'
+      );
+    } finally {
+      setAccountBusy(false);
+    }
+  }
+
   async function signOutAccount() {
     try {
       setAccountBusy(true);
@@ -2785,6 +2819,7 @@ function usePawsoState() {
     setRecoveryPassword,
     completePasswordRecovery,
     secureAccount,
+    deleteAccount,
     signOutAccount,
     setApiStatus,
     authReady,
