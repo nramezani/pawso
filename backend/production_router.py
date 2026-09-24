@@ -1,10 +1,12 @@
 import html
 import os
+import re
+from datetime import UTC, datetime
 from typing import Literal
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from auth import AuthenticatedUser, require_user
 from rate_limit import UsageLimiter
@@ -20,20 +22,31 @@ invitation_limiter = UsageLimiter(
 
 class InvitationEmailRequest(BaseModel):
     household_id: str = Field(min_length=36, max_length=36)
-    household_name: str = Field(min_length=1, max_length=120)
     email: str = Field(min_length=3, max_length=320)
     role: Literal["caregiver", "sitter"]
     invite_code: str = Field(min_length=36, max_length=36)
 
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", normalized):
+            raise ValueError("Enter a valid invitation email address.")
+        return normalized
 
-async def _confirm_owner(user: AuthenticatedUser, household_id: str) -> None:
+
+async def _confirm_owner(user: AuthenticatedUser, household_id: str) -> str:
     supabase_url = os.getenv("SUPABASE_URL", "").rstrip("/")
     publishable_key = os.getenv("SUPABASE_PUBLISHABLE_KEY", "")
     if not supabase_url or not publishable_key:
         raise HTTPException(status_code=503, detail="Database service is not configured.")
 
+    headers = {
+        "apikey": publishable_key,
+        "Authorization": f"Bearer {user.access_token}",
+    }
     async with httpx.AsyncClient(timeout=10.0) as client:
-        response = await client.get(
+        membership_response = await client.get(
             f"{supabase_url}/rest/v1/household_members",
             params={
                 "household_id": f"eq.{household_id}",
@@ -42,16 +55,23 @@ async def _confirm_owner(user: AuthenticatedUser, household_id: str) -> None:
                 "select": "id",
                 "limit": "1",
             },
-            headers={
-                "apikey": publishable_key,
-                "Authorization": f"Bearer {user.access_token}",
-            },
+            headers=headers,
         )
 
-    if response.status_code != 200:
+        household_response = await client.get(
+            f"{supabase_url}/rest/v1/households",
+            params={"id": f"eq.{household_id}", "select": "name", "limit": "1"},
+            headers=headers,
+        )
+
+    if membership_response.status_code != 200 or household_response.status_code != 200:
         raise HTTPException(status_code=503, detail="Could not verify household access.")
-    if not response.json():
+    if not membership_response.json():
         raise HTTPException(status_code=403, detail="Only the household owner can send invitations.")
+    households = household_response.json()
+    if not households or not isinstance(households[0].get("name"), str):
+        raise HTTPException(status_code=404, detail="Household was not found.")
+    return households[0]["name"]
 
 
 async def _confirm_invitation(
@@ -69,7 +89,8 @@ async def _confirm_invitation(
                 "invited_email": f"eq.{str(request.email).strip().lower()}",
                 "role": f"eq.{request.role}",
                 "status": "eq.pending",
-                "select": "id",
+                "expires_at": f"gt.{datetime.now(UTC).isoformat()}",
+                "select": "id,expires_at",
                 "limit": "1",
             },
             headers={
@@ -130,7 +151,7 @@ async def send_household_invitation(
     request: InvitationEmailRequest,
     user: AuthenticatedUser = Depends(require_user),
 ):
-    await _confirm_owner(user, request.household_id)
+    household_name = await _confirm_owner(user, request.household_id)
     await _confirm_invitation(user, request)
     await invitation_limiter.check(user.id)
 
@@ -147,7 +168,7 @@ async def send_household_invitation(
     ios_url = os.getenv("PAWSO_IOS_DOWNLOAD_URL", "")
     android_url = os.getenv("PAWSO_ANDROID_DOWNLOAD_URL", "")
 
-    safe_household = html.escape(request.household_name)
+    safe_household = html.escape(household_name)
     safe_role = html.escape(request.role)
     safe_code = html.escape(request.invite_code)
     download_links = ""
@@ -178,7 +199,7 @@ async def send_household_invitation(
             json={
                 "from": from_email,
                 "to": [str(request.email)],
-                "subject": f"Join {request.household_name} on Pawso",
+                "subject": f"Join {household_name} on Pawso",
                 "html": email_html,
             },
         )
