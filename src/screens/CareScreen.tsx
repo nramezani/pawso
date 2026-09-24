@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
@@ -18,6 +19,7 @@ import {
 } from '../components/ui';
 
 export function CareScreen() {
+  const [showHistory, setShowHistory] = useState(false);
   const {
     setScreen,
     canManageCare,
@@ -196,9 +198,29 @@ export function CareScreen() {
   const completedTaskIds = new Set(
     taskCompletions.map((completion) => completion.task_id)
   );
-  const completedCurrentTasks = careTasks.filter((task) =>
-    completedTaskIds.has(task.id)
+  const completedTaskEntries = careTasks
+    .map((task) => ({
+      task,
+      completion: taskCompletions.find(
+        (completion) => completion.task_id === task.id
+      ),
+    }))
+    .filter(
+      (entry): entry is typeof entry & { completion: NonNullable<typeof entry.completion> } =>
+        Boolean(entry.completion)
+    )
+    .sort(
+      (a, b) =>
+        new Date(b.completion.completed_at).getTime() -
+        new Date(a.completion.completed_at).getTime()
+    );
+  const completedCurrentTasks = completedTaskEntries.map((entry) => entry.task);
+  const carePlanTasks = careTasks.filter(
+    (task) => task.is_active || completedTaskIds.has(task.id)
   );
+  const archivedTaskCount = careTasks.filter(
+    (task) => !task.is_active && !completedTaskIds.has(task.id)
+  ).length;
 
 return (
       <Page scroll>
@@ -216,14 +238,14 @@ return (
           </View>
         </View>
 
-        {careTasks.length > 0 ? (
+        {carePlanTasks.length > 0 ? (
           <ProgressOverview
-            title="Current care plan"
+            title="Care task history"
             completed={completedCurrentTasks.length}
-            total={careTasks.length}
+            total={carePlanTasks.length}
             detail={
               activeCareTasks.length === 0
-                ? 'Every current task is complete.'
+                ? 'Every active task is complete.'
                 : `${activeCareTasks.length} task${
                     activeCareTasks.length === 1 ? '' : 's'
                   } still need attention.`
@@ -277,9 +299,15 @@ return (
         ) : activeCareTasks.length === 0 ? (
           <View style={styles.emptyDocuments}>
             <Text style={styles.bigEmoji}>📅</Text>
-            <Text style={styles.cardStrong}>No active care tasks</Text>
+            <Text style={styles.cardStrong}>
+              {completedTaskEntries.length > 0
+                ? 'All active tasks are complete'
+                : 'No active care tasks'}
+            </Text>
             <Text style={styles.cardMuted}>
-              Add things like a urine recheck, water-filter change, nail trim, or vet follow-up.
+              {completedTaskEntries.length > 0
+                ? 'Open completion history below to see what was done and by whom.'
+                : 'Add things like a urine recheck, water-filter change, nail trim, or vet follow-up.'}
             </Text>
           </View>
         ) : (
@@ -294,6 +322,7 @@ return (
 
                 {canManageCare ? (
                   <Pressable
+                    style={styles.iconActionButton}
                     accessibilityRole="button"
                     accessibilityLabel={`Archive ${task.title}`}
                     disabled={deletingTaskId === task.id}
@@ -336,6 +365,45 @@ return (
             </View>
           ))
         )}
+
+        {completedTaskEntries.length > 0 || archivedTaskCount > 0 ? (
+          <View style={styles.infoCard}>
+            <Text style={styles.cardStrong}>Past care tasks</Text>
+            <Text style={styles.cardMuted}>
+              {completedTaskEntries.length} completed
+              {archivedTaskCount > 0
+                ? ` · ${archivedTaskCount} archived without completion`
+                : ''}
+            </Text>
+
+            {completedTaskEntries.length > 0 ? (
+              <SecondaryButton
+                title={showHistory ? 'Hide completion history' : 'Show completion history'}
+                onPress={() => setShowHistory((value) => !value)}
+              />
+            ) : null}
+
+            {showHistory
+              ? completedTaskEntries.slice(0, 10).map(({ task, completion }) => (
+                  <View key={`history-${task.id}`} style={styles.careListCard}>
+                    <Text style={styles.careListIcon}>✓</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.cardStrong}>{task.title}</Text>
+                      <Text style={styles.cardMuted}>
+                        Completed {new Date(completion.completed_at).toLocaleString()}
+                        {completion.actor_name ? ` · ${completion.actor_name}` : ''}
+                      </Text>
+                    </View>
+                  </View>
+                ))
+              : null}
+            {showHistory && completedTaskEntries.length > 10 ? (
+              <Text style={styles.reminderFinePrint}>
+                Showing the 10 most recent completions.
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
 
         <SecondaryButton title="Back to Today" onPress={() => setScreen('today')} />
       </Page>

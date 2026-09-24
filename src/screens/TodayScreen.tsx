@@ -52,7 +52,9 @@ export function TodayScreen() {
     openCareScreen,
     openDocumentsScreen,
     setScreen,
+    canViewMedical,
     canManageMedical,
+    canManageCare,
     notificationPermission,
     notificationsEnabled,
     notificationSyncing,
@@ -73,7 +75,11 @@ export function TodayScreen() {
   const now = new Date();
   const todayCareTasks = careTasks.filter((task) => {
     const due = new Date(task.due_at);
+    const hasCompletion = taskCompletions.some(
+      (completion) => completion.task_id === task.id
+    );
     return (
+      (task.is_active || hasCompletion) &&
       due.getFullYear() === now.getFullYear() &&
       due.getMonth() === now.getMonth() &&
       due.getDate() === now.getDate()
@@ -355,7 +361,9 @@ export function TodayScreen() {
             );
           })}
 
-          <PrimaryButton title="+ Add another pet" onPress={startAddPet} />
+          {canManageMedical ? (
+            <PrimaryButton title="+ Add another pet" onPress={startAddPet} />
+          ) : null}
 
         </>
       ) : (
@@ -471,11 +479,6 @@ export function TodayScreen() {
                   accessibilityLabel={`Mark ${dose.medication.name} as given`}
                 >
                   <Text style={styles.givenButtonText}>✓ Given</Text>
-                  {dose.log?.actor_name ? (
-                    <Text style={styles.cardMuted}>
-                      by {dose.log.actor_name}
-                    </Text>
-                  ) : null}
                 </Pressable>
                 <Pressable
                   style={styles.skipDoseButton}
@@ -649,18 +652,24 @@ export function TodayScreen() {
                 title="Health timeline"
                 onPress={() => setScreen('timeline')}
               />
-              <SecondaryButton
-                title="Veterinary documents"
-                onPress={openDocumentsScreen}
-              />
-              <SecondaryButton
-                title="Prepare for a vet visit"
-                onPress={openVetVisitPrep}
-              />
-              <SecondaryButton
-                title="Smart Care Plan"
-                onPress={openSmartCarePlan}
-              />
+              {canViewMedical ? (
+                <>
+                  <SecondaryButton
+                    title="Veterinary documents"
+                    onPress={openDocumentsScreen}
+                  />
+                  <SecondaryButton
+                    title="Prepare for a vet visit"
+                    onPress={openVetVisitPrep}
+                  />
+                </>
+              ) : null}
+              {canManageCare ? (
+                <SecondaryButton
+                  title="Smart Care Plan"
+                  onPress={openSmartCarePlan}
+                />
+              ) : null}
               <SecondaryButton
                 title="Health profile & weight trend"
                 onPress={() => setScreen('petProfile')}

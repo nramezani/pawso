@@ -43,7 +43,12 @@ export function AddMedicationScreen() {
     );
   }
 
-  const hasValidTime = newMedicationTimes.some((time: string) => time.trim());
+  const validTimePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
+  const allTimesValid =
+    newMedicationTimes.length > 0 &&
+    newMedicationTimes.every((time: string) =>
+      validTimePattern.test(time.trim())
+    );
 
   return (
     <Page scroll keyboard>
@@ -114,6 +119,12 @@ export function AddMedicationScreen() {
         </View>
       ))}
 
+      <Text style={styles.reminderFinePrint}>
+        {allTimesValid
+          ? '✓ Daily times are ready.'
+          : 'Each daily time must use HH:MM from 00:00 through 23:59.'}
+      </Text>
+
       {newMedicationTimes.length < 6 ? (
         <SecondaryButton
           title="+ Add another daily time"
@@ -133,7 +144,7 @@ export function AddMedicationScreen() {
       <PrimaryButton
         title={isSavingMedication ? 'Saving medication…' : 'Save medication'}
         disabled={
-          isSavingMedication || !newMedicationName.trim() || !hasValidTime
+          isSavingMedication || !newMedicationName.trim() || !allTimesValid
         }
         onPress={createMedication}
       />

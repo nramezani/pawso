@@ -190,13 +190,19 @@ export function AskScreen() {
     followUpEvents
   } = usePawso();
 
-const suggestedQuestions = [
-      `Summarize ${petName}'s health history.`,
-      'What follow-up did the vet recommend?',
-      `What medications are currently recorded for ${petName}?`,
-    ];
+  const careRecordCount = careTasks.filter(
+    (task) =>
+      task.is_active ||
+      taskCompletions.some((completion) => completion.task_id === task.id)
+  ).length;
 
-    return (
+  const suggestedQuestions = [
+    `Summarize ${petName}'s health history.`,
+    'What follow-up did the vet recommend?',
+    `What medications are currently recorded for ${petName}?`,
+  ];
+
+  return (
       <Page scroll keyboard>
         <Header back={() => setScreen('today')} title="Ask Pawso" />
 
@@ -230,8 +236,8 @@ const suggestedQuestions = [
                 tone: 'green',
               },
               {
-                label: 'Care tasks',
-                value: careTasks.length,
+                label: 'Care records',
+                value: careRecordCount,
                 icon: '📅',
                 tone: 'neutral',
               },

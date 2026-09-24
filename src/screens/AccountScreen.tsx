@@ -16,10 +16,28 @@ export function AccountScreen() {
   function confirmDeleteAccount(onConfirm: () => void) {
     Alert.alert(
       'Delete Pawso account?',
-      'This permanently deletes your account and access to Pawso data. This cannot be undone.',
+      'This permanently deletes your account and Pawso data. Download any original veterinary files you need first; a complete data export is not available yet. This cannot be undone.',
       [
         { text: 'Keep account', style: 'cancel' },
         { text: 'Delete permanently', style: 'destructive', onPress: onConfirm },
+      ]
+    );
+  }
+
+  function confirmExistingAccountSignIn(petCount: number, onConfirm: () => void) {
+    if (petCount === 0) {
+      onConfirm();
+      return;
+    }
+
+    Alert.alert(
+      'Switch to another account?',
+      `This temporary workspace has ${petCount} pet${
+        petCount === 1 ? '' : 's'
+      }. Signing in will not move those records. Secure this temporary account instead if you want to keep them.`,
+      [
+        { text: 'Keep temporary account', style: 'cancel' },
+        { text: 'Sign in anyway', onPress: onConfirm },
       ]
     );
   }
@@ -51,6 +69,7 @@ export function AccountScreen() {
     resetAiProcessingConsent,
     deleteAccount,
     signOutAccount,
+    pets,
   } = usePawso();
 
   return (
@@ -87,6 +106,8 @@ export function AccountScreen() {
             secureTextEntry
             autoCapitalize="none"
             autoCorrect={false}
+            autoComplete="new-password"
+            textContentType="newPassword"
             placeholder="At least 8 characters"
           />
           <Text style={styles.reminderFinePrint}>
@@ -111,6 +132,8 @@ export function AccountScreen() {
             autoCapitalize="none"
             keyboardType="email-address"
             autoCorrect={false}
+            autoComplete="email"
+            textContentType="emailAddress"
             placeholder="you@example.com"
           />
 
@@ -121,13 +144,15 @@ export function AccountScreen() {
             secureTextEntry
             autoCapitalize="none"
             autoCorrect={false}
+            autoComplete="current-password"
+            textContentType="password"
             placeholder="Your Pawso password"
           />
 
           <PrimaryButton
             title={accountBusy ? 'Signing in…' : 'Sign in'}
             disabled={accountBusy}
-            onPress={signInAccount}
+            onPress={() => confirmExistingAccountSignIn(pets.length, signInAccount)}
           />
           <SecondaryButton
             title={accountBusy ? 'Sending…' : 'Forgot password'}
@@ -152,6 +177,8 @@ export function AccountScreen() {
             autoCapitalize="none"
             keyboardType="email-address"
             autoCorrect={false}
+            autoComplete="email"
+            textContentType="emailAddress"
             placeholder="you@example.com"
           />
 
@@ -162,6 +189,8 @@ export function AccountScreen() {
             secureTextEntry
             autoCapitalize="none"
             autoCorrect={false}
+            autoComplete="new-password"
+            textContentType="newPassword"
             placeholder="At least 8 characters"
           />
 
@@ -262,7 +291,9 @@ export function AccountScreen() {
         <>
           <Text style={styles.sectionTitle}>Account data</Text>
           <Text style={styles.cardMuted}>
-            Account deletion is permanent. Export any records you need first.
+            Account deletion is permanent. Download any original veterinary
+            files you need first. A complete Pawso data export is not available
+            yet.
           </Text>
           <SecondaryButton
             title={accountBusy ? 'Deleting account…' : 'Delete my account'}

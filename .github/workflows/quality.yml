@@ -37,8 +37,14 @@ jobs:
         run: npm run typecheck
       - name: Lint (errors only; warning backlog tracked separately)
         run: npm run lint
+      - name: Expo Doctor
+        run: npx expo-doctor
       - name: Validate Expo configuration
         run: npx expo config --json > /dev/null
+      - name: Bundle Android
+        run: CI=1 npx expo export --platform android --output-dir /tmp/pawso-android
+      - name: Bundle iOS
+        run: CI=1 npx expo export --platform ios --output-dir /tmp/pawso-ios
 
   backend:
     runs-on: ubuntu-latest

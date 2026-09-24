@@ -24,6 +24,7 @@ export function VetVisitPrepScreen() {
     timelineEvents,
     medicationList,
     careTasks,
+    taskCompletions,
     visitReason,
     setVisitReason,
     visitChanges,
@@ -33,6 +34,12 @@ export function VetVisitPrepScreen() {
     vetVisitPrepError,
     generateVetVisitPrep,
   } = usePawso();
+
+  const careRecordCount = careTasks.filter(
+    (task) =>
+      task.is_active ||
+      taskCompletions.some((completion) => completion.task_id === task.id)
+  ).length;
 
   const briefing = vetVisitPrep
     ? [
@@ -79,8 +86,8 @@ export function VetVisitPrepScreen() {
               tone: 'green',
             },
             {
-              label: 'Care tasks',
-              value: careTasks.length,
+              label: 'Care records',
+              value: careRecordCount,
               icon: '📅',
               tone: 'neutral',
             },

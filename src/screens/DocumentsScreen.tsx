@@ -1,7 +1,8 @@
+import { useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
-import { MetricStrip } from '../components/VisualSummary';
+import { FilterChipRow, MetricStrip } from '../components/VisualSummary';
 import {
   Page,
   Header,
@@ -17,7 +18,10 @@ import {
   styles,
 } from '../components/ui';
 
+type DocumentFilter = 'all' | 'review_required' | 'confirmed';
+
 export function DocumentsScreen() {
+  const [documentFilter, setDocumentFilter] = useState<DocumentFilter>('all');
   const {
     setScreen,
     canViewMedical,
@@ -203,6 +207,29 @@ export function DocumentsScreen() {
     (total, document) => total + document.linked_events,
     0
   );
+  const filteredDocuments =
+    documentFilter === 'all'
+      ? petDocuments
+      : petDocuments.filter((document) => document.status === documentFilter);
+  const documentFilterOptions: Array<{
+    value: DocumentFilter;
+    label: string;
+    count: number;
+  }> = [{ value: 'all', label: 'All', count: petDocuments.length }];
+  if (documentsNeedingReview > 0) {
+    documentFilterOptions.push({
+      value: 'review_required',
+      label: 'Needs review',
+      count: documentsNeedingReview,
+    });
+  }
+  if (confirmedDocuments > 0) {
+    documentFilterOptions.push({
+      value: 'confirmed',
+      label: 'Confirmed',
+      count: confirmedDocuments,
+    });
+  }
 
 return (
       <Page scroll>
@@ -220,7 +247,7 @@ return (
           </View>
         </View>
 
-        {canViewMedical && petDocuments.length > 0 ? (
+        {canViewMedical && petDocuments.length > 1 ? (
           <MetricStrip
             accessibilityLabel={`${petName}'s document library overview`}
             items={[
@@ -277,6 +304,15 @@ return (
           </View>
         )}
 
+        {canViewMedical && petDocuments.length > 0 ? (
+          <FilterChipRow
+            label="Filter medical records"
+            selected={documentFilter}
+            onSelect={setDocumentFilter}
+            options={documentFilterOptions}
+          />
+        ) : null}
+
         {documentsError !== '' && (
           <View style={styles.errorCard}>
             <Text style={styles.errorTitle}>Medical records error</Text>
@@ -299,8 +335,16 @@ return (
                 : 'The household owner has not added any confirmed records yet.'}
             </Text>
           </View>
+        ) : filteredDocuments.length === 0 ? (
+          <View style={styles.emptyDocuments}>
+            <Text style={styles.bigEmoji}>🔎</Text>
+            <Text style={styles.cardStrong}>No matching records</Text>
+            <Text style={styles.cardMuted}>
+              Choose another filter to see more of {petName}&apos;s document library.
+            </Text>
+          </View>
         ) : (
-          petDocuments.map((document) => (
+          filteredDocuments.map((document) => (
             <View key={document.id} style={styles.documentCard}>
               <View style={styles.documentCardHeader}>
                 <View style={styles.documentIconBox}>

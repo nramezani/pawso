@@ -19,12 +19,37 @@ Never add their real values to GitHub or a Docker image.
 
 Optional production configuration:
 
-| Variable | Default |
+| Variable | Purpose / default |
 | --- | --- |
-| `CORS_ALLOWED_ORIGINS` | Local Expo web origins |
-| `AI_REQUESTS_PER_MINUTE` | `10` |
-| `AI_REQUESTS_PER_DAY` | `100` |
-| `MAX_UPLOAD_SIZE_MB` | `10` |
+| `ENVIRONMENT` | Set to `production` to disable generated API docs |
+| `OPENAI_MODEL` | Structured-output model; default `gpt-4o` |
+| `OPENAI_TIMEOUT_SECONDS` | Per-call timeout; default `30` |
+| `OPENAI_MAX_RETRIES` | Bounded SDK retries; default `2` |
+| `OPENAI_MAX_OUTPUT_TOKENS` | Output/cost cap; default `2000` |
+| `OPENAI_MAX_TOTAL_SOURCE_CHARS` | Aggregate source cap; default `30000` |
+| `OPENAI_IMAGE_DETAIL` | `auto`, `low`, or `high`; default `auto` |
+| `CORS_ALLOWED_ORIGINS` | Local Expo web origins by default |
+| `AI_REQUESTS_PER_MINUTE` | Per-process AI limit; default `10` |
+| `AI_REQUESTS_PER_DAY` | Per-process AI limit; default `100` |
+| `MAX_UPLOAD_SIZE_MB` | Upload cap; default `10` |
+
+Required for account deletion:
+
+| Variable | Purpose |
+| --- | --- |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server-only storage/database/Auth deletion; never expose to the app |
+
+Required for automatic household invitation email:
+
+| Variable | Purpose / default |
+| --- | --- |
+| `RESEND_API_KEY` | Transactional email credential |
+| `PAWSO_INVITE_FROM_EMAIL` | Verified sender, such as `Pawso <invites@example.com>` |
+| `PAWSO_INVITE_BASE_URL` | Deep-link base; default `pawso://invite` |
+| `PAWSO_IOS_DOWNLOAD_URL` | Current TestFlight/App Store link |
+| `PAWSO_ANDROID_DOWNLOAD_URL` | Current EAS/Play Store link |
+| `INVITATION_EMAILS_PER_MINUTE` | Owner email limit; default `3` |
+| `INVITATION_EMAILS_PER_DAY` | Owner email limit; default `25` |
 
 The platform supplies `PORT`; the container defaults to `8000` when it is not
 set.

@@ -1,7 +1,13 @@
+import { useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
-import { MetricStrip } from '../components/VisualSummary';
+import { parseLocalDateTime } from '../utils/dateTime';
+import {
+  ActivityBarChart,
+  FilterChipRow,
+  MetricStrip,
+} from '../components/VisualSummary';
 import {
   Page,
   Header,
@@ -17,7 +23,15 @@ import {
   styles,
 } from '../components/ui';
 
+type TimelineFilter =
+  | 'all'
+  | 'Veterinary visit'
+  | 'Owner observation'
+  | 'Weight'
+  | 'Follow-up';
+
 export function TimelineScreen() {
+  const [eventFilter, setEventFilter] = useState<TimelineFilter>('all');
   const {
     setScreen,
     canViewMedical,
@@ -195,6 +209,74 @@ export function TimelineScreen() {
   const countEvents = (type: string) =>
     timelineEvents.filter((event) => event.type === type).length;
 
+  const filteredEvents =
+    eventFilter === 'all'
+      ? timelineEvents
+      : timelineEvents.filter((event) => event.type === eventFilter);
+
+  const activityBuckets = Array.from({ length: 6 }, (_, index) => {
+    const month = new Date();
+    month.setDate(1);
+    month.setHours(0, 0, 0, 0);
+    month.setMonth(month.getMonth() - (5 - index));
+
+    const eventsThisMonth = timelineEvents.filter((event) => {
+      const eventDate = parseLocalDateTime(event.date) ?? new Date(event.date);
+      return (
+        !Number.isNaN(eventDate.getTime()) &&
+        eventDate.getFullYear() === month.getFullYear() &&
+        eventDate.getMonth() === month.getMonth()
+      );
+    });
+
+    const otherCount = eventsThisMonth.filter(
+      (event) =>
+        ![
+          'Veterinary visit',
+          'Owner observation',
+          'Weight',
+          'Follow-up',
+        ].includes(event.type)
+    ).length;
+
+    return {
+      key: `${month.getFullYear()}-${month.getMonth()}`,
+      label: month.toLocaleDateString([], { month: 'short' }),
+      values: {
+        vet: eventsThisMonth.filter((event) => event.type === 'Veterinary visit')
+          .length,
+        observation: eventsThisMonth.filter(
+          (event) => event.type === 'Owner observation'
+        ).length,
+        weight: eventsThisMonth.filter((event) => event.type === 'Weight').length,
+        followUp: eventsThisMonth.filter((event) => event.type === 'Follow-up')
+          .length,
+        other: otherCount,
+      },
+    };
+  });
+  const sixMonthEventCount = activityBuckets.reduce(
+    (total, bucket) =>
+      total + Object.values(bucket.values).reduce((sum, value) => sum + value, 0),
+    0
+  );
+  const hasOtherEvents = activityBuckets.some((bucket) => bucket.values.other > 0);
+  const timelineFilterOptions: Array<{
+    value: TimelineFilter;
+    label: string;
+    count: number;
+  }> = [{ value: 'all', label: 'All', count: timelineEvents.length }];
+
+  for (const option of [
+    { value: 'Veterinary visit', label: 'Vet' },
+    { value: 'Owner observation', label: 'Notes' },
+    { value: 'Weight', label: 'Weight' },
+    { value: 'Follow-up', label: 'Follow-ups' },
+  ] as const) {
+    const count = countEvents(option.value);
+    if (count > 0) timelineFilterOptions.push({ ...option, count });
+  }
+
 return (
     <Page scroll>
       <Header
@@ -250,6 +332,35 @@ return (
         />
       ) : null}
 
+      {sixMonthEventCount >= 2 ? (
+        <ActivityBarChart
+          title="Health activity · 6 months"
+          detail={`${sixMonthEventCount} recorded event${
+            sixMonthEventCount === 1 ? '' : 's'
+          } in this period.`}
+          buckets={activityBuckets}
+          series={[
+            { key: 'vet', label: 'Vet visit', color: '#6F3C86' },
+            { key: 'observation', label: 'Observation', color: '#2F6F63' },
+            { key: 'weight', label: 'Weight', color: '#4E79A7' },
+            { key: 'followUp', label: 'Follow-up', color: '#D98B2B' },
+            ...(hasOtherEvents
+              ? [{ key: 'other', label: 'Other', color: '#8A9691' }]
+              : []),
+          ]}
+          note="This is a record-activity view, not a measure of health severity or improvement."
+        />
+      ) : null}
+
+      {timelineEvents.length > 1 ? (
+        <FilterChipRow
+          label="Filter health history"
+          selected={eventFilter}
+          onSelect={setEventFilter}
+          options={timelineFilterOptions}
+        />
+      ) : null}
+
       {timelineEvents.length === 0 ? (
         <View style={styles.emptyTimeline}>
           <Text style={styles.bigEmoji}>📋</Text>
@@ -258,8 +369,16 @@ return (
             No health events yet
           </Text>
         </View>
+      ) : filteredEvents.length === 0 ? (
+        <View style={styles.emptyTimeline}>
+          <Text style={styles.bigEmoji}>🔎</Text>
+          <Text style={styles.cardStrong}>No matching events</Text>
+          <Text style={styles.cardMuted}>
+            Choose another filter to see more of {petName}&apos;s health history.
+          </Text>
+        </View>
       ) : (
-        timelineEvents.map((event) => (
+        filteredEvents.map((event) => (
           <View
             key={event.id}
             style={styles.timelineEvent}
