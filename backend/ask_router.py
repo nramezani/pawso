@@ -261,9 +261,13 @@ def ask_pawso(payload: AskRequest):
             raise ValueError("The model did not return a structured answer.")
 
         allowed_ids = {source.id for source in payload.sources}
-        answer.source_ids = [
-            source_id for source_id in answer.source_ids if source_id in allowed_ids
-        ]
+        answer.source_ids = list(
+            dict.fromkeys(
+                source_id
+                for source_id in answer.source_ids
+                if source_id in allowed_ids
+            )
+        )
 
         if urgent_match:
             answer.safety_category = "urgent"

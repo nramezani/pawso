@@ -201,6 +201,9 @@ export function AskScreen() {
     'What follow-up did the vet recommend?',
     `What medications are currently recorded for ${petName}?`,
   ];
+  const uniqueAnswerSourceIds = askAnswer
+    ? Array.from(new Set(askAnswer.source_ids))
+    : [];
 
   return (
       <Page scroll keyboard>
@@ -314,11 +317,11 @@ export function AskScreen() {
 
             <Text style={styles.askAnswerText}>{askAnswer.answer}</Text>
 
-            {askAnswer.source_ids.length > 0 ? (
+            {uniqueAnswerSourceIds.length > 0 ? (
               <>
                 <Text style={styles.askSourcesTitle}>Sources used</Text>
 
-                {askAnswer.source_ids.map((sourceId) => (
+                {uniqueAnswerSourceIds.map((sourceId) => (
                   <View key={sourceId} style={styles.askSourceRow}>
                     <Text style={styles.askSourceIcon}>↗</Text>
                     <Text style={styles.askSourceText}>
