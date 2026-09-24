@@ -10,9 +10,15 @@ from auth import AuthenticatedUser, require_user
 
 
 class UsageLimiter:
-    def __init__(self, requests_per_minute: int, requests_per_day: int):
+    def __init__(
+        self,
+        requests_per_minute: int,
+        requests_per_day: int,
+        label: str = "AI",
+    ):
         self.requests_per_minute = requests_per_minute
         self.requests_per_day = requests_per_day
+        self.label = label
         self._minute_windows: dict[str, deque[float]] = defaultdict(deque)
         self._daily_usage: dict[tuple[str, date], int] = defaultdict(int)
         self._lock = asyncio.Lock()
@@ -30,7 +36,7 @@ class UsageLimiter:
                 retry_after = max(1, int(60 - (now - window[0])))
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail="Too many AI requests. Please try again shortly.",
+                    detail=f"Too many {self.label} requests. Please try again shortly.",
                     headers={"Retry-After": str(retry_after)},
                 )
 
@@ -38,7 +44,7 @@ class UsageLimiter:
             if self._daily_usage[daily_key] >= self.requests_per_day:
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail="Daily AI limit reached. Please try again tomorrow.",
+                    detail=f"Daily {self.label} limit reached. Please try again tomorrow.",
                 )
 
             window.append(now)
