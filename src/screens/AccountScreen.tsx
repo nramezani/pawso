@@ -1,4 +1,4 @@
-import { Text, View } from 'react-native';
+import { Alert, Linking, Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
 import {
@@ -12,6 +12,17 @@ import {
 } from '../components/ui';
 
 export function AccountScreen() {
+  function confirmDeleteAccount(onConfirm: () => void) {
+    Alert.alert(
+      'Delete Pawso account?',
+      'This permanently deletes your account and access to Pawso data. This cannot be undone.',
+      [
+        { text: 'Keep account', style: 'cancel' },
+        { text: 'Delete permanently', style: 'destructive', onPress: onConfirm },
+      ]
+    );
+  }
+
   const {
     setScreen,
     accountEmail,
@@ -36,6 +47,7 @@ export function AccountScreen() {
     setRecoveryPassword,
     completePasswordRecovery,
     secureAccount,
+    deleteAccount,
     signOutAccount,
   } = usePawso();
 
@@ -194,7 +206,7 @@ export function AccountScreen() {
 
       {!accountIsAnonymous ? (
         <PrimaryButton
-          title="Household & shared care"
+          title="People & access"
           onPress={() => setScreen('household')}
         />
       ) : (
@@ -205,6 +217,38 @@ export function AccountScreen() {
           </Text>
         </View>
       )}
+
+      <Text style={styles.sectionTitle}>Legal & privacy</Text>
+      <SecondaryButton
+        title="Privacy Policy"
+        onPress={() =>
+          Linking.openURL(
+            'https://github.com/nramezani/pawso/blob/main/docs/PRIVACY_POLICY_DRAFT.md'
+          )
+        }
+      />
+      <SecondaryButton
+        title="Terms of Use"
+        onPress={() =>
+          Linking.openURL(
+            'https://github.com/nramezani/pawso/blob/main/docs/TERMS_OF_USE_DRAFT.md'
+          )
+        }
+      />
+
+      {!accountIsAnonymous ? (
+        <>
+          <Text style={styles.sectionTitle}>Account data</Text>
+          <Text style={styles.cardMuted}>
+            Account deletion is permanent. Export any records you need first.
+          </Text>
+          <SecondaryButton
+            title={accountBusy ? 'Deleting account…' : 'Delete my account'}
+            disabled={accountBusy}
+            onPress={() => confirmDeleteAccount(deleteAccount)}
+          />
+        </>
+      ) : null}
     </Page>
   );
 }
