@@ -38,6 +38,10 @@ notifications, accessibility, and release tooling.
   Android adaptive-icon background.
 - Made clean CI installs reproducible with `npm ci` and declared the required
   `expo-font` peer directly.
+- Added accessible, data-backed visual summaries across the pet profile, Today,
+  medications, care, timeline, documents, household, Ask Pawso, Smart Care, and
+  vet-preparation screens. The weight chart shows exact recorded values and
+  deliberately avoids making a clinical judgment about weight change.
 
 ## Database migrations that must be applied
 
@@ -56,7 +60,7 @@ signed-in email. The latter two add transactional RPCs used by this app version.
 - ESLint blocking errors: pass
 - Expo configuration parse: pass
 - Python compile: pass
-- Backend and migration contract tests: 18 pass
+- Backend and migration contract tests: 19 pass
 - Medication-time regression check: pass for valid and invalid boundary cases
 
 The live Supabase RLS suite still requires a disposable staging project and the
@@ -81,6 +85,8 @@ owner/caregiver/sitter test accounts described in
   People & access, medications, and care tasks.
 - Internal iOS and Android builds with the final icon; splash branding must be
   checked on a release build because Expo Go does not reproduce it exactly.
+- Record at least two weights and verify chart ordering, exact values, range,
+  accessibility summary, and the link back to the weight check-in flow.
 
 ## Still required before public release
 

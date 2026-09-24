@@ -1,6 +1,7 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
+import { MetricStrip } from '../components/VisualSummary';
 import {
   Page,
   Header,
@@ -214,9 +215,28 @@ const suggestedQuestions = [
 
         <View style={styles.askPrivacyCard}>
           <Text style={styles.askPrivacyTitle}>Using {petName}'s Pawso memory</Text>
-          <Text style={styles.cardMuted}>
-            {timelineEvents.length} health events · {medicationList.length} medications · {careTasks.length} care tasks
-          </Text>
+          <MetricStrip
+            items={[
+              {
+                label: 'Health events',
+                value: timelineEvents.length,
+                icon: '📋',
+                tone: 'purple',
+              },
+              {
+                label: 'Medications',
+                value: medicationList.length,
+                icon: '💊',
+                tone: 'green',
+              },
+              {
+                label: 'Care tasks',
+                value: careTasks.length,
+                icon: '📅',
+                tone: 'neutral',
+              },
+            ]}
+          />
         </View>
 
         <Text style={styles.sectionTitle}>Try asking</Text>

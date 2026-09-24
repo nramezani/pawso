@@ -724,6 +724,48 @@ export const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
+  dailyProgressCard: {
+    marginTop: 14,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#E5E9E7',
+  },
+
+  dailyProgressHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+
+  dailyProgressPercent: {
+    color: '#53166F',
+    fontSize: 22,
+    fontWeight: '800',
+  },
+
+  dailyProgressTrack: {
+    height: 10,
+    marginTop: 16,
+    overflow: 'hidden',
+    borderRadius: 8,
+    backgroundColor: '#EAEDEA',
+  },
+
+  dailyProgressFill: {
+    height: '100%',
+    borderRadius: 8,
+    backgroundColor: '#53166F',
+  },
+
+  dailyProgressMeta: {
+    marginTop: 10,
+    color: '#56645F',
+    fontSize: 12,
+  },
+
   successCard: {
     flexDirection: 'row',
     gap: 14,

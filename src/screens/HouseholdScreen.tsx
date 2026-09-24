@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Alert, Linking, Share, Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
+import { MetricStrip } from '../components/VisualSummary';
 import {
   Page,
   Header,
@@ -42,6 +43,11 @@ export function HouseholdScreen() {
   const [shareError, setShareError] = useState('');
   const canInvite = householdRole === 'owner';
   const joinFormVisible = showJoin || Boolean(joinCode);
+  const ownerCount = householdMembers.filter((member) => member.role === 'owner').length;
+  const caregiverCount = householdMembers.filter(
+    (member) => member.role === 'caregiver'
+  ).length;
+  const sitterCount = householdMembers.filter((member) => member.role === 'sitter').length;
 
   const invitationMessage = inviteCode
     ? `You've been invited to join ${householdName || 'a Pawso household'} as a ${inviteRole}. Open Pawso, go to Account → Household & shared care → Join with an invite code, and enter:
@@ -130,6 +136,32 @@ This one-time code expires after 7 days.`
           follow and complete assigned care.
         </Text>
       </View>
+
+      {householdMembers.length > 0 ? (
+        <MetricStrip
+          accessibilityLabel={`${householdName} access overview`}
+          items={[
+            {
+              label: 'Owners',
+              value: ownerCount,
+              icon: '★',
+              tone: 'purple',
+            },
+            {
+              label: 'Caregivers',
+              value: caregiverCount,
+              icon: '♥',
+              tone: 'green',
+            },
+            {
+              label: 'Sitters',
+              value: sitterCount,
+              icon: '⌂',
+              tone: 'neutral',
+            },
+          ]}
+        />
+      ) : null}
 
       <View style={styles.infoCard}>
         <Text style={styles.cardStrong}>Joining someone else's household?</Text>

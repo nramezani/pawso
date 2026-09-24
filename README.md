@@ -2,6 +2,10 @@
 
 Pawso is an AI-powered pet-care copilot for managing veterinary records, medications, care routines, reminders, household collaboration, and grounded pet-specific questions.
 
+The mobile experience includes accessible visual summaries for weight history,
+daily care progress, medication logging, current care tasks, health events,
+documents, household access, and AI source coverage.
+
 ## Technology
 
 - Expo SDK 57 and React Native

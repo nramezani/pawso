@@ -1,6 +1,7 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
+import { MetricStrip } from '../components/VisualSummary';
 import {
   Page,
   Header,
@@ -191,6 +192,9 @@ export function TimelineScreen() {
     followUpEvents
   } = usePawso();
 
+  const countEvents = (type: string) =>
+    timelineEvents.filter((event) => event.type === type).length;
+
 return (
     <Page scroll>
       <Header
@@ -213,6 +217,38 @@ return (
           </Text>
         </View>
       </View>
+
+      {timelineEvents.length > 0 ? (
+        <MetricStrip
+          accessibilityLabel={`${petName}'s health event overview`}
+          items={[
+            {
+              label: 'Vet visits',
+              value: countEvents('Veterinary visit'),
+              icon: '🩺',
+              tone: 'purple',
+            },
+            {
+              label: 'Observations',
+              value: countEvents('Owner observation'),
+              icon: '👁',
+              tone: 'green',
+            },
+            {
+              label: 'Weights',
+              value: countEvents('Weight'),
+              icon: '⚖️',
+              tone: 'neutral',
+            },
+            {
+              label: 'Follow-ups',
+              value: countEvents('Follow-up'),
+              icon: '📅',
+              tone: 'amber',
+            },
+          ]}
+        />
+      ) : null}
 
       {timelineEvents.length === 0 ? (
         <View style={styles.emptyTimeline}>

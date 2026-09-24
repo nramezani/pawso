@@ -1,6 +1,7 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
+import { WeightTrendCard } from '../components/WeightTrendCard';
 import {
   Page,
   Header,
@@ -171,6 +172,7 @@ export function PetProfileScreen() {
     createPetProfile,
     canManageMedical,
     startEditPet,
+    openHealthCheckIn,
     checkBackend,
     canCreateProfile,
     petEmoji,
@@ -247,6 +249,15 @@ return (
             value={weight || 'Not provided'}
           />
         </Card>
+
+        <WeightTrendCard
+          timelineEvents={timelineEvents}
+          currentWeight={weight}
+          petName={petName}
+          onRecordWeight={
+            canManageMedical ? () => openHealthCheckIn('weight') : undefined
+          }
+        />
 
         <Card title="Health">
           <Info

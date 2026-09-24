@@ -1,6 +1,7 @@
 import { ActivityIndicator, Share, Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
+import { MetricStrip } from '../components/VisualSummary';
 import {
   Header,
   Input,
@@ -63,9 +64,28 @@ export function VetVisitPrepScreen() {
 
       <View style={styles.infoCard}>
         <Text style={styles.cardStrong}>Pawso memory available</Text>
-        <Text style={styles.cardMuted}>
-          {timelineEvents.length} health events · {medicationList.length} medications · {careTasks.length} care tasks
-        </Text>
+        <MetricStrip
+          items={[
+            {
+              label: 'Health events',
+              value: timelineEvents.length,
+              icon: '📋',
+              tone: 'purple',
+            },
+            {
+              label: 'Medications',
+              value: medicationList.length,
+              icon: '💊',
+              tone: 'green',
+            },
+            {
+              label: 'Care tasks',
+              value: careTasks.length,
+              icon: '📅',
+              tone: 'neutral',
+            },
+          ]}
+        />
       </View>
 
       <Label text="Reason for this visit" />
