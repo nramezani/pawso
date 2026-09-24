@@ -1,6 +1,7 @@
 import { Alert, Linking, Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
+import { PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from '../config';
 import {
   Page,
   Header,
@@ -218,23 +219,23 @@ export function AccountScreen() {
         </View>
       )}
 
-      <Text style={styles.sectionTitle}>Legal & privacy</Text>
-      <SecondaryButton
-        title="Privacy Policy"
-        onPress={() =>
-          Linking.openURL(
-            'https://github.com/nramezani/pawso/blob/main/docs/PRIVACY_POLICY_DRAFT.md'
-          )
-        }
-      />
-      <SecondaryButton
-        title="Terms of Use"
-        onPress={() =>
-          Linking.openURL(
-            'https://github.com/nramezani/pawso/blob/main/docs/TERMS_OF_USE_DRAFT.md'
-          )
-        }
-      />
+      {PRIVACY_POLICY_URL || TERMS_OF_USE_URL ? (
+        <>
+          <Text style={styles.sectionTitle}>Legal & privacy</Text>
+          {PRIVACY_POLICY_URL ? (
+            <SecondaryButton
+              title="Privacy Policy"
+              onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}
+            />
+          ) : null}
+          {TERMS_OF_USE_URL ? (
+            <SecondaryButton
+              title="Terms of Use"
+              onPress={() => Linking.openURL(TERMS_OF_USE_URL)}
+            />
+          ) : null}
+        </>
+      ) : null}
 
       {!accountIsAnonymous ? (
         <>
