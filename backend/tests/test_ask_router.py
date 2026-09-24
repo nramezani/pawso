@@ -56,11 +56,11 @@ class AggregateSourceLengthValidationTests(unittest.TestCase):
 
 
 class AskPawsoEndpointTests(unittest.TestCase):
-    def test_filters_source_ids_to_the_allowed_set(self):
+    def test_filters_and_deduplicates_source_ids(self):
         payload = AskRequest(pet=_pet(), question="How is Fido?", sources=[_source("allowed-id")])
         model_response = AskResponse(
             answer="Fido is doing well.",
-            source_ids=["allowed-id", "hallucinated-id"],
+            source_ids=["allowed-id", "hallucinated-id", "allowed-id"],
             answer_type="record_summary",
             safety_category="normal",
         )
