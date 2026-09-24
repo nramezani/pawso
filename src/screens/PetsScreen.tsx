@@ -87,6 +87,18 @@ export function PetsScreen() {
               : `${householdMembers.length} people have access. Manage caregivers and sitters.`}
           </Text>
         </Pressable>
+
+        <Pressable
+          style={styles.infoCard}
+          onPress={() => setScreen('account')}
+          accessibilityRole="button"
+          accessibilityLabel="Open account and settings"
+        >
+          <Text style={styles.cardStrong}>Account & settings</Text>
+          <Text style={styles.cardMuted}>
+            Sign in or out, manage password recovery, privacy, and account data.
+          </Text>
+        </Pressable>
       </View>
     </Page>
   );
