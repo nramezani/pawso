@@ -7,9 +7,15 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
 
 from auth import AuthenticatedUser, require_user
+from rate_limit import UsageLimiter
 
 
 router = APIRouter(prefix="/api/v1", tags=["production"])
+invitation_limiter = UsageLimiter(
+    requests_per_minute=max(1, int(os.getenv("INVITATION_EMAILS_PER_MINUTE", "3"))),
+    requests_per_day=max(1, int(os.getenv("INVITATION_EMAILS_PER_DAY", "25"))),
+    label="invitation email",
+)
 
 
 class InvitationEmailRequest(BaseModel):
@@ -48,12 +54,85 @@ async def _confirm_owner(user: AuthenticatedUser, household_id: str) -> None:
         raise HTTPException(status_code=403, detail="Only the household owner can send invitations.")
 
 
+async def _confirm_invitation(
+    user: AuthenticatedUser,
+    request: InvitationEmailRequest,
+) -> None:
+    supabase_url = os.getenv("SUPABASE_URL", "").rstrip("/")
+    publishable_key = os.getenv("SUPABASE_PUBLISHABLE_KEY", "")
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.get(
+            f"{supabase_url}/rest/v1/household_invitations",
+            params={
+                "household_id": f"eq.{request.household_id}",
+                "invite_code": f"eq.{request.invite_code}",
+                "invited_email": f"eq.{str(request.email).strip().lower()}",
+                "role": f"eq.{request.role}",
+                "status": "eq.pending",
+                "select": "id",
+                "limit": "1",
+            },
+            headers={
+                "apikey": publishable_key,
+                "Authorization": f"Bearer {user.access_token}",
+            },
+        )
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=503, detail="Could not verify invitation.")
+    if not response.json():
+        raise HTTPException(
+            status_code=400,
+            detail="Invitation details do not match a pending Pawso invitation.",
+        )
+
+
+async def _collect_storage_objects(
+    client: httpx.AsyncClient,
+    supabase_url: str,
+    headers: dict[str, str],
+    prefix: str,
+) -> list[str]:
+    object_names: list[str] = []
+    offset = 0
+
+    while True:
+        response = await client.post(
+            f"{supabase_url}/storage/v1/object/list/vet-records",
+            headers=headers,
+            json={"prefix": prefix, "limit": 100, "offset": offset},
+        )
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=502,
+                detail="Could not prepare stored files for deletion.",
+            )
+
+        page = response.json()
+        for item in page:
+            if not isinstance(item, dict) or not isinstance(item.get("name"), str):
+                continue
+            child = f"{prefix.rstrip('/')}/{item['name']}"
+            if item.get("id"):
+                object_names.append(child)
+            else:
+                object_names.extend(
+                    await _collect_storage_objects(client, supabase_url, headers, child)
+                )
+
+        if len(page) < 100:
+            return object_names
+        offset += 100
+
+
 @router.post("/household-invitations/email")
 async def send_household_invitation(
     request: InvitationEmailRequest,
     user: AuthenticatedUser = Depends(require_user),
 ):
     await _confirm_owner(user, request.household_id)
+    await _confirm_invitation(user, request)
+    await invitation_limiter.check(user.id)
 
     resend_key = os.getenv("RESEND_API_KEY", "")
     from_email = os.getenv("PAWSO_INVITE_FROM_EMAIL", "")
@@ -120,13 +199,66 @@ async def delete_account(user: AuthenticatedUser = Depends(require_user)):
             detail="Account deletion is not configured. Contact Pawso support.",
         )
 
+    service_headers = {
+        "apikey": service_key,
+        "Authorization": f"Bearer {service_key}",
+    }
+
     async with httpx.AsyncClient(timeout=15.0) as client:
+        owned_response = await client.get(
+            f"{supabase_url}/rest/v1/household_members",
+            params={
+                "user_id": f"eq.{user.id}",
+                "role": "eq.owner",
+                "select": "household_id",
+            },
+            headers=service_headers,
+        )
+        if owned_response.status_code != 200:
+            raise HTTPException(status_code=502, detail="Could not verify household ownership.")
+
+        for membership in owned_response.json():
+            household_id = membership.get("household_id")
+            members_response = await client.get(
+                f"{supabase_url}/rest/v1/household_members",
+                params={
+                    "household_id": f"eq.{household_id}",
+                    "user_id": f"neq.{user.id}",
+                    "select": "id",
+                    "limit": "1",
+                },
+                headers=service_headers,
+            )
+            if members_response.status_code != 200:
+                raise HTTPException(status_code=502, detail="Could not verify household members.")
+            if members_response.json():
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        "Remove other caregivers and sitters before deleting an owner account. "
+                        "This prevents accidental deletion of shared household records."
+                    ),
+                )
+
+        object_names = await _collect_storage_objects(
+            client,
+            supabase_url,
+            service_headers,
+            user.id,
+        )
+
+        if object_names:
+            delete_objects_response = await client.delete(
+                f"{supabase_url}/storage/v1/object/vet-records",
+                headers=service_headers,
+                json={"prefixes": object_names},
+            )
+            if delete_objects_response.status_code not in (200, 204):
+                raise HTTPException(status_code=502, detail="Could not delete stored veterinary files.")
+
         response = await client.delete(
             f"{supabase_url}/auth/v1/admin/users/{user.id}",
-            headers={
-                "apikey": service_key,
-                "Authorization": f"Bearer {service_key}",
-            },
+            headers=service_headers,
         )
 
     if response.status_code not in (200, 204):
