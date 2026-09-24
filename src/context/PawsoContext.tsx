@@ -71,6 +71,7 @@ function usePawsoState() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'caregiver' | 'sitter'>('caregiver');
   const [inviteCode, setInviteCode] = useState('');
+  const [inviteEmailStatus, setInviteEmailStatus] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [memberDisplayName, setMemberDisplayName] = useState('');
   const canViewMedical = householdRole === 'owner' || householdRole === 'caregiver';
@@ -506,6 +507,7 @@ function usePawsoState() {
       setHouseholdBusy(true);
       setHouseholdError('');
       setInviteCode('');
+      setInviteEmailStatus('');
 
       const { data, error } = await supabase.rpc('create_household_invitation', {
         target_household: householdId,
@@ -514,7 +516,36 @@ function usePawsoState() {
       });
 
       if (error) throw error;
-      setInviteCode(String(data ?? ''));
+      const createdCode = String(data ?? '');
+      setInviteCode(createdCode);
+
+      if (inviteEmail.trim()) {
+        setInviteEmailStatus('Sending invitation email…');
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/v1/household-invitations/email`, {
+            method: 'POST',
+            headers: await getApiAuthHeaders('application/json'),
+            body: JSON.stringify({
+              household_id: householdId,
+              household_name: householdName,
+              email: inviteEmail.trim().toLowerCase(),
+              role: inviteRole,
+              invite_code: createdCode,
+            }),
+          });
+          const body = await response.json().catch(() => null);
+          if (!response.ok) {
+            throw new Error(getApiErrorMessage(body, 'Automatic email is unavailable.'));
+          }
+          setInviteEmailStatus('Invitation email sent.');
+        } catch (emailError) {
+          setInviteEmailStatus(
+            emailError instanceof Error
+              ? `${emailError.message} You can still use Email or Share below.`
+              : 'Automatic email is unavailable. Use Email or Share below.'
+          );
+        }
+      }
     } catch (error) {
       console.log('Create household invitation error:', error);
       setHouseholdError(
@@ -2720,6 +2751,7 @@ function usePawsoState() {
     inviteRole,
     setInviteRole,
     inviteCode,
+    inviteEmailStatus,
     joinCode,
     setJoinCode,
     memberDisplayName,
