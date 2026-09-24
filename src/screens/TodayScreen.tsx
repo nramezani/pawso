@@ -59,6 +59,13 @@ export function TodayScreen() {
   } = usePawso();
 
   const showAllPets = pets.length > 1 && todayView === 'all';
+  const localHour = new Date().getHours();
+  const greeting =
+    localHour < 12
+      ? 'Good morning'
+      : localHour < 17
+      ? 'Good afternoon'
+      : 'Good evening';
 
   async function openPetToday(petId: string) {
     await selectPet(petId);
@@ -69,7 +76,7 @@ export function TodayScreen() {
     <Page scroll>
       <View style={styles.headerRow}>
         <View>
-          <Text style={styles.todayTitle}>Good morning</Text>
+          <Text style={styles.todayTitle}>{greeting}</Text>
           <Text style={styles.todaySubtitle}>
             {showAllPets
               ? `Here's what your ${pets.length} pets need today.`
