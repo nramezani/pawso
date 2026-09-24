@@ -4,25 +4,25 @@
 
 - [x] Repair committed Expo configuration.
 - [x] Declare the Expo Linking dependency.
-- [ ] Commit the locally generated lockfile after `npx expo install expo-linking`.
-- [ ] Add CI for TypeScript, Expo config parsing, backend tests, and secret scanning.
-- [ ] Remove obsolete backups and verify a clean clone can build.
+- [x] Commit the locally generated lockfile after `npx expo install expo-linking`.
+- [x] Add CI for TypeScript, Expo config parsing, backend tests, and secret scanning.
+- [x] Remove obsolete backups and verify a clean install passes checks.
 
 ## Gate 2 — Safety and privacy
 
 - [ ] Publish reviewed Privacy Policy and Terms.
-- [ ] Add a clear “not veterinary advice / not for emergencies” experience.
-- [ ] Add explicit AI-processing consent with timestamp and policy version.
+- [x] Add a clear “not veterinary advice / not for emergencies” experience.
+- [x] Add explicit AI-processing consent with timestamp and policy version.
 - [ ] Add document, pet, household, and account deletion.
 - [ ] Add data export.
 - [ ] Define retention, backup deletion, breach response, and vendor inventory.
 
 ## Gate 3 — Product completeness
 
-- [ ] Edit and archive records without losing provenance.
+- [x] Edit pet profiles and archive care/medication records without losing history.
 - [ ] Recurring care tasks with skip, snooze, pause, and end.
 - [ ] Medication start/end dates, course status, and refills.
-- [ ] Household invite revocation, role change, and member removal.
+- [ ] Household role change (invite revocation and member removal are complete).
 - [ ] Search/filter and weight/symptom trends.
 - [ ] Emergency pet card and exportable veterinarian/caregiver handoff.
 

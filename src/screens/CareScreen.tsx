@@ -252,17 +252,17 @@ return (
                 {canManageCare ? (
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel={`Delete ${task.title}`}
+                    accessibilityLabel={`Archive ${task.title}`}
                     disabled={deletingTaskId === task.id}
+                    accessibilityState={{ disabled: deletingTaskId === task.id }}
                     onPress={() =>
                       Alert.alert(
-                        'Delete care task?',
-                        `This removes "${task.title}". This cannot be undone.`,
+                        'Archive care task?',
+                        `This removes "${task.title}" from active tasks while preserving its history.`,
                         [
                           { text: 'Cancel', style: 'cancel' },
                           {
-                            text: 'Delete',
-                            style: 'destructive',
+                            text: 'Archive',
                             onPress: () => deleteCareTask(task),
                           },
                         ]
@@ -270,7 +270,7 @@ return (
                     }
                   >
                     <Text style={{ fontSize: 18, opacity: deletingTaskId === task.id ? 0.4 : 1 }}>
-                      🗑️
+                      📦
                     </Text>
                   </Pressable>
                 ) : null}
@@ -282,6 +282,9 @@ return (
                 style={styles.completeCareButton}
                 disabled={completingTaskId === task.id}
                 onPress={() => completeCareTask(task)}
+                accessibilityRole="button"
+                accessibilityLabel={`Mark ${task.title} complete`}
+                accessibilityState={{ disabled: completingTaskId === task.id }}
               >
                 <Text style={styles.completeCareButtonText}>
                   {completingTaskId === task.id ? 'Saving…' : '✓ Mark complete'}

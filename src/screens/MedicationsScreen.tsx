@@ -267,17 +267,17 @@ return (
                   {canManageMedical ? (
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel={`Delete ${medication.name}`}
+                      accessibilityLabel={`Archive ${medication.name}`}
                       disabled={deletingMedicationId === medication.id}
+                      accessibilityState={{ disabled: deletingMedicationId === medication.id }}
                       onPress={() =>
                         Alert.alert(
-                          'Delete medication?',
-                          `This removes "${medication.name}" and its schedule and dose history. This cannot be undone.`,
+                          'Archive medication?',
+                          `This removes "${medication.name}" from active schedules while keeping its dose history.`,
                           [
                             { text: 'Cancel', style: 'cancel' },
                             {
-                              text: 'Delete',
-                              style: 'destructive',
+                              text: 'Archive',
                               onPress: () => deleteMedication(medication),
                             },
                           ]
@@ -285,7 +285,7 @@ return (
                       }
                     >
                       <Text style={{ fontSize: 18, opacity: deletingMedicationId === medication.id ? 0.4 : 1 }}>
-                        🗑️
+                        📦
                       </Text>
                     </Pressable>
                   ) : null}

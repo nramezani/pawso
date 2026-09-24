@@ -321,6 +321,12 @@ begin
     raise exception 'Invitation is invalid, expired, or already used';
   end if;
 
+  if invitation.invited_email is not null
+    and lower(coalesce(auth.jwt() ->> 'email', '')) <> lower(invitation.invited_email)
+  then
+    raise exception 'Sign in with the email address that received this invitation';
+  end if;
+
   display_value := coalesce(
     nullif(trim(preferred_display_name), ''),
     split_part(coalesce(auth.jwt() ->> 'email', ''), '@', 1),
