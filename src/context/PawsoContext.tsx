@@ -65,6 +65,7 @@ function usePawsoState() {
   const [householdName, setHouseholdName] = useState('My Pawso Household');
   const [householdRole, setHouseholdRole] = useState<'owner' | 'caregiver' | 'sitter' | null>(null);
   const [householdMembers, setHouseholdMembers] = useState<HouseholdMember[]>([]);
+  const [householdInvitations, setHouseholdInvitations] = useState<any[]>([]);
   const [householdBusy, setHouseholdBusy] = useState(false);
   const [householdError, setHouseholdError] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
@@ -404,6 +405,7 @@ function usePawsoState() {
       const [
         { data: household, error: householdLoadError },
         { data: members, error: membersError },
+        { data: invitations, error: invitationsError },
       ] = await Promise.all([
         supabase.from('households').select('id, name').eq('id', id).single(),
         supabase
@@ -411,11 +413,19 @@ function usePawsoState() {
           .select('id, household_id, user_id, display_name, role, created_at')
           .eq('household_id', id)
           .order('created_at', { ascending: true }),
+        supabase
+          .from('household_invitations')
+          .select('id, household_id, invited_email, role, status, invite_code, expires_at, created_at')
+          .eq('household_id', id)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false }),
       ]);
 
       if (householdLoadError) throw householdLoadError;
       if (membersError) throw membersError;
+      if (invitationsError && householdRole === 'owner') throw invitationsError;
 
+      setHouseholdInvitations(invitations ?? []);
       setHouseholdName(household?.name ?? 'My Pawso Household');
       setHouseholdMembers((members ?? []) as HouseholdMember[]);
 
@@ -444,6 +454,46 @@ function usePawsoState() {
     setHouseholdBusy(true);
     try {
       await loadHousehold(householdId);
+    } finally {
+      setHouseholdBusy(false);
+    }
+  }
+
+  async function removeHouseholdMember(memberId: string) {
+    if (!householdId) return;
+    try {
+      setHouseholdBusy(true);
+      setHouseholdError('');
+      const { error } = await supabase.rpc('remove_household_member', {
+        target_household: householdId,
+        target_member: memberId,
+      });
+      if (error) throw error;
+      await loadHousehold(householdId);
+    } catch (error) {
+      setHouseholdError(
+        error instanceof Error ? error.message : 'Could not remove access.'
+      );
+    } finally {
+      setHouseholdBusy(false);
+    }
+  }
+
+  async function cancelHouseholdInvitation(invitationId: string) {
+    if (!householdId) return;
+    try {
+      setHouseholdBusy(true);
+      setHouseholdError('');
+      const { error } = await supabase.rpc('cancel_household_invitation', {
+        target_household: householdId,
+        target_invitation: invitationId,
+      });
+      if (error) throw error;
+      await loadHousehold(householdId);
+    } catch (error) {
+      setHouseholdError(
+        error instanceof Error ? error.message : 'Could not cancel invitation.'
+      );
     } finally {
       setHouseholdBusy(false);
     }
@@ -2658,6 +2708,7 @@ function usePawsoState() {
     householdName,
     householdRole,
     householdMembers,
+    householdInvitations,
     householdBusy,
     householdError,
     canViewMedical,
@@ -2676,6 +2727,8 @@ function usePawsoState() {
     ensureHousehold,
     loadHousehold,
     refreshHousehold,
+    removeHouseholdMember,
+    cancelHouseholdInvitation,
     createHouseholdInvite,
     acceptHouseholdInvite,
     accountEmail,
