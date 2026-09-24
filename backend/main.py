@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from rate_limit import enforce_ai_limits
+from production_router import router as production_router
 from upload_validation import content_type_matches, detect_supported_file
 
 
@@ -30,6 +31,7 @@ app = FastAPI(
     openapi_url=None if IS_PRODUCTION else "/openapi.json",
 )
 app.include_router(ask_router)
+app.include_router(production_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -42,7 +44,7 @@ app.add_middleware(
         if origin.strip()
     ],
     allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
