@@ -12,6 +12,7 @@ export function PetsScreen() {
     startAddPet,
     databaseError,
     householdMembers,
+    canManageMedical,
     setScreen,
   } = usePawso();
   const catCount = pets.filter((pet) => pet.species === 'cat').length;
@@ -91,7 +92,9 @@ export function PetsScreen() {
         })}
       </View>
 
-      <PrimaryButton title="+ Add another pet" onPress={startAddPet} />
+      {canManageMedical ? (
+        <PrimaryButton title="+ Add another pet" onPress={startAddPet} />
+      ) : null}
 
       <View style={{ marginTop: 12 }}>
         <Pressable

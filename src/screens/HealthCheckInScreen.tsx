@@ -91,18 +91,22 @@ export function HealthCheckInScreen() {
         multiline
       />
 
-      <PrimaryButton
-        title={checkInSaving ? 'Saving…' : 'Save to health timeline'}
-        disabled={checkInSaving}
-        onPress={saveHealthCheckIn}
-      />
-
       {checkInError ? (
         <View style={styles.errorCard}>
           <Text style={styles.errorTitle}>Could not save check-in</Text>
           <Text style={styles.errorText}>{checkInError}</Text>
         </View>
       ) : null}
+
+      <PrimaryButton
+        title={checkInSaving ? 'Saving…' : 'Save to health timeline'}
+        disabled={
+          checkInSaving ||
+          !checkInDate.trim() ||
+          (isSymptom ? !checkInTitle.trim() : !checkInWeight.trim())
+        }
+        onPress={saveHealthCheckIn}
+      />
     </Page>
   );
 }

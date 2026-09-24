@@ -52,6 +52,26 @@ class MigrationContractTests(unittest.TestCase):
         self.assertIn("insert into public.medical_events", extraction_confirmation)
         self.assertIn("update public.ai_extractions", extraction_confirmation)
 
+    def test_care_completion_is_rpc_only_and_functions_are_not_public(self):
+        hardening = (
+            MIGRATIONS / "20260928_harden_rpc_access_and_care_history.sql"
+        ).read_text(encoding="utf-8").lower()
+
+        self.assertIn(
+            "revoke insert on table public.task_completions from authenticated",
+            hardening,
+        )
+        self.assertIn(
+            "create unique index if not exists task_completions_one_per_task_idx",
+            hardening,
+        )
+        self.assertIn("from public, anon", hardening)
+        self.assertIn("to authenticated", hardening)
+        self.assertIn("function public.create_medication_with_schedules", hardening)
+        self.assertIn("function public.record_weight_check_in", hardening)
+        self.assertIn("insert into public.medication_schedules", hardening)
+        self.assertIn("update public.pets", hardening)
+
 
 if __name__ == "__main__":
     unittest.main()

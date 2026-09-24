@@ -173,6 +173,7 @@ function usePawsoState() {
   const [medicationList, setMedicationList] = useState<Medication[]>([]);
   const [medicationSchedules, setMedicationSchedules] = useState<MedicationSchedule[]>([]);
   const [medicationLogs, setMedicationLogs] = useState<MedicationLog[]>([]);
+  const [medicationHistoryLogs, setMedicationHistoryLogs] = useState<MedicationLog[]>([]);
   const [medicationsLoading, setMedicationsLoading] = useState(false);
   const [medicationsError, setMedicationsError] = useState('');
   const [isSavingMedication, setIsSavingMedication] = useState(false);
@@ -773,6 +774,7 @@ function usePawsoState() {
     setMedicationList([]);
     setMedicationSchedules([]);
     setMedicationLogs([]);
+    setMedicationHistoryLogs([]);
     setCareTasks([]);
     setTaskCompletions([]);
     setAskQuestion('');
@@ -1245,6 +1247,7 @@ function usePawsoState() {
     setMedicationList([]);
     setMedicationSchedules([]);
     setMedicationLogs([]);
+    setMedicationHistoryLogs([]);
     setCareTasks([]);
     setTaskCompletions([]);
     setAskAnswer(null);
@@ -1252,6 +1255,77 @@ function usePawsoState() {
     setVetVisitPrep(null);
     setSmartCareSuggestions([]);
     setSmartCareSources([]);
+    setNewMedicationName('');
+    setNewMedicationDose('');
+    setNewMedicationUnit('');
+    setNewMedicationInstructions('');
+    setNewMedicationTimes(['08:00']);
+    setNewCareTitle('');
+    setNewCareNotes('');
+    setNewCareDate('');
+    setNewCareTime('09:00');
+    setCheckInDate(formatLocalDateInput());
+    setCheckInTitle('');
+    setCheckInDetails('');
+    setCheckInWeight('');
+    setUploadError('');
+    setCheckInError('');
+  }
+
+  function clearLoadedPetRecords() {
+    setTimelineEvents([]);
+    setPetDocuments([]);
+    setDocumentName('');
+    setDocumentSize(null);
+    setDocumentContentType('');
+    setCurrentDocumentId(null);
+    setCurrentExtractionId(null);
+    setOpeningDocumentId(null);
+    setVisitDate('');
+    setClinic('');
+    setFinding('');
+    setDiagnosis('');
+    setDiagnosisCertainty('unknown');
+    setFollowUp('');
+    setExtractedMedications([]);
+    setExtractionWarnings([]);
+    setExtractionModel('');
+    setExtractionPromptVersion('');
+    setMedicationList([]);
+    setMedicationSchedules([]);
+    setMedicationLogs([]);
+    setMedicationHistoryLogs([]);
+    setCareTasks([]);
+    setTaskCompletions([]);
+    setAskQuestion('');
+    setAskAnswer(null);
+    setAskSources([]);
+    setVisitReason('');
+    setVisitChanges('');
+    setVetVisitPrep(null);
+    setVetVisitPrepError('');
+    setSmartCareSuggestions([]);
+    setSmartCareSources([]);
+    setSmartCareError('');
+    setNewMedicationName('');
+    setNewMedicationDose('');
+    setNewMedicationUnit('');
+    setNewMedicationInstructions('');
+    setNewMedicationTimes(['08:00']);
+    setNewCareTitle('');
+    setNewCareNotes('');
+    setNewCareDate('');
+    setNewCareTime('09:00');
+    setCheckInDate(formatLocalDateInput());
+    setCheckInTitle('');
+    setCheckInDetails('');
+    setCheckInWeight('');
+    setUploadError('');
+    setAskError('');
+    setCheckInError('');
+    setDocumentsError('');
+    setMedicationsError('');
+    setCareError('');
   }
 
   async function loadPets(userId: string, targetHouseholdId?: string | null) {
@@ -1402,6 +1476,7 @@ function usePawsoState() {
         pet = data as PetSummary;
       }
 
+      if (currentPetId !== pet.id) clearLoadedPetRecords();
       hydratePet(pet);
       setAskAnswer(null);
       setAskSources([]);
@@ -1423,6 +1498,11 @@ function usePawsoState() {
   }
 
   function startAddPet() {
+    if (!canManageMedical) {
+      setDatabaseError('Only the household owner can add a pet.');
+      return;
+    }
+
     setIsEditingPet(false);
     setPetName('');
     setPetType(null);
@@ -1480,6 +1560,7 @@ function usePawsoState() {
       rows.find((pet) => pet.id === currentPetId) ??
       rows[0];
 
+    if (currentPetId !== selected.id) clearLoadedPetRecords();
     hydratePet(selected);
 
     await Promise.all([
@@ -1584,16 +1665,28 @@ function usePawsoState() {
         });
       }
 
-      for (const task of careTasks) {
+      for (const task of careTasks.filter(
+        (item) =>
+          item.is_active ||
+          taskCompletions.some((completion) => completion.task_id === item.id)
+      )) {
+        const completion = taskCompletions.find(
+          (item) => item.task_id === task.id
+        );
         sources.push({
           id: `care:${task.id}`,
           label: task.title,
-          source_type: 'Confirmed care task',
-          date: task.due_at,
+          source_type: completion ? 'Completed care task' : 'Active care task',
+          date: completion?.completed_at ?? task.due_at,
           text: [
             task.title,
             task.notes,
             `Due: ${new Date(task.due_at).toLocaleString()}`,
+            completion
+              ? `Completed: ${new Date(completion.completed_at).toLocaleString()}${
+                  completion.actor_name ? ` by ${completion.actor_name}` : ''
+                }`
+              : 'Status: active',
           ]
             .filter(Boolean)
             .join(' · '),
@@ -1689,13 +1782,29 @@ function usePawsoState() {
         });
       }
 
-      for (const task of careTasks) {
+      for (const task of careTasks.filter(
+        (item) =>
+          item.is_active ||
+          taskCompletions.some((completion) => completion.task_id === item.id)
+      )) {
+        const completion = taskCompletions.find(
+          (item) => item.task_id === task.id
+        );
         sources.push({
           id: `care:${task.id}`,
           label: task.title,
-          source_type: 'Confirmed care task',
-          date: task.due_at,
-          text: [task.title, task.notes, `Due: ${new Date(task.due_at).toLocaleString()}`]
+          source_type: completion ? 'Completed care task' : 'Active care task',
+          date: completion?.completed_at ?? task.due_at,
+          text: [
+            task.title,
+            task.notes,
+            `Due: ${new Date(task.due_at).toLocaleString()}`,
+            completion
+              ? `Completed: ${new Date(completion.completed_at).toLocaleString()}${
+                  completion.actor_name ? ` by ${completion.actor_name}` : ''
+                }`
+              : 'Status: active',
+          ]
             .filter(Boolean)
             .join(' · '),
         });
@@ -1777,40 +1886,33 @@ function usePawsoState() {
       if (sessionError) throw sessionError;
       if (!session?.user) throw new Error('Pawso session is not ready. Please try again.');
 
-      const event = checkInType === 'symptom'
-        ? {
-            pet_id: currentPetId,
-            user_id: session.user.id,
-            event_type: 'owner_symptom',
-            event_date: checkInDate.trim(),
-            title: checkInTitle.trim(),
-            description: checkInDetails.trim() || 'No additional details provided.',
-            source_type: 'owner_note',
-          }
-        : {
-            pet_id: currentPetId,
-            user_id: session.user.id,
-            event_type: 'weight',
-            event_date: checkInDate.trim(),
-            title: `Weight recorded: ${weightValue} kg`,
-            description: checkInDetails.trim() || 'Owner-recorded weight.',
-            source_type: 'owner_note',
-          };
-
-      const { error: insertError } = await supabase.from('medical_events').insert(event);
-      if (insertError) throw insertError;
-
       if (checkInType === 'weight') {
-        const { error: updateError } = await supabase
-          .from('pets')
-          .update({ weight_kg: weightValue })
-          .eq('id', currentPetId);
-        if (updateError) throw updateError;
+        const { error: weightError } = await supabase.rpc(
+          'record_weight_check_in',
+          {
+            target_pet: currentPetId,
+            target_date: checkInDate.trim(),
+            target_weight: weightValue,
+            target_notes: checkInDetails.trim() || null,
+          }
+        );
+        if (weightError) throw weightError;
 
         setWeight(`${weightValue} kg`);
         setPets((current) => current.map((pet) =>
           pet.id === currentPetId ? { ...pet, weight_kg: weightValue } : pet
         ));
+      } else {
+        const { error: insertError } = await supabase.from('medical_events').insert({
+          pet_id: currentPetId,
+          user_id: session.user.id,
+          event_type: 'owner_symptom',
+          event_date: checkInDate.trim(),
+          title: checkInTitle.trim(),
+          description: checkInDetails.trim() || 'No additional details provided.',
+          source_type: 'owner_note',
+        });
+        if (insertError) throw insertError;
       }
 
       await loadTimeline(currentPetId);
@@ -1910,7 +2012,6 @@ function usePawsoState() {
         .from('care_tasks')
         .select('id, title, notes, due_at, task_type, is_active')
         .eq('pet_id', petId)
-        .eq('is_active', true)
         .order('due_at', { ascending: true });
 
       if (tasksError) throw tasksError;
@@ -2136,7 +2237,7 @@ function usePawsoState() {
       const medicationIds = (meds ?? []).map((med) => med.id);
 
       let schedules: MedicationSchedule[] = [];
-      let logs: MedicationLog[] = [];
+      let todayLogs: MedicationLog[] = [];
 
       if (medicationIds.length > 0) {
         const { data: scheduleRows, error: schedulesError } = await supabase
@@ -2148,26 +2249,37 @@ function usePawsoState() {
         if (schedulesError) throw schedulesError;
         schedules = (scheduleRows ?? []) as MedicationSchedule[];
 
-        const start = new Date();
-        start.setHours(0, 0, 0, 0);
-
-        const end = new Date(start);
-        end.setDate(end.getDate() + 1);
-
-        const { data: logRows, error: logsError } = await supabase
-          .from('medication_logs')
-          .select('id, medication_id, schedule_id, scheduled_for, status, logged_at, note, actor_name')
-          .eq('pet_id', petId)
-          .gte('scheduled_for', start.toISOString())
-          .lt('scheduled_for', end.toISOString());
-
-        if (logsError) throw logsError;
-        logs = (logRows ?? []) as MedicationLog[];
       }
+
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const historyStart = new Date(todayStart);
+      historyStart.setDate(historyStart.getDate() - 6);
+      const tomorrowStart = new Date(todayStart);
+      tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+
+      const { data: historyRows, error: logsError } = await supabase
+        .from('medication_logs')
+        .select('id, medication_id, schedule_id, scheduled_for, status, logged_at, note, actor_name')
+        .eq('pet_id', petId)
+        .gte('scheduled_for', historyStart.toISOString())
+        .lt('scheduled_for', tomorrowStart.toISOString())
+        .order('scheduled_for', { ascending: true });
+
+      if (logsError) throw logsError;
+      const historyLogs = (historyRows ?? []) as MedicationLog[];
+      todayLogs = historyLogs.filter((log) => {
+        const scheduledFor = new Date(log.scheduled_for).getTime();
+        return (
+          scheduledFor >= todayStart.getTime() &&
+          scheduledFor < tomorrowStart.getTime()
+        );
+      });
 
       setMedicationList((meds ?? []) as Medication[]);
       setMedicationSchedules(schedules);
-      setMedicationLogs(logs);
+      setMedicationLogs(todayLogs);
+      setMedicationHistoryLogs(historyLogs);
     } catch (error) {
       console.log('Load medication data error:', error);
       setMedicationsError(
@@ -2246,42 +2358,19 @@ function usePawsoState() {
       setIsSavingMedication(true);
       setMedicationsError('');
 
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession();
-
-      if (sessionError) throw sessionError;
-      if (!session?.user) throw new Error('Pawso session is not ready.');
-
-      const { data: medicationRow, error: medicationError } = await supabase
-        .from('medications')
-        .insert({
-          pet_id: currentPetId,
-          user_id: session.user.id,
-          name: newMedicationName.trim(),
-          dose: newMedicationDose.trim() || null,
-          unit: newMedicationUnit.trim() || null,
-          instructions: newMedicationInstructions.trim() || null,
-          is_active: true,
-        })
-        .select('id')
-        .single();
+      const { error: medicationError } = await supabase.rpc(
+        'create_medication_with_schedules',
+        {
+          target_pet: currentPetId,
+          target_name: newMedicationName.trim(),
+          target_dose: newMedicationDose.trim(),
+          target_unit: newMedicationUnit.trim(),
+          target_instructions: newMedicationInstructions.trim(),
+          target_times: times,
+        }
+      );
 
       if (medicationError) throw medicationError;
-
-      const scheduleRows = times.map((time) => ({
-        medication_id: medicationRow.id,
-        pet_id: currentPetId,
-        user_id: session.user.id,
-        time_of_day: time,
-      }));
-
-      const { error: scheduleError } = await supabase
-        .from('medication_schedules')
-        .insert(scheduleRows);
-
-      if (scheduleError) throw scheduleError;
 
       setNewMedicationName('');
       setNewMedicationDose('');
@@ -2404,6 +2493,7 @@ function usePawsoState() {
     try {
       setDocumentsLoading(true);
       setDocumentsError('');
+      setPetDocuments([]);
 
       const { data: documents, error: documentsQueryError } = await supabase
         .from('documents')
@@ -2685,7 +2775,7 @@ function usePawsoState() {
   }
 
   const canCreateProfile =
-    petName.trim() !== '' && petType !== null;
+    canManageMedical && petName.trim() !== '' && petType !== null;
 
   const petEmoji = petType === 'dog' ? '🐶' : '🐱';
 
@@ -2933,144 +3023,125 @@ function usePawsoState() {
   }
 
   async function pickVetRecord() {
-  try {
-    setUploadError('');
+    let temporaryFileUri: string | null = null;
+    try {
+      setUploadError('');
 
-    if (!(await confirmAiProcessingConsent())) return;
+      if (!(await confirmAiProcessingConsent())) return;
 
-    const result = await DocumentPicker.getDocumentAsync({
-      type: ['application/pdf', 'image/*'],
-      copyToCacheDirectory: true,
-    });
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'image/*'],
+        copyToCacheDirectory: true,
+      });
 
-    if (result.canceled) {
-      return;
-    }
-
-    const asset = result.assets[0];
-
-    setDocumentName(asset.name);
-    setDocumentSize(asset.size ?? null);
-    setDocumentContentType(asset.mimeType || 'application/octet-stream');
-    setCurrentDocumentId(null);
-    setCurrentExtractionId(null);
-    setDiagnosisCertainty('unknown');
-    setExtractedMedications([]);
-    setExtractionWarnings([]);
-    setExtractionModel('');
-    setExtractionPromptVersion('');
-    setScreen('processing');
-
-    const uploadResult = await FileSystem.uploadAsync(
-      `${API_BASE_URL}/api/v1/documents/extract`,
-      asset.uri,
-      {
-        httpMethod: 'POST',
-        uploadType: FileSystem.FileSystemUploadType.MULTIPART,
-        fieldName: 'file',
-        headers: await getApiAuthHeaders(),
-        mimeType:
-          asset.mimeType || 'application/octet-stream',
+      if (result.canceled) {
+        return;
       }
-    );
 
-    if (
-      uploadResult.status < 200 ||
-      uploadResult.status >= 300
-    ) {
-      throw new Error(
-        `Upload failed (${uploadResult.status}): ${uploadResult.body}`
+      const asset = result.assets[0];
+      temporaryFileUri = asset.uri;
+
+      setDocumentName(asset.name);
+      setDocumentSize(asset.size ?? null);
+      setDocumentContentType(asset.mimeType || 'application/octet-stream');
+      setCurrentDocumentId(null);
+      setCurrentExtractionId(null);
+      setDiagnosisCertainty('unknown');
+      setExtractedMedications([]);
+      setExtractionWarnings([]);
+      setExtractionModel('');
+      setExtractionPromptVersion('');
+      setScreen('processing');
+
+      const uploadResult = await FileSystem.uploadAsync(
+        `${API_BASE_URL}/api/v1/documents/extract`,
+        asset.uri,
+        {
+          httpMethod: 'POST',
+          uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+          fieldName: 'file',
+          headers: await getApiAuthHeaders(),
+          mimeType: asset.mimeType || 'application/octet-stream',
+        }
       );
+
+      if (uploadResult.status < 200 || uploadResult.status >= 300) {
+        throw new Error(
+          `Upload failed (${uploadResult.status}): ${uploadResult.body}`
+        );
+      }
+
+      const data = JSON.parse(uploadResult.body);
+
+      setDocumentName(data.document?.filename || asset.name);
+      setDocumentSize(data.document?.size_bytes ?? asset.size ?? null);
+      setVisitDate(data.extraction?.visit_date || '');
+      setClinic(data.extraction?.clinic || '');
+      setFinding(data.extraction?.finding || '');
+      setDiagnosis(data.extraction?.diagnosis || '');
+      setDiagnosisCertainty(
+        normalizeDiagnosisCertainty(data.extraction?.diagnosis_certainty)
+      );
+      setFollowUp(data.extraction?.follow_up || '');
+      setExtractedMedications(
+        Array.isArray(data.extraction?.medications)
+          ? data.extraction.medications.filter(
+              (item: unknown) => typeof item === 'string'
+            )
+          : []
+      );
+      setExtractionWarnings(
+        Array.isArray(data.extraction?.warnings)
+          ? data.extraction.warnings.filter(
+              (item: unknown) => typeof item === 'string'
+            )
+          : []
+      );
+      setExtractionModel(
+        typeof data.ai?.model === 'string' ? data.ai.model : ''
+      );
+      setExtractionPromptVersion(
+        typeof data.ai?.prompt_version === 'string'
+          ? data.ai.prompt_version
+          : ''
+      );
+
+      const resolvedContentType =
+        data.document?.content_type ||
+        asset.mimeType ||
+        'application/octet-stream';
+
+      setDocumentContentType(resolvedContentType);
+
+      await persistExtractionProposal({
+        filename: data.document?.filename || asset.name,
+        contentType: resolvedContentType,
+        sizeBytes: data.document?.size_bytes ?? asset.size ?? null,
+        localUri: asset.uri,
+        extraction: data.extraction ?? {},
+        model: data.ai?.model,
+        promptVersion: data.ai?.prompt_version,
+      });
+
+      setScreen('review');
+    } catch (error) {
+      console.log('Document upload error:', error);
+
+      setUploadError(
+        error instanceof Error
+          ? error.message
+          : 'Something went wrong while uploading the file.'
+      );
+
+      setScreen('today');
+    } finally {
+      if (temporaryFileUri) {
+        await FileSystem.deleteAsync(temporaryFileUri, { idempotent: true }).catch(
+          () => undefined
+        );
+      }
     }
-
-    const data = JSON.parse(uploadResult.body);
-
-    console.log('Document upload response:', data);
-
-    setDocumentName(
-      data.document?.filename || asset.name
-    );
-
-    setDocumentSize(
-      data.document?.size_bytes ??
-        asset.size ??
-        null
-    );
-
-    setVisitDate(
-      data.extraction?.visit_date || ''
-    );
-
-    setClinic(
-      data.extraction?.clinic || ''
-    );
-
-    setFinding(
-      data.extraction?.finding || ''
-    );
-
-    setDiagnosis(
-      data.extraction?.diagnosis || ''
-    );
-
-    setDiagnosisCertainty(
-      normalizeDiagnosisCertainty(data.extraction?.diagnosis_certainty)
-    );
-
-    setFollowUp(
-      data.extraction?.follow_up || ''
-    );
-
-    setExtractedMedications(
-      Array.isArray(data.extraction?.medications)
-        ? data.extraction.medications.filter((item: unknown) => typeof item === 'string')
-        : []
-    );
-
-    setExtractionWarnings(
-      Array.isArray(data.extraction?.warnings)
-        ? data.extraction.warnings.filter((item: unknown) => typeof item === 'string')
-        : []
-    );
-
-    setExtractionModel(typeof data.ai?.model === 'string' ? data.ai.model : '');
-    setExtractionPromptVersion(
-      typeof data.ai?.prompt_version === 'string' ? data.ai.prompt_version : ''
-    );
-
-    const resolvedContentType =
-      data.document?.content_type ||
-      asset.mimeType ||
-      'application/octet-stream';
-
-    setDocumentContentType(resolvedContentType);
-
-    await persistExtractionProposal({
-      filename: data.document?.filename || asset.name,
-      contentType: resolvedContentType,
-      sizeBytes:
-        data.document?.size_bytes ??
-        asset.size ??
-        null,
-      localUri: asset.uri,
-      extraction: data.extraction ?? {},
-      model: data.ai?.model,
-      promptVersion: data.ai?.prompt_version,
-    });
-
-    setScreen('review');
-  } catch (error) {
-    console.log('Document upload error:', error);
-
-    setUploadError(
-      error instanceof Error
-        ? error.message
-        : 'Something went wrong while uploading the file.'
-    );
-
-    setScreen('today');
   }
-}
 
   async function confirmExtraction() {
     if (!currentPetId) {
@@ -3159,7 +3230,9 @@ function usePawsoState() {
   );
 
   const activeCareTasks = careTasks.filter(
-    (task) => !taskCompletions.some((completion) => completion.task_id === task.id)
+    (task) =>
+      task.is_active &&
+      !taskCompletions.some((completion) => completion.task_id === task.id)
   );
 
   const overdueMedicationDoses = pendingMedicationDoses.filter(
@@ -3328,6 +3401,7 @@ function usePawsoState() {
     setMedicationSchedules,
     medicationLogs,
     setMedicationLogs,
+    medicationHistoryLogs,
     medicationsLoading,
     setMedicationsLoading,
     medicationsError,

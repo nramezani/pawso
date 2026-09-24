@@ -63,7 +63,7 @@ export type MedicationLog = {
   medication_id: string;
   schedule_id: string | null;
   scheduled_for: string;
-  status: 'given' | 'skipped' | 'missed';
+  status: 'given' | 'skipped';
   logged_at: string;
   note: string | null;
   actor_name?: string | null;

@@ -42,6 +42,15 @@ notifications, accessibility, and release tooling.
   medications, care, timeline, documents, household, Ask Pawso, Smart Care, and
   vet-preparation screens. The weight chart shows exact recorded values and
   deliberately avoids making a clinical judgment about weight change.
+- Added honest seven-day medication-outcome and six-month health-activity
+  charts, timeline/document filters, and actor/timestamp care history.
+- Corrected care persistence so completed tasks remain available after reload
+  and removed the unsupported medication `missed` state from the UI.
+- Made medication-plus-schedules and weight-event-plus-profile writes atomic.
+- Hardened database function execution, protected task completion from duplicate
+  rows, and prevented cross-pet data from lingering during pet switches.
+- Added a branded native splash configuration and Android/iOS bundle checks to
+  CI.
 
 ## Database migrations that must be applied
 
@@ -50,9 +59,11 @@ Apply these in order to the Supabase project before testing this batch:
 1. `20260925_fix_household_invitation_cancellation.sql`
 2. `20260926_atomic_care_completion.sql`
 3. `20260927_atomic_extraction_confirmation.sql`
+4. `20260928_harden_rpc_access_and_care_history.sql`
 
 The first migration also secures addressed invitation codes to the recipient's
-signed-in email. The latter two add transactional RPCs used by this app version.
+signed-in email. The remaining migrations add transactional RPCs and access
+hardening used by this app version.
 
 ## Automated verification
 
@@ -60,8 +71,10 @@ signed-in email. The latter two add transactional RPCs used by this app version.
 - ESLint blocking errors: pass
 - Expo configuration parse: pass
 - Python compile: pass
-- Backend and migration contract tests: 19 pass
+- Backend and migration contract tests: 20 pass
 - Medication-time regression check: pass for valid and invalid boundary cases
+- Expo Doctor: 21/21 checks pass
+- Android and iOS Metro exports: pass
 
 The live Supabase RLS suite still requires a disposable staging project and the
 owner/caregiver/sitter test accounts described in

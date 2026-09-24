@@ -100,15 +100,18 @@ health endpoints are `/health` and `/ready`.
 - [Terms of use draft](docs/TERMS_OF_USE_DRAFT.md)
 - [Membership and pricing recommendation](docs/MEMBERSHIP_AND_PRICING.md)
 - [Release readiness review (2026-09-24)](docs/RELEASE_READINESS_REVIEW_2026-09-24.md)
+- [Deep product, workflow, UI, and engineering audit (2026-09-24)](docs/DEEP_AUDIT_2026-09-24.md)
 - [EAS environment setup](docs/EAS_ENVIRONMENT_SETUP.md)
 - [Backend deployment guide](docs/BACKEND_DEPLOYMENT.md)
 - [Baseline Supabase schema](supabase/migrations/20260911_core_schema.sql)
 - [Household sharing migration](supabase/migrations/20260912_household_shared_care.sql)
-- [Household role permissions](supabase/migrations/20260912_household_role_permissions.sql)
+- [Reconciled household role permissions](supabase/migrations/20260923_reconcile_household_role_rls.sql)
 
 Apply all Supabase migrations in filename order. The mobile app expects the
-transactional and invitation fixes in migrations `20260925` through `20260927`.
+transactional, invitation, and access-hardening fixes in migrations `20260925`
+through `20260928`.
 
 ## Current status
 
-Pawso is a functional local MVP under active development. Review the audit and roadmap before external beta distribution.
+Pawso is a private-beta candidate under active development. Complete the P0
+items in the deep audit before distributing the next build.

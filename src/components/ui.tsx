@@ -822,6 +822,7 @@ export const styles = StyleSheet.create({
   },
 
   outlineButton: {
+    minHeight: 44,
     marginTop: 18,
     borderWidth: 1,
     borderColor: '#53166F',
@@ -995,7 +996,7 @@ export const styles = StyleSheet.create({
 
   checkWarning: {
     fontSize: 12,
-    color: '#A56D1A',
+    color: '#8A682E',
     fontWeight: '700',
   },
 
@@ -1140,6 +1141,8 @@ export const styles = StyleSheet.create({
     gap: 9,
   },
   askSuggestionChip: {
+    minHeight: 44,
+    justifyContent: 'center',
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#DCE6E2',
@@ -1278,6 +1281,7 @@ export const styles = StyleSheet.create({
     fontSize: 19,
   },
   completeCareButton: {
+    minHeight: 44,
     marginTop: 14,
     backgroundColor: '#2F6F63',
     borderRadius: 13,
@@ -1316,6 +1320,7 @@ export const styles = StyleSheet.create({
     gap: 10,
   },
   givenButton: {
+    minHeight: 44,
     flex: 1,
     backgroundColor: '#2F6F63',
     paddingVertical: 12,
@@ -1327,6 +1332,7 @@ export const styles = StyleSheet.create({
     fontWeight: '800',
   },
   skipDoseButton: {
+    minHeight: 44,
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 13,
@@ -1556,9 +1562,18 @@ export const styles = StyleSheet.create({
   },
   reminderFinePrint: {
     marginTop: 10,
-    color: '#73837D',
+    color: '#66736F',
     fontSize: 12,
     lineHeight: 17,
+  },
+
+  iconActionButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 22,
+    backgroundColor: '#F2F5F3',
   },
 
   inviteCodeText: {

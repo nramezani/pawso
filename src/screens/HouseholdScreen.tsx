@@ -50,7 +50,12 @@ export function HouseholdScreen() {
   const sitterCount = householdMembers.filter((member) => member.role === 'sitter').length;
 
   const invitationMessage = inviteCode
-    ? `You've been invited to join ${householdName || 'a Pawso household'} as a ${inviteRole}. Open Pawso, go to Account → Household & shared care → Join with an invite code, and enter:
+    ? `You've been invited to join ${householdName || 'a Pawso household'} as a ${inviteRole}.
+
+Open the invitation in Pawso:
+pawso://invite/${inviteCode}
+
+If the link does not open, open Pawso → Account → People & access → Join with an invite code, and enter:
 
 ${inviteCode}
 

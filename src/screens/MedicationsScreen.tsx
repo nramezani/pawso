@@ -1,7 +1,10 @@
 import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
-import { ProgressOverview } from '../components/VisualSummary';
+import {
+  ActivityBarChart,
+  ProgressOverview,
+} from '../components/VisualSummary';
 import {
   Page,
   Header,
@@ -99,6 +102,7 @@ export function MedicationsScreen() {
     setMedicationSchedules,
     medicationLogs,
     setMedicationLogs,
+    medicationHistoryLogs,
     medicationsLoading,
     setMedicationsLoading,
     medicationsError,
@@ -199,9 +203,31 @@ export function MedicationsScreen() {
   const skippedToday = todayMedicationDoses.filter(
     (dose) => dose.log?.status === 'skipped'
   ).length;
-  const missedToday = todayMedicationDoses.filter(
-    (dose) => dose.log?.status === 'missed'
-  ).length;
+  const medicationActivityBuckets = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() - (6 - index));
+    const dayStart = date.getTime();
+    const nextDate = new Date(date);
+    nextDate.setDate(nextDate.getDate() + 1);
+    const dayEnd = nextDate.getTime();
+    const logs = medicationHistoryLogs.filter((log) => {
+      const scheduledFor = new Date(log.scheduled_for).getTime();
+      return scheduledFor >= dayStart && scheduledFor < dayEnd;
+    });
+
+    return {
+      key: `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`,
+      label:
+        index === 6
+          ? 'Today'
+          : date.toLocaleDateString([], { weekday: 'short' }),
+      values: {
+        given: logs.filter((log) => log.status === 'given').length,
+        skipped: logs.filter((log) => log.status === 'skipped').length,
+      },
+    };
+  });
 
 return (
       <Page scroll>
@@ -235,7 +261,6 @@ return (
             breakdown={[
               { label: 'Given', value: givenToday, icon: '✓', tone: 'green' },
               { label: 'Skipped', value: skippedToday, icon: '↷', tone: 'amber' },
-              { label: 'Missed', value: missedToday, icon: '!', tone: 'amber' },
               {
                 label: 'Pending',
                 value: pendingMedicationDoses.length,
@@ -244,6 +269,45 @@ return (
               },
             ]}
           />
+        ) : null}
+
+        {medicationHistoryLogs.length >= 2 ? (
+          <ActivityBarChart
+            title="Dose activity · 7 days"
+            detail={`${medicationHistoryLogs.length} dose outcome${
+              medicationHistoryLogs.length === 1 ? '' : 's'
+            } logged during this period.`}
+            buckets={medicationActivityBuckets}
+            series={[
+              { key: 'given', label: 'Given', color: '#2F6F63' },
+              { key: 'skipped', label: 'Skipped', color: '#D98B2B' },
+            ]}
+            note="This chart shows recorded outcomes only. It does not judge adherence or infer unlogged doses."
+          />
+        ) : null}
+
+        {completedMedicationDoses.length > 0 ? (
+          <>
+            <Text style={styles.sectionTitle}>Today&apos;s logged doses</Text>
+            {completedMedicationDoses.map((dose) => (
+              <View
+                key={`logged-${dose.schedule.id}`}
+                style={styles.careListCard}
+              >
+                <Text style={styles.careListIcon}>
+                  {dose.log?.status === 'given' ? '✓' : '↷'}
+                </Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.cardStrong}>{dose.medication.name}</Text>
+                  <Text style={styles.cardMuted}>
+                    {dose.log?.status === 'given' ? 'Given' : 'Skipped'} ·{' '}
+                    {formatMedicationTime(dose.scheduledFor)}
+                    {dose.log?.actor_name ? ` · ${dose.log.actor_name}` : ''}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </>
         ) : null}
 
         {canManageMedical ? (
@@ -303,6 +367,7 @@ return (
 
                   {canManageMedical ? (
                     <Pressable
+                      style={styles.iconActionButton}
                       accessibilityRole="button"
                       accessibilityLabel={`Archive ${medication.name}`}
                       disabled={deletingMedicationId === medication.id}

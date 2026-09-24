@@ -178,7 +178,7 @@ export function WeightTrendCard({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`Record a new weight for ${petName}`}
-            hitSlop={8}
+            style={chartStyles.linkAction}
             onPress={onRecordWeight}
           >
             <Text style={chartStyles.link}>Record new</Text>
@@ -297,6 +297,12 @@ const chartStyles = StyleSheet.create({
     color: '#53166F',
     fontSize: 13,
     fontWeight: '800',
+  },
+  linkAction: {
+    minHeight: 44,
+    minWidth: 88,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
   },
   note: {
     marginTop: 10,

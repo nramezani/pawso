@@ -1,6 +1,6 @@
 # Pawso End-to-End QA Checklist
 
-Last updated: September 21, 2026
+Last updated: September 24, 2026
 
 Use this checklist on both iOS and Android before each beta build. Test with an
 owner account and a separate caregiver or sitter account.
@@ -14,6 +14,8 @@ owner account and a separate caregiver or sitter account.
 - [ ] Confirm `expo-linking` is committed in `package.json` and the lockfile.
 - [ ] Verify Android bottom navigation remains above the system navigation controls.
 - [ ] Verify local notifications in Android and iOS development builds (not Expo Go).
+- [ ] Apply migrations through `20260928_harden_rpc_access_and_care_history.sql`
+  before testing medication creation or weight check-ins.
 
 ## Owner workflow
 
@@ -43,6 +45,10 @@ owner account and a separate caregiver or sitter account.
 - [ ] Today prioritizes overdue, due soon, later, and completed items correctly.
 - [ ] Medication dose logging cannot be accidentally duplicated.
 - [ ] Care-task completion records the correct member and time.
+- [ ] Completed care remains in history after refresh/relaunch; archived-only
+  tasks are not counted as completed.
+- [ ] Seven-day medication activity shows only recorded given/skipped outcomes
+  and does not infer missed doses.
 - [ ] Dates, times, and daylight-saving changes behave correctly.
 - [ ] Reminder permission denial is explained without blocking other features.
 - [ ] Multi-pet Today cards open the correct pet.
@@ -57,6 +63,8 @@ owner account and a separate caregiver or sitter account.
 - [ ] Ask Pawso cites only the selected pet's records.
 - [ ] Ask Pawso degrades safely when the backend is unavailable.
 - [ ] Health check-ins distinguish owner observations from veterinary records.
+- [ ] Weight check-in creates one timeline event and updates the profile together.
+- [ ] Timeline filters and six-month activity use the correct local dates.
 - [ ] Vet Visit Prep and Smart Care Plans show their supporting sources.
 - [ ] AI safety language does not imply diagnosis or emergency care.
 
@@ -66,7 +74,8 @@ owner account and a separate caregiver or sitter account.
 - [ ] Owner can create a one-use sitter invite.
 - [ ] Invite expiration and invalid-code errors are clear.
 - [ ] Caregiver can manage routine care but cannot manage medical records.
-- [ ] Sitter can view and complete assigned care without medical access.
+- [ ] Sitter can view and complete assigned care without veterinary documents or
+  timeline access; confirm the intended safety-profile fields separately.
 - [ ] A second account never sees another household without accepting an invite.
 - [ ] Member names appear on relevant completion activity.
 
@@ -87,6 +96,7 @@ owner account and a separate caregiver or sitter account.
 
 - [ ] `npm exec -- tsc --noEmit`
 - [ ] `npx expo config --json`
+- [ ] Android and iOS `npx expo export` bundle checks
 - [ ] Backend compile/tests
 - [ ] Supabase RLS integration tests
 - [ ] iOS physical-device smoke test

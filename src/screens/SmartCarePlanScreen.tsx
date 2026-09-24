@@ -8,6 +8,7 @@ export function SmartCarePlanScreen() {
   const {
     setScreen,
     petName,
+    canManageCare,
     smartCareSuggestions,
     smartCareLoading,
     smartCareError,
@@ -87,7 +88,12 @@ export function SmartCarePlanScreen() {
           {suggestion.source_ids.map((sourceId) => (
             <Text key={sourceId} style={styles.cardMuted}>• {getSmartCareSourceLabel(sourceId)}</Text>
           ))}
-          <PrimaryButton title="Review & schedule" onPress={() => acceptSmartCareSuggestion(suggestion)} />
+          {canManageCare ? (
+            <PrimaryButton
+              title="Review & schedule"
+              onPress={() => acceptSmartCareSuggestion(suggestion)}
+            />
+          ) : null}
         </View>
       ))}
 
