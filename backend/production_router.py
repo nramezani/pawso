@@ -4,7 +4,7 @@ from typing import Literal
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 from auth import AuthenticatedUser, require_user
 
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api/v1", tags=["production"])
 class InvitationEmailRequest(BaseModel):
     household_id: str = Field(min_length=36, max_length=36)
     household_name: str = Field(min_length=1, max_length=120)
-    email: EmailStr
+    email: str = Field(min_length=3, max_length=320)
     role: Literal["caregiver", "sitter"]
     invite_code: str = Field(min_length=36, max_length=36)
 
