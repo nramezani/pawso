@@ -27,6 +27,7 @@ export function HouseholdScreen() {
     inviteRole,
     setInviteRole,
     inviteCode,
+    inviteEmailStatus,
     joinCode,
     setJoinCode,
     memberDisplayName,
@@ -253,9 +254,12 @@ This one-time code expires after 7 days.`
               <Text style={styles.cardStrong}>Invitation ready</Text>
               <Text selectable style={styles.inviteCodeText}>{inviteCode}</Text>
               <Text style={styles.cardMuted}>
-                It expires after 7 days and can be used once. Email it directly
-                or use your phone's share menu.
+                It expires after 7 days and can be used once. Pawso attempts
+                automatic delivery first; Email and Share remain available as backups.
               </Text>
+              {inviteEmailStatus ? (
+                <Text style={styles.cardMuted}>{inviteEmailStatus}</Text>
+              ) : null}
               <PrimaryButton
                 title="Email invitation"
                 onPress={emailInvitation}
