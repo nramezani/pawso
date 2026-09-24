@@ -1,6 +1,7 @@
 import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
+import { ProgressOverview } from '../components/VisualSummary';
 import {
   Page,
   Header,
@@ -192,6 +193,13 @@ export function CareScreen() {
     followUpEvents
   } = usePawso();
 
+  const completedTaskIds = new Set(
+    taskCompletions.map((completion) => completion.task_id)
+  );
+  const completedCurrentTasks = careTasks.filter((task) =>
+    completedTaskIds.has(task.id)
+  );
+
 return (
       <Page scroll>
         <Header back={() => setScreen('today')} title="Care & Reminders" />
@@ -207,6 +215,41 @@ return (
             </Text>
           </View>
         </View>
+
+        {careTasks.length > 0 ? (
+          <ProgressOverview
+            title="Current care plan"
+            completed={completedCurrentTasks.length}
+            total={careTasks.length}
+            detail={
+              activeCareTasks.length === 0
+                ? 'Every current task is complete.'
+                : `${activeCareTasks.length} task${
+                    activeCareTasks.length === 1 ? '' : 's'
+                  } still need attention.`
+            }
+            breakdown={[
+              {
+                label: 'Completed',
+                value: completedCurrentTasks.length,
+                icon: '✓',
+                tone: 'green',
+              },
+              {
+                label: 'Upcoming',
+                value: upcomingCareTasks.length,
+                icon: '→',
+                tone: 'purple',
+              },
+              {
+                label: 'Overdue',
+                value: overdueCareTasks.length,
+                icon: '!',
+                tone: 'amber',
+              },
+            ]}
+          />
+        ) : null}
 
         {canManageCare ? (
           <PrimaryButton title="Add Care Task" onPress={() => setScreen('addCareTask')} />

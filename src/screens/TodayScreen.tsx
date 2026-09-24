@@ -32,6 +32,9 @@ export function TodayScreen() {
     dueSoonMedicationDoses,
     laterMedicationDoses,
     upcomingCareTasks,
+    careTasks,
+    taskCompletions,
+    todayMedicationDoses,
     completedMedicationDoses,
     followUpEvents,
     loggingDoseId,
@@ -67,6 +70,25 @@ export function TodayScreen() {
       : localHour < 17
       ? 'Good afternoon'
       : 'Good evening';
+  const now = new Date();
+  const todayCareTasks = careTasks.filter((task) => {
+    const due = new Date(task.due_at);
+    return (
+      due.getFullYear() === now.getFullYear() &&
+      due.getMonth() === now.getMonth() &&
+      due.getDate() === now.getDate()
+    );
+  });
+  const completedCareTasks = todayCareTasks.filter((task) =>
+    taskCompletions.some((completion) => completion.task_id === task.id)
+  );
+  const todayCareTotal = todayMedicationDoses.length + todayCareTasks.length;
+  const todayCareCompleted =
+    completedMedicationDoses.length + completedCareTasks.length;
+  const todayProgress =
+    todayCareTotal > 0
+      ? Math.min(100, Math.round((todayCareCompleted / todayCareTotal) * 100))
+      : 0;
 
   async function openPetToday(petId: string) {
     await selectPet(petId);
@@ -245,6 +267,35 @@ export function TodayScreen() {
           </Text>
         </View>
       )}
+
+      {!showAllPets && todayCareTotal > 0 ? (
+        <View
+          style={styles.dailyProgressCard}
+          accessible
+          accessibilityLabel={`Today's care progress for ${petName}: ${todayCareCompleted} of ${todayCareTotal} completed, ${todayProgress} percent.`}
+        >
+          <View style={styles.dailyProgressHeader}>
+            <View>
+              <Text style={styles.cardStrong}>Today&apos;s care progress</Text>
+              <Text style={styles.cardMuted}>
+                {todayCareCompleted === todayCareTotal
+                  ? `Everything scheduled for ${petName} is complete.`
+                  : `${todayCareCompleted} of ${todayCareTotal} completed`}
+              </Text>
+            </View>
+            <Text style={styles.dailyProgressPercent}>{todayProgress}%</Text>
+          </View>
+          <View style={styles.dailyProgressTrack}>
+            <View
+              style={[styles.dailyProgressFill, { width: `${todayProgress}%` }]}
+            />
+          </View>
+          <Text style={styles.dailyProgressMeta}>
+            {completedMedicationDoses.length}/{todayMedicationDoses.length} medication doses ·{' '}
+            {completedCareTasks.length}/{todayCareTasks.length} care tasks
+          </Text>
+        </View>
+      ) : null}
 
       {showAllPets ? (
         <>
@@ -611,7 +662,7 @@ export function TodayScreen() {
                 onPress={openSmartCarePlan}
               />
               <SecondaryButton
-                title="View pet profile"
+                title="Health profile & weight trend"
                 onPress={() => setScreen('petProfile')}
               />
             </View>

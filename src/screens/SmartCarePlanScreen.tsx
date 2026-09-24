@@ -1,6 +1,7 @@
 import { ActivityIndicator, Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
+import { MetricStrip } from '../components/VisualSummary';
 import { Header, Page, PrimaryButton, SecondaryButton, styles } from '../components/ui';
 
 export function SmartCarePlanScreen() {
@@ -14,6 +15,8 @@ export function SmartCarePlanScreen() {
     acceptSmartCareSuggestion,
     getSmartCareSourceLabel,
   } = usePawso();
+  const suggestionCount = (type: 'follow_up' | 'monitoring' | 'routine_care') =>
+    smartCareSuggestions.filter((suggestion) => suggestion.task_type === type).length;
 
   return (
     <Page scroll>
@@ -48,6 +51,32 @@ export function SmartCarePlanScreen() {
           <Text style={styles.cardStrong}>No suggestions generated yet</Text>
           <Text style={styles.cardMuted}>Pawso only suggests tasks that confirmed records can support.</Text>
         </View>
+      ) : null}
+
+      {smartCareSuggestions.length > 0 ? (
+        <MetricStrip
+          accessibilityLabel={`${petName}'s smart care suggestion overview`}
+          items={[
+            {
+              label: 'Follow-up',
+              value: suggestionCount('follow_up'),
+              icon: '🩺',
+              tone: 'purple',
+            },
+            {
+              label: 'Monitoring',
+              value: suggestionCount('monitoring'),
+              icon: '👁',
+              tone: 'amber',
+            },
+            {
+              label: 'Routine care',
+              value: suggestionCount('routine_care'),
+              icon: '✓',
+              tone: 'green',
+            },
+          ]}
+        />
       ) : null}
 
       {smartCareSuggestions.map((suggestion, index) => (

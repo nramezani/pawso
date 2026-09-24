@@ -1,6 +1,7 @@
 import { Pressable, Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
+import { MetricStrip } from '../components/VisualSummary';
 import { Page, Header, PrimaryButton, styles } from '../components/ui';
 
 export function PetsScreen() {
@@ -13,6 +14,8 @@ export function PetsScreen() {
     householdMembers,
     setScreen,
   } = usePawso();
+  const catCount = pets.filter((pet) => pet.species === 'cat').length;
+  const dogCount = pets.filter((pet) => pet.species === 'dog').length;
 
   return (
     <Page scroll>
@@ -23,6 +26,23 @@ export function PetsScreen() {
         Switch pets anytime. Pawso keeps each pet's records, medications,
         care tasks, and AI memory separate.
       </Text>
+
+      {pets.length > 0 ? (
+        <MetricStrip
+          accessibilityLabel="Pawso household overview"
+          items={[
+            { label: 'Pets', value: pets.length, icon: '🐾', tone: 'purple' },
+            { label: 'Cats', value: catCount, icon: '🐱', tone: 'green' },
+            { label: 'Dogs', value: dogCount, icon: '🐶', tone: 'green' },
+            {
+              label: 'People',
+              value: householdMembers.length,
+              icon: '👥',
+              tone: 'neutral',
+            },
+          ]}
+        />
+      ) : null}
 
       {databaseError !== '' ? (
         <View style={styles.errorCard}>

@@ -23,7 +23,8 @@
 - [ ] Recurring care tasks with skip, snooze, pause, and end.
 - [ ] Medication start/end dates, course status, and refills.
 - [ ] Household role change (invite revocation and member removal are complete).
-- [ ] Search/filter and weight/symptom trends.
+- [x] Weight trend from owner-recorded timeline measurements.
+- [ ] Search/filter and structured symptom trends.
 - [ ] Emergency pet card and exportable veterinarian/caregiver handoff.
 
 ## Gate 4 — Native quality

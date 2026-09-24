@@ -1,6 +1,7 @@
 import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
+import { ProgressOverview } from '../components/VisualSummary';
 import {
   Page,
   Header,
@@ -192,6 +193,16 @@ export function MedicationsScreen() {
     followUpEvents
   } = usePawso();
 
+  const givenToday = todayMedicationDoses.filter(
+    (dose) => dose.log?.status === 'given'
+  ).length;
+  const skippedToday = todayMedicationDoses.filter(
+    (dose) => dose.log?.status === 'skipped'
+  ).length;
+  const missedToday = todayMedicationDoses.filter(
+    (dose) => dose.log?.status === 'missed'
+  ).length;
+
 return (
       <Page scroll>
         <Header back={() => setScreen('today')} title="Medications" />
@@ -208,6 +219,32 @@ return (
             </Text>
           </View>
         </View>
+
+        {todayMedicationDoses.length > 0 ? (
+          <ProgressOverview
+            title="Today's dose log"
+            completed={completedMedicationDoses.length}
+            total={todayMedicationDoses.length}
+            detail={
+              pendingMedicationDoses.length === 0
+                ? 'Every scheduled dose has been logged.'
+                : `${pendingMedicationDoses.length} scheduled dose${
+                    pendingMedicationDoses.length === 1 ? '' : 's'
+                  } still need a status.`
+            }
+            breakdown={[
+              { label: 'Given', value: givenToday, icon: '✓', tone: 'green' },
+              { label: 'Skipped', value: skippedToday, icon: '↷', tone: 'amber' },
+              { label: 'Missed', value: missedToday, icon: '!', tone: 'amber' },
+              {
+                label: 'Pending',
+                value: pendingMedicationDoses.length,
+                icon: '○',
+                tone: 'purple',
+              },
+            ]}
+          />
+        ) : null}
 
         {canManageMedical ? (
           <PrimaryButton

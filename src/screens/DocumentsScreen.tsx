@@ -1,6 +1,7 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
+import { MetricStrip } from '../components/VisualSummary';
 import {
   Page,
   Header,
@@ -192,6 +193,17 @@ export function DocumentsScreen() {
     followUpEvents
   } = usePawso();
 
+  const confirmedDocuments = petDocuments.filter(
+    (document) => document.status === 'confirmed'
+  ).length;
+  const documentsNeedingReview = petDocuments.filter(
+    (document) => document.status === 'review_required'
+  ).length;
+  const linkedTimelineEvents = petDocuments.reduce(
+    (total, document) => total + document.linked_events,
+    0
+  );
+
 return (
       <Page scroll>
         <Header back={() => setScreen('today')} title="Medical Records" />
@@ -207,6 +219,38 @@ return (
             </Text>
           </View>
         </View>
+
+        {canViewMedical && petDocuments.length > 0 ? (
+          <MetricStrip
+            accessibilityLabel={`${petName}'s document library overview`}
+            items={[
+              {
+                label: 'Records',
+                value: petDocuments.length,
+                icon: '📄',
+                tone: 'neutral',
+              },
+              {
+                label: 'Confirmed',
+                value: confirmedDocuments,
+                icon: '✓',
+                tone: 'green',
+              },
+              {
+                label: 'Review needed',
+                value: documentsNeedingReview,
+                icon: '!',
+                tone: documentsNeedingReview > 0 ? 'amber' : 'neutral',
+              },
+              {
+                label: 'Timeline links',
+                value: linkedTimelineEvents,
+                icon: '↗',
+                tone: 'purple',
+              },
+            ]}
+          />
+        ) : null}
 
         {canManageMedical ? (
           <Pressable
