@@ -631,8 +631,12 @@ function usePawsoState() {
         data.user.email?.split('@')[0]
       );
       await loadExistingPet(data.user.id, activeHouseholdId);
-      setAccountMessage('Signed in. Your Pawso records are ready.');
-      setScreen('pets');
+      setAccountMessage(
+        joinCode.trim()
+          ? 'Signed in. Your invitation is ready to accept.'
+          : 'Signed in. Your Pawso records are ready.'
+      );
+      setScreen(joinCode.trim() ? 'household' : 'pets');
     } catch (error) {
       console.log('Sign in error:', error);
       setAccountError(
@@ -675,6 +679,23 @@ function usePawsoState() {
   }
 
   async function handleAuthCallback(url: string) {
+    const inviteMatch = url.match(/\/invite\/([0-9a-f-]{36})/i);
+    if (inviteMatch) {
+      setJoinCode(inviteMatch[1]);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session?.user && !session.user.is_anonymous) {
+        setScreen('household');
+      } else {
+        setAccountMessage(
+          'Invitation saved. Sign in or secure your account, then join the household.'
+        );
+        setScreen('account');
+      }
+      return;
+    }
+
     if (!url.includes('/auth/callback')) return;
 
     try {
