@@ -50,6 +50,7 @@ app.add_middleware(
 
 
 MAX_FILE_SIZE = max(1, int(os.getenv("MAX_UPLOAD_SIZE_MB", "10"))) * 1024 * 1024
+EXTRACTION_PROMPT_VERSION = "vet-record-extraction-v1"
 
 
 class VetRecordExtraction(BaseModel):
@@ -68,6 +69,16 @@ class VetRecordExtraction(BaseModel):
     follow_up: str | None
     medications: list[str]
     warnings: list[str]
+
+
+@app.get("/")
+def service_home():
+    return {
+        "status": "ok",
+        "service": "pawso-api",
+        "health": "/health",
+        "readiness": "/ready",
+    }
 
 
 @app.get("/health")
@@ -263,6 +274,10 @@ Never fill in information that is not actually present.
 
         return {
             "status": "success",
+            "ai": {
+                "model": MODEL,
+                "prompt_version": EXTRACTION_PROMPT_VERSION,
+            },
             "document": {
                 "filename": file.filename,
                 "content_type": content_type,

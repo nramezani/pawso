@@ -21,7 +21,7 @@ Requirements:
 Install dependencies:
 
 ```powershell
-npm install
+npm ci
 ```
 
 Create a root `.env.local` file:
@@ -95,10 +95,15 @@ health endpoints are `/health` and `/ready`.
 - [Privacy policy draft](docs/PRIVACY_POLICY_DRAFT.md)
 - [Terms of use draft](docs/TERMS_OF_USE_DRAFT.md)
 - [Membership and pricing recommendation](docs/MEMBERSHIP_AND_PRICING.md)
+- [Release readiness review (2026-09-24)](docs/RELEASE_READINESS_REVIEW_2026-09-24.md)
+- [EAS environment setup](docs/EAS_ENVIRONMENT_SETUP.md)
 - [Backend deployment guide](docs/BACKEND_DEPLOYMENT.md)
 - [Baseline Supabase schema](supabase/migrations/20260911_core_schema.sql)
 - [Household sharing migration](supabase/migrations/20260912_household_shared_care.sql)
 - [Household role permissions](supabase/migrations/20260912_household_role_permissions.sql)
+
+Apply all Supabase migrations in filename order. The mobile app expects the
+transactional and invitation fixes in migrations `20260925` through `20260927`.
 
 ## Current status
 

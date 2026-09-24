@@ -79,8 +79,33 @@ export async function clearPawsoLocalNotifications() {
   await Notifications.cancelAllScheduledNotificationsAsync();
 }
 
+export async function subscribeToPawsoNotificationResponses(
+  onOpen: (data: Record<string, unknown>) => void | Promise<void>
+) {
+  const Notifications = await getNotifications();
+  if (!Notifications) return () => {};
+
+  const openResponse = async (response: {
+    notification: { request: { content: { data?: Record<string, unknown> } } };
+  }) => {
+    try {
+      await onOpen(response.notification.request.content.data ?? {});
+    } finally {
+      await Notifications.clearLastNotificationResponseAsync();
+    }
+  };
+
+  const subscription = Notifications.addNotificationResponseReceivedListener(
+    openResponse
+  );
+  const lastResponse = await Notifications.getLastNotificationResponseAsync();
+  if (lastResponse) await openResponse(lastResponse);
+
+  return () => subscription.remove();
+}
+
 export async function syncPawsoLocalNotifications(
-  pets: Array<{ id: string; name: string }>
+  pets: { id: string; name: string }[]
 ) {
   const Notifications = await getNotifications();
   if (!Notifications) return 0;

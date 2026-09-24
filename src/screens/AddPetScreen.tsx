@@ -43,18 +43,23 @@ export function AddPetScreen() {
     setVetClinic,
     databaseError,
     isSavingPet,
+    isEditingPet,
     canCreateProfile,
     createPetProfile,
   } = usePawso();
-  const [showHealthDetails, setShowHealthDetails] = useState(false);
+  const [showHealthDetails, setShowHealthDetails] = useState(isEditingPet);
 
   return (
     <Page scroll keyboard>
       <Header back={cancelAddPet} title="Pawso" />
 
-      <Text style={styles.pageTitle}>Add your pet</Text>
+      <Text style={styles.pageTitle}>
+        {isEditingPet ? 'Edit pet details' : 'Add your pet'}
+      </Text>
       <Text style={styles.pageSubtitle}>
-        Start with the basics. Everything else can be added now or later.
+        {isEditingPet
+          ? 'Update the information your household uses for care.'
+          : 'Start with the basics. Everything else can be added now or later.'}
       </Text>
 
       <View style={styles.petPhoto}>
@@ -179,7 +184,13 @@ export function AddPetScreen() {
       ) : null}
 
       <PrimaryButton
-        title={isSavingPet ? 'Saving pet…' : 'Create pet profile'}
+        title={
+          isSavingPet
+            ? 'Saving pet…'
+            : isEditingPet
+            ? 'Save changes'
+            : 'Create pet profile'
+        }
         disabled={!canCreateProfile || isSavingPet}
         onPress={createPetProfile}
       />

@@ -165,6 +165,7 @@ export function DocumentsScreen() {
     logMedicationDose,
     loadDocuments,
     openDocumentsScreen,
+    resumeExtractionReview,
     openOriginalDocument,
     formatDocumentDate,
     formatDocumentSize,
@@ -239,7 +240,7 @@ return (
           </View>
         )}
 
-        {documentsLoading ? (
+        {!canViewMedical ? null : documentsLoading ? (
           <View style={styles.documentsLoading}>
             <ActivityIndicator size="large" color="#2F6F63" />
             <Text style={styles.cardMuted}>Loading medical records…</Text>
@@ -249,7 +250,9 @@ return (
             <Text style={styles.bigEmoji}>📁</Text>
             <Text style={styles.cardStrong}>No medical records yet</Text>
             <Text style={styles.cardMuted}>
-              Upload a veterinary PDF or image to start {petName}'s document library.
+              {canManageMedical
+                ? `Upload a veterinary PDF or image to start ${petName}'s document library.`
+                : 'The household owner has not added any confirmed records yet.'}
             </Text>
           </View>
         ) : (
@@ -317,6 +320,17 @@ return (
                     : 'Original file unavailable'}
                 </Text>
               </Pressable>
+
+              {document.status === 'review_required' && canManageMedical ? (
+                <Pressable
+                  style={styles.outlineButton}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Continue reviewing ${document.filename}`}
+                  onPress={() => resumeExtractionReview(document)}
+                >
+                  <Text style={styles.outlineButtonText}>Continue AI review</Text>
+                </Pressable>
+              ) : null}
             </View>
           ))
         )}

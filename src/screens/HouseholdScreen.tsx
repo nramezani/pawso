@@ -38,9 +38,10 @@ export function HouseholdScreen() {
     removeHouseholdMember,
     cancelHouseholdInvitation,
   } = usePawso();
-  const [showJoin, setShowJoin] = useState(false);
+  const [showJoin, setShowJoin] = useState(Boolean(joinCode));
   const [shareError, setShareError] = useState('');
   const canInvite = householdRole === 'owner';
+  const joinFormVisible = showJoin || Boolean(joinCode);
 
   const invitationMessage = inviteCode
     ? `You've been invited to join ${householdName || 'a Pawso household'} as a ${inviteRole}. Open Pawso, go to Account → Household & shared care → Join with an invite code, and enter:
@@ -133,16 +134,23 @@ This one-time code expires after 7 days.`
       <View style={styles.infoCard}>
         <Text style={styles.cardStrong}>Joining someone else's household?</Text>
         <Text style={styles.cardMuted}>
-          Anyone can join with a valid invite code, even if Pawso already shows
-          them as the owner of an empty personal household.
+          Paste a code here if someone invited you. When an invitation names an
+          email address, you must sign in with that same address.
         </Text>
         <SecondaryButton
-          title={showJoin ? 'Hide join form' : 'Join with an invite code'}
-          onPress={() => setShowJoin((value) => !value)}
+          title={joinFormVisible ? 'Hide join form' : 'Join with an invite code'}
+          onPress={() => {
+            if (joinFormVisible) {
+              setShowJoin(false);
+              setJoinCode('');
+            } else {
+              setShowJoin(true);
+            }
+          }}
         />
       </View>
 
-      {showJoin ? (
+      {joinFormVisible ? (
         <>
           <Text style={styles.sectionTitle}>Join another household</Text>
           <Label text="Your display name" />
@@ -245,7 +253,7 @@ This one-time code expires after 7 days.`
 
           <PrimaryButton
             title={householdBusy ? 'Creating invite…' : 'Create invitation'}
-            disabled={householdBusy || !inviteEmail.trim()}
+            disabled={householdBusy || !inviteEmail.trim().includes('@')}
             onPress={createHouseholdInvite}
           />
 
@@ -261,7 +269,7 @@ This one-time code expires after 7 days.`
                 <Text style={styles.cardMuted}>{inviteEmailStatus}</Text>
               ) : null}
               <PrimaryButton
-                title="Email invitation"
+                title="Open email app (backup)"
                 onPress={emailInvitation}
               />
               <SecondaryButton

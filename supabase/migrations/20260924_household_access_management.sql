@@ -59,7 +59,7 @@ begin
   end if;
 
   update public.household_invitations
-  set status = 'cancelled'
+  set status = 'revoked'
   where id = target_invitation
     and household_id = target_household
     and status = 'pending';

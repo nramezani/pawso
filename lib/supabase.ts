@@ -6,19 +6,15 @@ const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabasePublishableKey =
   process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
-if (!supabaseUrl) {
-  throw new Error('Missing EXPO_PUBLIC_SUPABASE_URL');
-}
-
-if (!supabasePublishableKey) {
-  throw new Error(
-    'Missing EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY'
-  );
-}
+export const SUPABASE_CONFIGURATION_ERROR = !supabaseUrl
+  ? 'This Pawso build is missing its Supabase URL.'
+  : !supabasePublishableKey
+  ? 'This Pawso build is missing its Supabase publishable key.'
+  : '';
 
 export const supabase = createClient(
-  supabaseUrl,
-  supabasePublishableKey,
+  supabaseUrl ?? 'https://missing-config.supabase.co',
+  supabasePublishableKey ?? 'missing-publishable-key',
   {
     auth: {
       storage: AsyncStorage,

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
@@ -10,6 +11,7 @@ import {
 } from '../components/ui';
 
 export function TodayScreen() {
+  const [showMoreTools, setShowMoreTools] = useState(false);
   const {
     apiStatus,
     checkBackend,
@@ -46,7 +48,6 @@ export function TodayScreen() {
     pickVetRecord,
     openCareScreen,
     openDocumentsScreen,
-    timelineEvents,
     setScreen,
     canManageMedical,
     notificationPermission,
@@ -181,11 +182,11 @@ export function TodayScreen() {
           <Text style={styles.errorText}>{notificationError}</Text>
         ) : null}
 
-        <Text style={styles.reminderFinePrint}>
-          Medication times and care-task due dates are scheduled directly from
-          your confirmed Pawso records. Pawso does not change medication timing
-          or dosing.
-        </Text>
+        {!notificationsEnabled ? (
+          <Text style={styles.reminderFinePrint}>
+            Reminders use only the medication times and care due dates you saved.
+          </Text>
+        ) : null}
       </View>
 
       {uploadError !== '' ? (
@@ -250,7 +251,6 @@ export function TodayScreen() {
           <Text style={styles.sectionTitle}>All Pets Today</Text>
 
           {allPetsToday.map((summary) => {
-            const pet = pets.find((item) => item.id === summary.pet_id);
             const emoji = summary.species === 'dog' ? '🐶' : '🐱';
             const dueTotal =
               summary.care_due_today + summary.medication_doses_pending;
@@ -588,27 +588,34 @@ export function TodayScreen() {
             <QuickAction icon="📅" label="Care task" onPress={openCareScreen} />
           </View>
 
-          <Text style={styles.sectionTitle}>More for {petName}</Text>
           <SecondaryButton
-            title="Health timeline"
-            onPress={() => setScreen('timeline')}
+            title={showMoreTools ? `Hide more tools` : `More tools for ${petName}`}
+            onPress={() => setShowMoreTools((value) => !value)}
           />
-          <SecondaryButton
-            title="Veterinary documents"
-            onPress={openDocumentsScreen}
-          />
-          <SecondaryButton
-            title="Prepare for a vet visit"
-            onPress={openVetVisitPrep}
-          />
-          <SecondaryButton
-            title="Smart Care Plan"
-            onPress={openSmartCarePlan}
-          />
-          <SecondaryButton
-            title="View pet profile"
-            onPress={() => setScreen('petProfile')}
-          />
+          {showMoreTools ? (
+            <View style={styles.infoCard}>
+              <SecondaryButton
+                title="Health timeline"
+                onPress={() => setScreen('timeline')}
+              />
+              <SecondaryButton
+                title="Veterinary documents"
+                onPress={openDocumentsScreen}
+              />
+              <SecondaryButton
+                title="Prepare for a vet visit"
+                onPress={openVetVisitPrep}
+              />
+              <SecondaryButton
+                title="Smart Care Plan"
+                onPress={openSmartCarePlan}
+              />
+              <SecondaryButton
+                title="View pet profile"
+                onPress={() => setScreen('petProfile')}
+              />
+            </View>
+          ) : null}
         </>
       )}
     </Page>

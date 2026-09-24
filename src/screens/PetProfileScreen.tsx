@@ -169,6 +169,8 @@ export function PetProfileScreen() {
     normalizeEventDate,
     parseWeightKg,
     createPetProfile,
+    canManageMedical,
+    startEditPet,
     checkBackend,
     canCreateProfile,
     petEmoji,
@@ -267,6 +269,10 @@ return (
           title="Go to Today"
           onPress={() => setScreen('today')}
         />
+
+        {canManageMedical ? (
+          <SecondaryButton title="Edit pet details" onPress={startEditPet} />
+        ) : null}
       </Page>
     );
 }

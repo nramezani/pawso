@@ -48,12 +48,13 @@ export function AccountScreen() {
     setRecoveryPassword,
     completePasswordRecovery,
     secureAccount,
+    resetAiProcessingConsent,
     deleteAccount,
     signOutAccount,
   } = usePawso();
 
   return (
-    <Page scroll>
+    <Page scroll keyboard>
       <Header title="Account" back={() => setScreen('pets')} />
 
       <Text style={styles.pageTitle}>
@@ -62,7 +63,7 @@ export function AccountScreen() {
 
       <Text style={styles.pageSubtitle}>
         {accountIsAnonymous
-          ? 'Your current Pawso data is tied to a temporary anonymous account. Add an email and password without changing your Pawso user ID or losing your pet records.'
+          ? 'Add an email and password so you can return to your pets from another phone.'
           : 'Your Pawso records are connected to your signed-in account.'}
       </Text>
 
@@ -72,7 +73,7 @@ export function AccountScreen() {
         </Text>
         <Text style={styles.cardMuted}>
           {accountIsAnonymous
-            ? 'Good for development, but not safe for a public beta because clearing app data or changing devices can make an anonymous account inaccessible.'
+            ? 'Your records are on this phone now. Secure the account before changing phones or reinstalling Pawso.'
             : accountEmail || 'Email account'}
         </Text>
       </View>
@@ -164,9 +165,17 @@ export function AccountScreen() {
             placeholder="At least 8 characters"
           />
 
+          <Text style={styles.reminderFinePrint}>
+            {secureAccountPassword.length === 0
+              ? 'Use at least 8 characters.'
+              : secureAccountPassword.length < 8
+              ? `${8 - secureAccountPassword.length} more character${8 - secureAccountPassword.length === 1 ? '' : 's'} needed.`
+              : '✓ Password length is ready.'}
+          </Text>
+
           <PrimaryButton
             title={accountBusy ? 'Securing account…' : 'Secure my Pawso account'}
-            disabled={accountBusy}
+            disabled={accountBusy || secureAccountPassword.length < 8}
             onPress={secureAccount}
           />
           <SecondaryButton
@@ -179,10 +188,8 @@ export function AccountScreen() {
           />
 
           <Text style={styles.reminderFinePrint}>
-            Pawso upgrades the existing anonymous Supabase user instead of creating
-            a new user. Your existing pet records remain under the same user ID.
-            Depending on your Supabase email settings, you may receive a
-            verification email.
+            Your existing pet records stay with this account. You may receive an
+            email asking you to verify the address.
           </Text>
         </>
       ) : (
@@ -236,6 +243,20 @@ export function AccountScreen() {
           ) : null}
         </>
       ) : null}
+
+      <SecondaryButton
+        title="Reset AI document consent"
+        onPress={resetAiProcessingConsent}
+      />
+
+      <Text style={styles.sectionTitle}>Safety</Text>
+      <View style={styles.infoCard}>
+        <Text style={styles.cardStrong}>Pawso organizes care information</Text>
+        <Text style={styles.cardMuted}>
+          Pawso does not diagnose, prescribe, or replace a veterinarian. For an
+          emergency or rapidly worsening symptoms, contact a veterinary clinic now.
+        </Text>
+      </View>
 
       {!accountIsAnonymous ? (
         <>

@@ -67,7 +67,13 @@ export function Header({
   return (
     <View style={styles.headerRow}>
       {back ? (
-        <Pressable onPress={back}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          hitSlop={10}
+          style={styles.backButton}
+          onPress={back}
+        >
           <Text style={styles.backText}>
             ← Back
           </Text>
@@ -99,7 +105,7 @@ export function Input(props: any) {
   return (
     <TextInput
       {...props}
-      placeholderTextColor="#7C8783"
+      placeholderTextColor="#68746F"
       style={[
         styles.input,
         props.multiline && styles.textArea,
@@ -317,6 +323,10 @@ export const styles = StyleSheet.create({
   },
 
   pageContent: {
+    flexGrow: 1,
+    width: '100%',
+    maxWidth: 720,
+    alignSelf: 'center',
     paddingHorizontal: 20,
     paddingTop: 18,
     paddingBottom: 36,
@@ -324,6 +334,9 @@ export const styles = StyleSheet.create({
 
   pageContentFlex: {
     flex: 1,
+    width: '100%',
+    maxWidth: 720,
+    alignSelf: 'center',
     paddingHorizontal: 20,
     paddingTop: 18,
     paddingBottom: 24,
@@ -347,17 +360,30 @@ export const styles = StyleSheet.create({
     fontSize: 28,
   },
 
+  brandImage: {
+    width: 88,
+    height: 88,
+    borderRadius: 22,
+  },
+
+  loadingText: {
+    marginTop: 16,
+    color: '#56645F',
+    fontSize: 16,
+    textAlign: 'center',
+  },
+
   logo: {
     marginTop: 18,
     fontSize: 23,
     fontWeight: '800',
-    color: '#2F6F63',
+    color: '#53166F',
   },
 
   smallLogo: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#2F6F63',
+    color: '#53166F',
   },
 
   heroTitle: {
@@ -381,8 +407,13 @@ export const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
 
+  backButton: {
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+
   backText: {
-    color: '#2F6F63',
+    color: '#53166F',
     fontSize: 16,
     fontWeight: '700',
   },
@@ -465,8 +496,8 @@ export const styles = StyleSheet.create({
   },
 
   optionSelected: {
-    backgroundColor: '#E2F0EB',
-    borderColor: '#2F6F63',
+    backgroundColor: '#F0E7F5',
+    borderColor: '#53166F',
   },
 
   optionText: {
@@ -475,13 +506,13 @@ export const styles = StyleSheet.create({
   },
 
   optionTextSelected: {
-    color: '#2F6F63',
+    color: '#53166F',
   },
 
   primaryButton: {
     minHeight: 52,
     marginTop: 30,
-    backgroundColor: '#2F6F63',
+    backgroundColor: '#53166F',
     borderRadius: 16,
     paddingVertical: 16,
     alignItems: 'center',
@@ -505,7 +536,7 @@ export const styles = StyleSheet.create({
   },
 
   secondaryButtonText: {
-    color: '#2F6F63',
+    color: '#53166F',
     fontSize: 15,
     fontWeight: '700',
   },
@@ -716,7 +747,7 @@ export const styles = StyleSheet.create({
 
   cardMuted: {
     marginTop: 4,
-    color: '#7A8783',
+    color: '#56645F',
     lineHeight: 20,
   },
 
@@ -751,14 +782,14 @@ export const styles = StyleSheet.create({
   outlineButton: {
     marginTop: 18,
     borderWidth: 1,
-    borderColor: '#2F6F63',
+    borderColor: '#53166F',
     borderRadius: 14,
     paddingVertical: 13,
     alignItems: 'center',
   },
 
   outlineButtonText: {
-    color: '#2F6F63',
+    color: '#53166F',
     fontWeight: '800',
   },
 
