@@ -71,6 +71,7 @@ function usePawsoState() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'caregiver' | 'sitter'>('caregiver');
   const [inviteCode, setInviteCode] = useState('');
+  const [inviteEmailStatus, setInviteEmailStatus] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [memberDisplayName, setMemberDisplayName] = useState('');
   const canViewMedical = householdRole === 'owner' || householdRole === 'caregiver';
@@ -506,6 +507,7 @@ function usePawsoState() {
       setHouseholdBusy(true);
       setHouseholdError('');
       setInviteCode('');
+      setInviteEmailStatus('');
 
       const { data, error } = await supabase.rpc('create_household_invitation', {
         target_household: householdId,
@@ -514,7 +516,35 @@ function usePawsoState() {
       });
 
       if (error) throw error;
-      setInviteCode(String(data ?? ''));
+      const createdCode = String(data ?? '');
+      setInviteCode(createdCode);
+
+      if (inviteEmail.trim()) {
+        setInviteEmailStatus('Sending invitation email…');
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/v1/household-invitations/email`, {
+            method: 'POST',
+            headers: await getApiAuthHeaders('application/json'),
+            body: JSON.stringify({
+              household_id: householdId,
+              email: inviteEmail.trim().toLowerCase(),
+              role: inviteRole,
+              invite_code: createdCode,
+            }),
+          });
+          const body = await response.json().catch(() => null);
+          if (!response.ok) {
+            throw new Error(getApiErrorMessage(body, 'Automatic email is unavailable.'));
+          }
+          setInviteEmailStatus('Invitation email sent.');
+        } catch (emailError) {
+          setInviteEmailStatus(
+            emailError instanceof Error
+              ? `${emailError.message} You can still use Email or Share below.`
+              : 'Automatic email is unavailable. Use Email or Share below.'
+          );
+        }
+      }
     } catch (error) {
       console.log('Create household invitation error:', error);
       setHouseholdError(
@@ -600,8 +630,12 @@ function usePawsoState() {
         data.user.email?.split('@')[0]
       );
       await loadExistingPet(data.user.id, activeHouseholdId);
-      setAccountMessage('Signed in. Your Pawso records are ready.');
-      setScreen('pets');
+      setAccountMessage(
+        joinCode.trim()
+          ? 'Signed in. Your invitation is ready to accept.'
+          : 'Signed in. Your Pawso records are ready.'
+      );
+      setScreen(joinCode.trim() ? 'household' : 'pets');
     } catch (error) {
       console.log('Sign in error:', error);
       setAccountError(
@@ -644,6 +678,23 @@ function usePawsoState() {
   }
 
   async function handleAuthCallback(url: string) {
+    const inviteMatch = url.match(/\/invite\/([0-9a-f-]{36})/i);
+    if (inviteMatch) {
+      setJoinCode(inviteMatch[1]);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session?.user && !session.user.is_anonymous) {
+        setScreen('household');
+      } else {
+        setAccountMessage(
+          'Invitation saved. Sign in or secure your account, then join the household.'
+        );
+        setScreen('account');
+      }
+      return;
+    }
+
     if (!url.includes('/auth/callback')) return;
 
     try {
@@ -776,6 +827,40 @@ function usePawsoState() {
         error instanceof Error
           ? error.message
           : 'Could not secure your Pawso account.'
+      );
+    } finally {
+      setAccountBusy(false);
+    }
+  }
+
+  async function deleteAccount() {
+    try {
+      setAccountBusy(true);
+      setAccountError('');
+      setAccountMessage('');
+
+      const response = await fetch(`${API_BASE_URL}/api/v1/account`, {
+        method: 'DELETE',
+        headers: await getApiAuthHeaders(),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(getApiErrorMessage(body, 'Could not delete your Pawso account.'));
+      }
+
+      await supabase.auth.signOut();
+      setAccountEmail('');
+      setAccountIsAnonymous(true);
+      setPets([]);
+      setCurrentPetId(null);
+      setHouseholdId(null);
+      setHouseholdMembers([]);
+      setHouseholdInvitations([]);
+      setScreen('welcome');
+    } catch (error) {
+      console.log('Delete account error:', error);
+      setAccountError(
+        error instanceof Error ? error.message : 'Could not delete your Pawso account.'
       );
     } finally {
       setAccountBusy(false);
@@ -2720,6 +2805,7 @@ function usePawsoState() {
     inviteRole,
     setInviteRole,
     inviteCode,
+    inviteEmailStatus,
     joinCode,
     setJoinCode,
     memberDisplayName,
@@ -2753,6 +2839,7 @@ function usePawsoState() {
     setRecoveryPassword,
     completePasswordRecovery,
     secureAccount,
+    deleteAccount,
     signOutAccount,
     setApiStatus,
     authReady,
