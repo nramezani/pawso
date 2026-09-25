@@ -24,3 +24,17 @@ export const supabase = createClient(
     },
   }
 );
+
+export function createTransientAuthClient() {
+  return createClient(
+    supabaseUrl ?? 'https://missing-config.supabase.co',
+    supabasePublishableKey ?? 'missing-publishable-key',
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false,
+      },
+    }
+  );
+}

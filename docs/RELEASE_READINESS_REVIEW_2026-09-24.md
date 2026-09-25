@@ -1,135 +1,71 @@
-# Pawso Release Readiness Review — 2026-09-24
+# Pawso release readiness review — 2026-09-24
 
-This review covers the mobile app, FastAPI backend, Supabase migrations,
-authentication and household workflows, AI-assisted document extraction,
-notifications, accessibility, and release tooling.
+## Decision
 
-## Completed in the release-readiness repair batch
+The planned product and engineering scope is code-complete for a controlled
+private beta. Release remains blocked until the account owner completes the
+external checklist: rotate the exposed API key, apply migration `20260929`,
+configure/redeploy production, verify live staging RLS, and pass the physical
+iOS/Android test matrix.
 
-- Fixed 24-hour medication time validation (`08:00` and other valid values now
-  pass while malformed values remain blocked).
-- Changed medication and care-task removal to archive records, preserving dose
-  and completion history.
-- Made care-task completion transactional with its audit entry.
-- Made AI extraction confirmation transactional with timeline creation and
-  idempotent against retries.
-- Added extraction model and prompt-version provenance.
-- Preserved and exposed diagnosis certainty, extraction warnings, and medication
-  text during owner review; extracted medications never change an active
-  schedule automatically.
-- Added first-use AI document-processing consent and an account control that
-  resets it.
-- Added a way to reopen pending AI reviews from Documents.
-- Persisted the selected household per user and fall back to the most recently
-  joined valid household, preventing an empty personal household from replacing
-  shared care after relaunch.
-- Bound addressed invitations to the authenticated recipient email.
-- Fixed invitation revocation to use the database's allowed `revoked` status.
-- Cleared all user-scoped state and local reminders during sign-out/account
-  deletion, then prepared a fresh anonymous workspace.
-- Added editable pet profiles for household owners.
-- Added strict local-date parsing, avoiding UTC date shifts and impossible dates.
-- Added notification tap routing to the relevant pet's medication or care view.
-- Added startup, retry, and crash-fallback screens to prevent silent blank states.
-- Improved password guidance, keyboard handling, Android-safe navigation
-  contrast, touch targets, tablet content width, branding, and dense Today-page
-  tool presentation.
-- Added the new logo to the in-app welcome/loading experience and aligned the
-  Android adaptive-icon background.
-- Made clean CI installs reproducible with `npm ci` and declared the required
-  `expo-font` peer directly.
-- Added accessible, data-backed visual summaries across the pet profile, Today,
-  medications, care, timeline, documents, household, Ask Pawso, Smart Care, and
-  vet-preparation screens. The weight chart shows exact recorded values and
-  deliberately avoids making a clinical judgment about weight change.
-- Added honest seven-day medication-outcome and six-month health-activity
-  charts, timeline/document filters, and actor/timestamp care history.
-- Corrected care persistence so completed tasks remain available after reload
-  and removed the unsupported medication `missed` state from the UI.
-- Made medication-plus-schedules and weight-event-plus-profile writes atomic.
-- Hardened database function execution, protected task completion from duplicate
-  rows, and prevented cross-pet data from lingering during pet switches.
-- Added a branded native splash configuration and Android/iOS bundle checks to
-  CI.
+## Completed release work
 
-## Database migrations that must be applied
+- Full pet lifecycle, private pet photos, emergency profile, and shareable PDF.
+- Full medication lifecycle with courses/refills, edit/pause/snooze, atomic dose
+  logging, and audit-preserving corrections.
+- Recurring care lifecycle with skip/snooze/pause/end and actor history.
+- Structured weight, symptom, and lab entry plus clinically honest charts.
+- Veterinary upload/extraction/review/confirmation with consent, provenance,
+  uncertainty, archive/restore/download/delete, and private-object cleanup.
+- Household email/code/deep-link invitation, switcher, timezone, role changes,
+  revocation/removal, and sitter medical-privacy boundaries.
+- Auth recovery callbacks, temporary-account protection, cooldown/error UI,
+  relaunch recovery, and clean sign-out/deletion state.
+- JSON export; pet, document, and account deletion; retention/vendor draft.
+- Owner-only opt-in read-only offline mode and system/light/dark appearance.
+- Accessible visuals, touch targets, large-list controls, Android safe areas,
+  native splash/logo, error boundary, and privacy-safe diagnostics.
+- Production health/readiness, Postgres rate limiting, scheduled uptime check,
+  operations/backup/support/store runbooks, and hardened CI.
 
-Apply these in order to the Supabase project before testing this batch:
+## Database requirement
 
-1. `20260925_fix_household_invitation_cancellation.sql`
-2. `20260926_atomic_care_completion.sql`
-3. `20260927_atomic_extraction_confirmation.sql`
-4. `20260928_harden_rpc_access_and_care_history.sql`
+Apply every migration in filename order. Existing Pawso production projects
+that already have migrations through `20260928` need only:
 
-The first migration also secures addressed invitation codes to the recipient's
-signed-in email. The remaining migrations add transactional RPCs and access
-hardening used by this app version.
+`supabase/migrations/20260929_complete_product_foundation.sql`
 
-## Automated verification
+It adds the data model, private photo storage, RLS, audited/atomic RPCs, shared
+rate limiting, and direct-write restrictions required by app version `1.1.0`.
+Apply it to staging first; database migrations are forward-only.
 
-- TypeScript: pass
-- ESLint blocking errors: pass
-- Expo configuration parse: pass
-- Python compile: pass
-- Backend and migration contract tests: 20 pass
-- Medication-time regression check: pass for valid and invalid boundary cases
-- Expo Doctor: 21/21 checks pass
-- Android and iOS Metro exports: pass
+## Verification
 
-The live Supabase RLS suite still requires a disposable staging project and the
-owner/caregiver/sitter test accounts described in
-`supabase/tests/test_household_role_rls.py`.
+| Gate | Result |
+| --- | --- |
+| TypeScript | Pass |
+| ESLint, zero warnings | Pass |
+| Expo config | Pass |
+| Expo Doctor | 21/21 pass |
+| Android/iOS Metro export | Pass / pass |
+| Backend tests | 32 tests pass |
+| Python compile | Pass |
+| SQL parse | 10 migrations, 415 statements pass |
+| Python dependency audit | No known vulnerabilities |
+| npm audit | 13 moderate; 0 high/critical; no incompatible forced fix applied |
 
-## Manual device tests required before private beta
+## Manual evidence still required
 
-- Password reset on iOS and Android using one fresh email link on each device.
-- Addressed invite: correct email succeeds; a different signed-in email fails.
-- Relaunch as caregiver/sitter and confirm the shared pets remain selected.
-- Owner removes a member and revokes a pending invitation; access stops after
-  refresh/relaunch.
-- Create medication schedules at `00:00`, `08:00`, and `23:59`; reject `24:00`.
-- Complete and archive care/medication items; confirm history remains.
-- Upload a clear record and an uncertain record, review certainty/warnings, tap
-  Review later, reopen from Documents, and confirm once.
-- Enable local reminders, tap medication and care notifications, and verify the
-  correct pet screen opens. Repeat across a daylight-saving transition in a test
-  timezone before public release.
-- Large text and VoiceOver/TalkBack pass on Welcome, Account, Today, Review,
-  People & access, medications, and care tasks.
-- Internal iOS and Android builds with the final icon; splash branding must be
-  checked on a release build because Expo Go does not reproduce it exactly.
-- Record at least two weights and verify chart ordering, exact values, range,
-  accessibility summary, and the link back to the weight check-in flow.
+- Live disposable-staging role/RLS run with separate owner, caregiver, and
+  sitter accounts.
+- Fresh recovery and invitation link on both physical platforms, with no
+  localhost fallback.
+- Relaunch, offline opt-in, notification tap, timezone/DST, role revocation,
+  storage deletion, export, camera/photo, accessibility, and dark-mode matrix.
+- Store-signed TestFlight and Play internal builds; Expo Go is insufficient for
+  native notifications, splash/icon, permissions, and release behavior.
+- Legal review and publication of the policies, verified backup retention,
+  store privacy declarations, support page/inbox, and staged rollout plan.
 
-## Still required before public release
-
-### Product and privacy
-
-- Legal review and publication of the Privacy Policy and Terms, plus production
-  URLs in EAS environment variables.
-- Structured data export and deletion/archive controls for pets and documents.
-- Household switching for users who intentionally belong to multiple active
-  households, plus owner-driven role changes.
-- Recurring care schedules, medication course dates/refills, and edit history.
-- Emergency pet card and veterinarian/caregiver handoff export.
-
-### Operations
-
-- Privacy-safe crash reporting and backend monitoring/alerting.
-- Staging Supabase project with RLS tests in a protected workflow.
-- EAS environment verification for development, preview, and production.
-- App Store/Play Store metadata, support contact, data-safety declarations, and
-  final production-build review.
-
-### Business
-
-- Keep the private beta free. Validate retention and caregiver usage before
-  implementing memberships.
-- After validation, implement server-side entitlements and receipt validation;
-  do not enforce plans only in the client.
-
-## Dependency note
-
-The current npm audit reports moderate transitive findings but no high or
-critical findings. Do not run `npm audit fix --force` against this Expo project;
-review upgrades within the supported Expo SDK line instead.
+Use `docs/EXTERNAL_COMPLETION_CHECKLIST.md` for exact owner steps and
+`docs/STORE_RELEASE_CHECKLIST.md` for public submission.

@@ -1,7 +1,7 @@
 # Pawso Privacy Policy — Draft
 
 **Status:** Product draft for legal review before public beta  
-**Last updated:** September 21, 2026  
+**Last updated:** September 24, 2026
 **Operator:** [Insert legal business name and mailing address]  
 **Privacy contact:** [Insert monitored privacy email]
 

@@ -3,17 +3,19 @@
     "name": "Pawso",
     "slug": "pawso-temp",
     "owner": "narara",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "scheme": "pawso",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.narara.pawso"
+      "bundleIdentifier": "com.narara.pawso",
+      "buildNumber": "2"
     },
     "android": {
       "package": "com.narara.pawso",
+      "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#FBF8F2",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -39,9 +41,22 @@
           "backgroundColor": "#FBF8F2",
           "image": "./assets/android-icon-foreground.png",
           "imageWidth": 180,
-          "resizeMode": "contain"
+          "resizeMode": "contain",
+          "dark": {
+            "backgroundColor": "#111512",
+            "image": "./assets/android-icon-foreground.png"
+          }
         }
-      ]
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Pawso to choose a pet profile photo.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      "expo-sharing"
     ],
     "extra": {
       "eas": {

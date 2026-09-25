@@ -1,5 +1,7 @@
+import html
 import json
-from typing import Literal
+import logging
+from typing import Annotated, Literal
 
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,6 +13,7 @@ from rate_limit import enforce_ai_limits
 load_dotenv()
 
 router = APIRouter(dependencies=[Depends(enforce_ai_limits)])
+logger = logging.getLogger("pawso.ai")
 
 
 class PetContext(BaseModel):
@@ -60,8 +63,10 @@ class AskRequest(BaseModel):
 
 
 class AskResponse(BaseModel):
-    answer: str
-    source_ids: list[str]
+    answer: str = Field(min_length=1, max_length=8000)
+    source_ids: list[Annotated[str, Field(min_length=1, max_length=200)]] = Field(
+        max_length=200
+    )
     answer_type: Literal[
         "record_summary",
         "record_lookup",
@@ -84,14 +89,16 @@ class VetVisitPrepRequest(BaseModel):
 
 
 class VetVisitPrepResponse(BaseModel):
-    overview: str
-    priority_concerns: list[str]
-    current_medications: list[str]
-    recent_history: list[str]
-    follow_up_items: list[str]
-    questions_for_vet: list[str]
-    missing_information: list[str]
-    source_ids: list[str]
+    overview: str = Field(min_length=1, max_length=4000)
+    priority_concerns: list[Annotated[str, Field(max_length=1000)]] = Field(max_length=20)
+    current_medications: list[Annotated[str, Field(max_length=1000)]] = Field(max_length=30)
+    recent_history: list[Annotated[str, Field(max_length=1000)]] = Field(max_length=30)
+    follow_up_items: list[Annotated[str, Field(max_length=1000)]] = Field(max_length=30)
+    questions_for_vet: list[Annotated[str, Field(max_length=1000)]] = Field(max_length=30)
+    missing_information: list[Annotated[str, Field(max_length=1000)]] = Field(max_length=30)
+    source_ids: list[Annotated[str, Field(min_length=1, max_length=200)]] = Field(
+        max_length=200
+    )
 
 
 class SmartCarePlanRequest(BaseModel):
@@ -105,11 +112,14 @@ class SmartCarePlanRequest(BaseModel):
 
 
 class SmartCareSuggestion(BaseModel):
-    title: str
-    reason: str
-    notes: str
+    title: str = Field(min_length=1, max_length=160)
+    reason: str = Field(min_length=1, max_length=1000)
+    notes: str = Field(max_length=2000)
     task_type: Literal["follow_up", "monitoring", "routine_care"]
-    source_ids: list[str]
+    source_ids: list[Annotated[str, Field(min_length=1, max_length=200)]] = Field(
+        min_length=1,
+        max_length=20,
+    )
 
 
 class SmartCarePlanResponse(BaseModel):
@@ -230,7 +240,11 @@ def _source_payload(source: AskSource) -> dict:
     injection via extracted text.
     """
     payload = source.model_dump()
-    payload["text"] = f'<untrusted_source id="{source.id}">{source.text}</untrusted_source>'
+    safe_id = html.escape(source.id, quote=True)
+    safe_text = html.escape(source.text, quote=False)
+    payload["text"] = (
+        f'<untrusted_source id="{safe_id}">{safe_text}</untrusted_source>'
+    )
     return payload
 
 
@@ -238,8 +252,11 @@ def _source_payload(source: AskSource) -> dict:
 def ask_pawso(payload: AskRequest):
     try:
         client = get_client()
-    except RuntimeError as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except RuntimeError:
+        raise HTTPException(
+            status_code=503,
+            detail="Pawso AI is temporarily unavailable.",
+        )
 
     question_lower = payload.question.lower()
     urgent_match = any(term in question_lower for term in URGENT_TERMS)
@@ -276,7 +293,7 @@ def ask_pawso(payload: AskRequest):
     except HTTPException:
         raise
     except Exception as exc:
-        print(f"Ask Pawso error: {exc}")
+        logger.error("ask_failed error_type=%s", type(exc).__name__)
         raise HTTPException(
             status_code=500,
             detail="Pawso could not answer from the pet record right now.",
@@ -287,8 +304,11 @@ def ask_pawso(payload: AskRequest):
 def prepare_vet_visit(payload: VetVisitPrepRequest):
     try:
         client = get_client()
-    except RuntimeError as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except RuntimeError:
+        raise HTTPException(
+            status_code=503,
+            detail="Pawso AI is temporarily unavailable.",
+        )
 
     context = {
         "pet": payload.pet.model_dump(),
@@ -315,7 +335,7 @@ def prepare_vet_visit(payload: VetVisitPrepRequest):
     except HTTPException:
         raise
     except Exception as exc:
-        print(f"Vet Visit Prep error: {exc}")
+        logger.error("vet_visit_prep_failed error_type=%s", type(exc).__name__)
         raise HTTPException(
             status_code=500,
             detail="Pawso could not prepare the vet visit right now.",
@@ -326,8 +346,11 @@ def prepare_vet_visit(payload: VetVisitPrepRequest):
 def create_smart_care_plan(payload: SmartCarePlanRequest):
     try:
         client = get_client()
-    except RuntimeError as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except RuntimeError:
+        raise HTTPException(
+            status_code=503,
+            detail="Pawso AI is temporarily unavailable.",
+        )
 
     context = {
         "pet": payload.pet.model_dump(),
@@ -355,5 +378,5 @@ def create_smart_care_plan(payload: SmartCarePlanRequest):
     except HTTPException:
         raise
     except Exception as exc:
-        print(f"Smart Care Plan error: {exc}")
+        logger.error("smart_care_plan_failed error_type=%s", type(exc).__name__)
         raise HTTPException(status_code=500, detail="Pawso could not create care suggestions right now.")

@@ -6,193 +6,33 @@ import { ProgressOverview } from '../components/VisualSummary';
 import {
   Page,
   Header,
-  Label,
-  Input,
-  OptionButton,
   PrimaryButton,
   SecondaryButton,
-  Card,
-  Info,
-  QuickAction,
-  ReviewField,
   styles,
 } from '../components/ui';
 
 export function CareScreen() {
   const [showHistory, setShowHistory] = useState(false);
+  const [historyLimit, setHistoryLimit] = useState(10);
   const {
     setScreen,
     canManageCare,
-    apiStatus,
-    setApiStatus,
-    authReady,
-    setAuthReady,
-    authError,
-    setAuthError,
-    databaseError,
-    setDatabaseError,
-    isSavingPet,
-    setIsSavingPet,
-    isConfirmingExtraction,
-    setIsConfirmingExtraction,
-    currentPetId,
-    setCurrentPetId,
     petName,
-    setPetName,
-    petType,
-    setPetType,
-    breed,
-    setBreed,
-    petAge,
-    setPetAge,
-    petSex,
-    setPetSex,
-    alteredStatus,
-    setAlteredStatus,
-    weight,
-    setWeight,
-    microchip,
-    setMicrochip,
-    conditions,
-    setConditions,
-    allergies,
-    setAllergies,
-    medications,
-    setMedications,
-    vetClinic,
-    setVetClinic,
-    documentName,
-    setDocumentName,
-    documentSize,
-    setDocumentSize,
-    documentContentType,
-    setDocumentContentType,
-    currentDocumentId,
-    setCurrentDocumentId,
-    currentExtractionId,
-    setCurrentExtractionId,
-    uploadError,
-    setUploadError,
-    visitDate,
-    setVisitDate,
-    clinic,
-    setClinic,
-    finding,
-    setFinding,
-    diagnosis,
-    setDiagnosis,
-    followUp,
-    setFollowUp,
-    timelineEvents,
-    setTimelineEvents,
-    petDocuments,
-    setPetDocuments,
-    documentsLoading,
-    setDocumentsLoading,
-    documentsError,
-    setDocumentsError,
-    openingDocumentId,
-    setOpeningDocumentId,
-    medicationList,
-    setMedicationList,
-    medicationSchedules,
-    setMedicationSchedules,
-    medicationLogs,
-    setMedicationLogs,
-    medicationsLoading,
-    setMedicationsLoading,
-    medicationsError,
-    setMedicationsError,
-    isSavingMedication,
-    setIsSavingMedication,
-    loggingDoseId,
-    setLoggingDoseId,
-    newMedicationName,
-    setNewMedicationName,
-    newMedicationDose,
-    setNewMedicationDose,
-    newMedicationUnit,
-    setNewMedicationUnit,
-    newMedicationInstructions,
-    setNewMedicationInstructions,
     careTasks,
-    setCareTasks,
     taskCompletions,
-    setTaskCompletions,
     careLoading,
-    setCareLoading,
     careError,
-    setCareError,
-    savingCareTask,
-    setSavingCareTask,
     completingTaskId,
-    setCompletingTaskId,
-    newCareTitle,
-    setNewCareTitle,
-    newCareNotes,
-    setNewCareNotes,
-    newCareDate,
-    setNewCareDate,
-    newCareTime,
-    setNewCareTime,
-    askQuestion,
-    setAskQuestion,
-    askAnswer,
-    setAskAnswer,
-    askSources,
-    setAskSources,
-    askLoading,
-    setAskLoading,
-    askError,
-    setAskError,
-    initializeSupabase,
-    loadExistingPet,
-    loadTimeline,
-    askPawso,
-    openAskScreen,
-    getAskSourceLabel,
-    loadCareData,
-    parseCareDateTime,
-    openCareScreen,
-    createCareTask,
     completeCareTask,
+    skipCareTask,
+    setCareTaskState,
     deleteCareTask,
     deletingTaskId,
     formatDueLabel,
-    getMedicationUrgency,
-    loadMedicationData,
-    buildScheduledDate,
-    getTodayMedicationDoses,
-    formatMedicationTime,
-    openMedicationsScreen,
-    createMedication,
-    logMedicationDose,
-    loadDocuments,
-    openDocumentsScreen,
-    openOriginalDocument,
-    formatDocumentDate,
-    formatDocumentSize,
-    normalizeEventDate,
-    parseWeightKg,
-    createPetProfile,
-    checkBackend,
-    canCreateProfile,
-    petEmoji,
-    alteredLabel,
-    alteredValue,
-    persistExtractionProposal,
-    pickVetRecord,
-    confirmExtraction,
-    todayMedicationDoses,
-    pendingMedicationDoses,
-    completedMedicationDoses,
     activeCareTasks,
-    overdueMedicationDoses,
-    dueSoonMedicationDoses,
-    laterMedicationDoses,
     overdueCareTasks,
     upcomingCareTasks,
-    followUpEvents
+    householdTimeZone,
   } = usePawso();
 
   const completedTaskIds = new Set(
@@ -221,6 +61,7 @@ export function CareScreen() {
   const archivedTaskCount = careTasks.filter(
     (task) => !task.is_active && !completedTaskIds.has(task.id)
   ).length;
+  const pausedTasks = careTasks.filter((task) => task.is_active && task.paused_at);
 
 return (
       <Page scroll>
@@ -318,6 +159,17 @@ return (
                 <View style={{ flex: 1 }}>
                   <Text style={styles.documentCardTitle}>{task.title}</Text>
                   <Text style={styles.documentCardMeta}>{formatDueLabel(task.due_at)}</Text>
+                  {task.recurrence_frequency !== 'none' ? (
+                    <Text style={styles.documentCardMeta}>
+                      Repeats every {task.recurrence_interval > 1 ? `${task.recurrence_interval} ` : ''}
+                      {task.recurrence_frequency === 'daily'
+                        ? task.recurrence_interval > 1 ? 'days' : 'day'
+                        : task.recurrence_frequency === 'weekly'
+                        ? task.recurrence_interval > 1 ? 'weeks' : 'week'
+                        : task.recurrence_interval > 1 ? 'months' : 'month'}
+                      {task.recurrence_ends_on ? ` · through ${task.recurrence_ends_on}` : ''}
+                    </Text>
+                  ) : null}
                 </View>
 
                 {canManageCare ? (
@@ -362,9 +214,78 @@ return (
                   {completingTaskId === task.id ? 'Saving…' : '✓ Mark complete'}
                 </Text>
               </Pressable>
+
+              {canManageCare ? (
+                <View style={styles.compactActionRow}>
+                  <Pressable
+                    style={styles.compactActionButton}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Skip ${task.title}`}
+                    onPress={() =>
+                      Alert.alert(
+                        'Skip this occurrence?',
+                        'Pawso will record it as skipped and create the next occurrence if this task repeats.',
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          { text: 'Skip', onPress: () => skipCareTask(task) },
+                        ]
+                      )
+                    }
+                  >
+                    <Text style={styles.compactActionText}>Skip</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.compactActionButton}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Snooze ${task.title} for one hour`}
+                    onPress={() =>
+                      setCareTaskState(task, 'snooze', new Date(Date.now() + 60 * 60 * 1000))
+                    }
+                  >
+                    <Text style={styles.compactActionText}>Snooze 1 hour</Text>
+                  </Pressable>
+                  {task.recurrence_frequency !== 'none' ? (
+                    <Pressable
+                      style={styles.compactActionButton}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Pause ${task.title} series`}
+                      onPress={() => setCareTaskState(task, 'pause')}
+                    >
+                      <Text style={styles.compactActionText}>Pause series</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              ) : null}
             </View>
           ))
         )}
+
+        {pausedTasks.length > 0 ? (
+          <View style={styles.infoCard}>
+            <Text style={styles.cardStrong}>Paused care schedules</Text>
+            <Text style={styles.cardMuted}>
+              Paused schedules stay out of Today until resumed.
+            </Text>
+            {pausedTasks.map((task) => (
+              <View key={`paused-${task.id}`} style={styles.careListCard}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.cardStrong}>{task.title}</Text>
+                  <Text style={styles.cardMuted}>{formatDueLabel(task.due_at)}</Text>
+                </View>
+                {canManageCare ? (
+                  <Pressable
+                    style={styles.compactActionButton}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Resume ${task.title}`}
+                    onPress={() => setCareTaskState(task, 'resume')}
+                  >
+                    <Text style={styles.compactActionText}>Resume</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ))}
+          </View>
+        ) : null}
 
         {completedTaskEntries.length > 0 || archivedTaskCount > 0 ? (
           <View style={styles.infoCard}>
@@ -384,23 +305,29 @@ return (
             ) : null}
 
             {showHistory
-              ? completedTaskEntries.slice(0, 10).map(({ task, completion }) => (
+              ? completedTaskEntries.slice(0, historyLimit).map(({ task, completion }) => (
                   <View key={`history-${task.id}`} style={styles.careListCard}>
-                    <Text style={styles.careListIcon}>✓</Text>
+                    <Text style={styles.careListIcon}>
+                      {completion.outcome === 'skipped' ? '↷' : '✓'}
+                    </Text>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.cardStrong}>{task.title}</Text>
                       <Text style={styles.cardMuted}>
-                        Completed {new Date(completion.completed_at).toLocaleString()}
+                        {completion.outcome === 'skipped' ? 'Skipped' : 'Completed'}{' '}
+                        {new Date(completion.completed_at).toLocaleString([], {
+                          timeZone: householdTimeZone,
+                        })}
                         {completion.actor_name ? ` · ${completion.actor_name}` : ''}
                       </Text>
                     </View>
                   </View>
                 ))
               : null}
-            {showHistory && completedTaskEntries.length > 10 ? (
-              <Text style={styles.reminderFinePrint}>
-                Showing the 10 most recent completions.
-              </Text>
+            {showHistory && completedTaskEntries.length > historyLimit ? (
+              <SecondaryButton
+                title={`Show more (${completedTaskEntries.length - historyLimit} remaining)`}
+                onPress={() => setHistoryLimit((value) => value + 10)}
+              />
             ) : null}
           </View>
         ) : null}

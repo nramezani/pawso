@@ -1,5 +1,11 @@
 # Pawso Product and Technical Audit
 
+> Historical baseline from September 17, 2026. The findings in this document
+> drove the later implementation and are retained for traceability. For current
+> completion status and remaining external release gates, use
+> [the September 24 deep audit](DEEP_AUDIT_2026-09-24.md) and
+> [the external completion checklist](EXTERNAL_COMPLETION_CHECKLIST.md).
+
 Audit date: September 17, 2026  
 Repository: `nramezani/pawso`  
 Current stage: Functional local MVP

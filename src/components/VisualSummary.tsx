@@ -1,4 +1,16 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
+
+import { createPawsoStyles, pawsoColor } from './ui';
+
+const darkSeriesColors: Record<string, string> = {
+  '#2F6F63': '#78C8B2',
+  '#53166F': '#D7A5EF',
+  '#6F3C86': '#C998E1',
+  '#4E79A7': '#88B9E8',
+  '#D98B2B': '#F0B65F',
+  '#8A9691': '#AEB9B4',
+  '#9A4F3D': '#E7907D',
+};
 
 export type MetricTone = 'purple' | 'green' | 'amber' | 'neutral';
 
@@ -159,7 +171,10 @@ export function ActivityBarChart({
                         key={item.key}
                         style={{
                           height: Math.max(4, (value / maximum) * 76),
-                          backgroundColor: item.color,
+                          backgroundColor: pawsoColor(
+                            item.color,
+                            darkSeriesColors[item.color] ?? item.color
+                          ),
                         }}
                       />
                     );
@@ -180,7 +195,12 @@ export function ActivityBarChart({
             <View
               style={[
                 summaryStyles.activityLegendDot,
-                { backgroundColor: item.color },
+                {
+                  backgroundColor: pawsoColor(
+                    item.color,
+                    darkSeriesColors[item.color] ?? item.color
+                  ),
+                },
               ]}
             />
             <Text style={summaryStyles.activityLegendText}>{item.label}</Text>
@@ -200,7 +220,7 @@ export function FilterChipRow<T extends string>({
   onSelect,
 }: {
   label: string;
-  options: Array<{ value: T; label: string; count?: number }>;
+  options: { value: T; label: string; count?: number }[];
   selected: T;
   onSelect: (value: T) => void;
 }) {
@@ -247,7 +267,7 @@ export function FilterChipRow<T extends string>({
   );
 }
 
-const summaryStyles = StyleSheet.create({
+const summaryStyles = createPawsoStyles({
   metricStrip: {
     marginTop: 14,
     marginBottom: 14,

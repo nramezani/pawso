@@ -3,6 +3,11 @@ import Constants, { AppOwnership } from 'expo-constants';
 import { Platform } from 'react-native';
 
 import { supabase } from '../../lib/supabase';
+import {
+  addDaysToDateInput,
+  formatDateInputInTimeZone,
+  parseDateTimeInTimeZone,
+} from '../utils/dateTime';
 
 const ENABLED_KEY = 'pawso.localRemindersEnabled';
 const CHANNEL_ID = 'pawso-care-reminders';
@@ -105,7 +110,8 @@ export async function subscribeToPawsoNotificationResponses(
 }
 
 export async function syncPawsoLocalNotifications(
-  pets: { id: string; name: string }[]
+  pets: { id: string; name: string }[],
+  timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
 ) {
   const Notifications = await getNotifications();
   if (!Notifications) return 0;
@@ -130,18 +136,23 @@ export async function syncPawsoLocalNotifications(
   const petIds = pets.map((pet) => pet.id);
   const petNameById = new Map(pets.map((pet) => [pet.id, pet.name]));
   let scheduledCount = 0;
+  const now = Date.now();
 
   const { data: careTasks, error: careError } = await supabase
     .from('care_tasks')
-    .select('id, pet_id, title, due_at, is_active')
+    .select('id, pet_id, title, due_at, is_active, paused_at')
     .in('pet_id', petIds)
-    .eq('is_active', true);
+    .eq('is_active', true)
+    .is('paused_at', null)
+    .gt('due_at', new Date(now).toISOString())
+    .order('due_at', { ascending: true })
+    // Keep room under iOS's scheduled-notification ceiling for medications.
+    .limit(30);
 
   if (careError) throw careError;
 
-  const now = Date.now();
-
   for (const task of careTasks ?? []) {
+    if (task.paused_at) continue;
     const due = new Date(task.due_at);
     if (Number.isNaN(due.getTime()) || due.getTime() <= now) continue;
 
@@ -171,50 +182,69 @@ export async function syncPawsoLocalNotifications(
 
   const { data: medications, error: medicationError } = await supabase
     .from('medications')
-    .select('id, pet_id, name, dose, unit, is_active')
+    .select('id, pet_id, name, dose, unit, is_active, paused_at, start_date, end_date')
     .in('pet_id', petIds)
     .eq('is_active', true);
 
   if (medicationError) throw medicationError;
 
-  const medicationIds = (medications ?? []).map((medication) => medication.id);
+  const activeMedications = (medications ?? []).filter((medication) => !medication.paused_at);
+  const medicationIds = activeMedications.map((medication) => medication.id);
 
   if (medicationIds.length > 0) {
     const { data: schedules, error: scheduleError } = await supabase
       .from('medication_schedules')
-      .select('id, medication_id, pet_id, time_of_day')
+      .select('id, medication_id, pet_id, time_of_day, snoozed_until')
       .in('medication_id', medicationIds);
 
     if (scheduleError) throw scheduleError;
 
     const medicationById = new Map(
-      (medications ?? []).map((medication) => [medication.id, medication])
+      activeMedications.map((medication) => [medication.id, medication])
     );
 
-    for (const schedule of schedules ?? []) {
-      const medication = medicationById.get(schedule.medication_id);
-      if (!medication) continue;
-
-      const [hourValue, minuteValue] = String(schedule.time_of_day)
-        .split(':')
-        .map(Number);
-
-      if (
-        !Number.isInteger(hourValue) ||
-        !Number.isInteger(minuteValue) ||
-        hourValue < 0 ||
-        hourValue > 23 ||
-        minuteValue < 0 ||
-        minuteValue > 59
-      ) {
-        continue;
+    const occurrences: {
+      date: Date;
+      schedule: NonNullable<typeof schedules>[number];
+      medication: (typeof activeMedications)[number];
+    }[] = [];
+    const today = formatDateInputInTimeZone(new Date(), timeZone);
+    for (let dayOffset = 0; dayOffset < 30; dayOffset += 1) {
+      const dateValue = addDaysToDateInput(today, dayOffset);
+      for (const schedule of schedules ?? []) {
+        const medication = medicationById.get(schedule.medication_id);
+        if (!medication) continue;
+        if (medication.start_date && dateValue < medication.start_date) continue;
+        if (medication.end_date && dateValue > medication.end_date) continue;
+        const snoozedDate =
+          dayOffset === 0 && schedule.snoozed_until
+            ? new Date(schedule.snoozed_until)
+            : null;
+        const date =
+          snoozedDate &&
+          !Number.isNaN(snoozedDate.getTime()) &&
+          snoozedDate.getTime() > now
+            ? snoozedDate
+            : parseDateTimeInTimeZone(
+                dateValue,
+                String(schedule.time_of_day).slice(0, 5),
+                timeZone
+              );
+        if (!date || date.getTime() <= now) continue;
+        occurrences.push({ date, schedule, medication });
       }
+    }
+
+    occurrences.sort((a, b) => a.date.getTime() - b.date.getTime());
+    const capacity = Math.max(0, 60 - scheduledCount);
+    for (const occurrence of occurrences.slice(0, capacity)) {
+      const { schedule, medication, date } = occurrence;
 
       const petName = petNameById.get(schedule.pet_id) ?? 'your pet';
       const dose = [medication.dose, medication.unit].filter(Boolean).join(' ');
 
       await Notifications.scheduleNotificationAsync({
-        identifier: `medication:${schedule.id}`,
+        identifier: `medication:${schedule.id}:${date.toISOString().slice(0, 10)}`,
         content: {
           title: `${petName} · Medication`,
           body: dose
@@ -229,9 +259,8 @@ export async function syncPawsoLocalNotifications(
           },
         },
         trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.DAILY,
-          hour: hourValue,
-          minute: minuteValue,
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          date,
           channelId: CHANNEL_ID,
         },
       });

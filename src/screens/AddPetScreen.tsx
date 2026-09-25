@@ -24,6 +24,8 @@ export function AddPetScreen() {
     setBreed,
     petAge,
     setPetAge,
+    petDateOfBirth,
+    setPetDateOfBirth,
     petSex,
     setPetSex,
     alteredStatus,
@@ -41,6 +43,12 @@ export function AddPetScreen() {
     setMedications,
     vetClinic,
     setVetClinic,
+    emergencyNotes,
+    setEmergencyNotes,
+    emergencyContactName,
+    setEmergencyContactName,
+    emergencyContactPhone,
+    setEmergencyContactPhone,
     databaseError,
     isSavingPet,
     isEditingPet,
@@ -74,6 +82,7 @@ export function AddPetScreen() {
         value={petName}
         onChangeText={setPetName}
         placeholder="e.g. Vicki"
+        maxLength={120}
       />
 
       <Label text="What kind of pet? *" />
@@ -91,13 +100,23 @@ export function AddPetScreen() {
       </View>
 
       <Label text="Breed" />
-      <Input value={breed} onChangeText={setBreed} placeholder="Optional" />
+      <Input value={breed} onChangeText={setBreed} placeholder="Optional" maxLength={120} />
 
-      <Label text="Date of birth or approximate age" />
+      <Label text="Date of birth" />
+      <Input
+        value={petDateOfBirth}
+        onChangeText={setPetDateOfBirth}
+        placeholder="YYYY-MM-DD"
+        keyboardType="numbers-and-punctuation"
+        maxLength={10}
+      />
+
+      <Label text="Approximate age (if DOB is unknown)" />
       <Input
         value={petAge}
         onChangeText={setPetAge}
-        placeholder="e.g. May 2022 or about 4 years"
+        placeholder="e.g. about 4 years"
+        maxLength={80}
       />
 
       <Label text="Sex" />
@@ -147,10 +166,10 @@ export function AddPetScreen() {
           </Text>
 
           <Label text="Weight" />
-          <Input value={weight} onChangeText={setWeight} placeholder="e.g. 4 kg" />
+          <Input value={weight} onChangeText={setWeight} placeholder="e.g. 4 kg" maxLength={32} />
 
           <Label text="Microchip number" />
-          <Input value={microchip} onChangeText={setMicrochip} placeholder="Optional" />
+          <Input value={microchip} onChangeText={setMicrochip} placeholder="Optional" maxLength={80} />
 
           <Label text="Existing health conditions" />
           <Input
@@ -158,10 +177,11 @@ export function AddPetScreen() {
             onChangeText={setConditions}
             placeholder="e.g. kidney disease"
             multiline
+            maxLength={2000}
           />
 
           <Label text="Allergies" />
-          <Input value={allergies} onChangeText={setAllergies} placeholder="Optional" multiline />
+          <Input value={allergies} onChangeText={setAllergies} placeholder="Optional" multiline maxLength={2000} />
 
           <Label text="Current medications" />
           <Input
@@ -169,10 +189,36 @@ export function AddPetScreen() {
             onChangeText={setMedications}
             placeholder="Medication, dose, frequency"
             multiline
+            maxLength={2000}
           />
 
           <Label text="Primary vet or clinic" />
-          <Input value={vetClinic} onChangeText={setVetClinic} placeholder="Clinic name" />
+          <Input value={vetClinic} onChangeText={setVetClinic} placeholder="Clinic name" maxLength={200} />
+
+          <Text style={styles.sectionTitle}>Emergency handoff</Text>
+          <Label text="Emergency contact name" />
+          <Input
+            value={emergencyContactName}
+            onChangeText={setEmergencyContactName}
+            placeholder="Pet owner or backup contact"
+            maxLength={120}
+          />
+          <Label text="Emergency contact phone" />
+          <Input
+            value={emergencyContactPhone}
+            onChangeText={setEmergencyContactPhone}
+            placeholder="Phone number"
+            keyboardType="phone-pad"
+            maxLength={80}
+          />
+          <Label text="Emergency notes" />
+          <Input
+            value={emergencyNotes}
+            onChangeText={setEmergencyNotes}
+            placeholder="Important handling or emergency instructions"
+            multiline
+            maxLength={2000}
+          />
         </>
       ) : null}
 

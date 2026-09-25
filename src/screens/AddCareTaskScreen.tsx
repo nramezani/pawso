@@ -1,4 +1,4 @@
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
 import {
@@ -8,122 +8,15 @@ import {
   Input,
   OptionButton,
   PrimaryButton,
-  SecondaryButton,
-  Card,
-  Info,
-  QuickAction,
-  ReviewField,
   styles,
 } from '../components/ui';
 
 export function AddCareTaskScreen() {
   const {
     setScreen,
-    canManageCare,
-    apiStatus,
-    setApiStatus,
-    authReady,
-    setAuthReady,
-    authError,
-    setAuthError,
-    databaseError,
-    setDatabaseError,
-    isSavingPet,
-    setIsSavingPet,
-    isConfirmingExtraction,
-    setIsConfirmingExtraction,
-    currentPetId,
-    setCurrentPetId,
     petName,
-    setPetName,
-    petType,
-    setPetType,
-    breed,
-    setBreed,
-    petAge,
-    setPetAge,
-    petSex,
-    setPetSex,
-    alteredStatus,
-    setAlteredStatus,
-    weight,
-    setWeight,
-    microchip,
-    setMicrochip,
-    conditions,
-    setConditions,
-    allergies,
-    setAllergies,
-    medications,
-    setMedications,
-    vetClinic,
-    setVetClinic,
-    documentName,
-    setDocumentName,
-    documentSize,
-    setDocumentSize,
-    documentContentType,
-    setDocumentContentType,
-    currentDocumentId,
-    setCurrentDocumentId,
-    currentExtractionId,
-    setCurrentExtractionId,
-    uploadError,
-    setUploadError,
-    visitDate,
-    setVisitDate,
-    clinic,
-    setClinic,
-    finding,
-    setFinding,
-    diagnosis,
-    setDiagnosis,
-    followUp,
-    setFollowUp,
-    timelineEvents,
-    setTimelineEvents,
-    petDocuments,
-    setPetDocuments,
-    documentsLoading,
-    setDocumentsLoading,
-    documentsError,
-    setDocumentsError,
-    openingDocumentId,
-    setOpeningDocumentId,
-    medicationList,
-    setMedicationList,
-    medicationSchedules,
-    setMedicationSchedules,
-    medicationLogs,
-    setMedicationLogs,
-    medicationsLoading,
-    setMedicationsLoading,
-    medicationsError,
-    setMedicationsError,
-    isSavingMedication,
-    setIsSavingMedication,
-    loggingDoseId,
-    setLoggingDoseId,
-    newMedicationName,
-    setNewMedicationName,
-    newMedicationDose,
-    setNewMedicationDose,
-    newMedicationUnit,
-    setNewMedicationUnit,
-    newMedicationInstructions,
-    setNewMedicationInstructions,
-    careTasks,
-    setCareTasks,
-    taskCompletions,
-    setTaskCompletions,
-    careLoading,
-    setCareLoading,
     careError,
-    setCareError,
     savingCareTask,
-    setSavingCareTask,
-    completingTaskId,
-    setCompletingTaskId,
     newCareTitle,
     setNewCareTitle,
     newCareNotes,
@@ -132,62 +25,13 @@ export function AddCareTaskScreen() {
     setNewCareDate,
     newCareTime,
     setNewCareTime,
-    askQuestion,
-    setAskQuestion,
-    askAnswer,
-    setAskAnswer,
-    askSources,
-    setAskSources,
-    askLoading,
-    setAskLoading,
-    askError,
-    setAskError,
-    initializeSupabase,
-    loadExistingPet,
-    loadTimeline,
-    askPawso,
-    openAskScreen,
-    getAskSourceLabel,
-    loadCareData,
-    parseCareDateTime,
-    openCareScreen,
+    newCareFrequency,
+    setNewCareFrequency,
+    newCareInterval,
+    setNewCareInterval,
+    newCareEndsOn,
+    setNewCareEndsOn,
     createCareTask,
-    completeCareTask,
-    formatDueLabel,
-    getMedicationUrgency,
-    loadMedicationData,
-    buildScheduledDate,
-    getTodayMedicationDoses,
-    formatMedicationTime,
-    openMedicationsScreen,
-    createMedication,
-    logMedicationDose,
-    loadDocuments,
-    openDocumentsScreen,
-    openOriginalDocument,
-    formatDocumentDate,
-    formatDocumentSize,
-    normalizeEventDate,
-    parseWeightKg,
-    createPetProfile,
-    checkBackend,
-    canCreateProfile,
-    petEmoji,
-    alteredLabel,
-    alteredValue,
-    persistExtractionProposal,
-    pickVetRecord,
-    confirmExtraction,
-    todayMedicationDoses,
-    pendingMedicationDoses,
-    completedMedicationDoses,
-    activeCareTasks,
-    overdueMedicationDoses,
-    dueSoonMedicationDoses,
-    laterMedicationDoses,
-    overdueCareTasks,
-    upcomingCareTasks,
-    followUpEvents
   } = usePawso();
 
 return (
@@ -204,7 +48,43 @@ return (
           value={newCareTitle}
           onChangeText={setNewCareTitle}
           placeholder="e.g. Repeat urinalysis"
+          maxLength={160}
         />
+
+        <Text style={styles.sectionTitle}>Repeat</Text>
+        <Text style={styles.cardMuted}>
+          Pawso creates the next occurrence only after this one is completed or skipped.
+        </Text>
+        <View style={styles.scheduleWrap}>
+          {(['none', 'daily', 'weekly', 'monthly'] as const).map((frequency) => (
+            <OptionButton
+              key={frequency}
+              title={frequency === 'none' ? 'One time' : frequency[0].toUpperCase() + frequency.slice(1)}
+              selected={newCareFrequency === frequency}
+              onPress={() => setNewCareFrequency(frequency)}
+            />
+          ))}
+        </View>
+        {newCareFrequency !== 'none' ? (
+          <>
+            <Label text={`Repeat every how many ${newCareFrequency === 'daily' ? 'days' : newCareFrequency === 'weekly' ? 'weeks' : 'months'}?`} />
+            <Input
+              value={newCareInterval}
+              onChangeText={setNewCareInterval}
+              keyboardType="number-pad"
+              placeholder="1"
+              maxLength={2}
+            />
+            <Label text="Stop repeating after (optional)" />
+            <Input
+              value={newCareEndsOn}
+              onChangeText={setNewCareEndsOn}
+              placeholder="YYYY-MM-DD"
+              keyboardType="numbers-and-punctuation"
+              maxLength={10}
+            />
+          </>
+        ) : null}
 
         <Label text="Notes" />
         <Input
@@ -212,6 +92,7 @@ return (
           onChangeText={setNewCareNotes}
           placeholder="Optional details"
           multiline
+          maxLength={2000}
         />
 
         <Label text="Due date *" />
@@ -219,6 +100,7 @@ return (
           value={newCareDate}
           onChangeText={setNewCareDate}
           placeholder="YYYY-MM-DD"
+          maxLength={10}
         />
 
         <Label text="Due time *" />
@@ -226,6 +108,7 @@ return (
           value={newCareTime}
           onChangeText={setNewCareTime}
           placeholder="09:00"
+          maxLength={5}
         />
 
         <Text style={styles.safetyText}>

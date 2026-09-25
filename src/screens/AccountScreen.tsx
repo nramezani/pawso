@@ -1,7 +1,7 @@
 import { Alert, Linking, Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
-import { PRIVACY_POLICY_URL, TERMS_OF_USE_URL } from '../config';
+import { PRIVACY_POLICY_URL, SUPPORT_EMAIL, TERMS_OF_USE_URL } from '../config';
 import {
   Page,
   Header,
@@ -9,6 +9,7 @@ import {
   Label,
   PrimaryButton,
   SecondaryButton,
+  OptionButton,
   styles,
 } from '../components/ui';
 
@@ -16,7 +17,7 @@ export function AccountScreen() {
   function confirmDeleteAccount(onConfirm: () => void) {
     Alert.alert(
       'Delete Pawso account?',
-      'This permanently deletes your account and Pawso data. Download any original veterinary files you need first; a complete data export is not available yet. This cannot be undone.',
+      'This permanently deletes your account and Pawso data. Export your structured data and download any original veterinary files you need first. This cannot be undone.',
       [
         { text: 'Keep account', style: 'cancel' },
         { text: 'Delete permanently', style: 'destructive', onPress: onConfirm },
@@ -25,19 +26,16 @@ export function AccountScreen() {
   }
 
   function confirmExistingAccountSignIn(petCount: number, onConfirm: () => void) {
-    if (petCount === 0) {
-      onConfirm();
-      return;
-    }
-
     Alert.alert(
-      'Switch to another account?',
-      `This temporary workspace has ${petCount} pet${
-        petCount === 1 ? '' : 's'
-      }. Signing in will not move those records. Secure this temporary account instead if you want to keep them.`,
+      'Discard temporary workspace?',
+      `Signing in will permanently delete this temporary workspace${
+        petCount > 0
+          ? ` and its ${petCount} pet${petCount === 1 ? '' : 's'}`
+          : ''
+      }. Secure the temporary account instead if you want to keep it.`,
       [
         { text: 'Keep temporary account', style: 'cancel' },
-        { text: 'Sign in anyway', onPress: onConfirm },
+        { text: 'Discard & sign in', style: 'destructive', onPress: onConfirm },
       ]
     );
   }
@@ -59,6 +57,7 @@ export function AccountScreen() {
     setSignInEmail,
     signInPassword,
     setSignInPassword,
+    passwordResetCooldown,
     signInAccount,
     requestPasswordReset,
     accountRecoveryMode,
@@ -70,6 +69,17 @@ export function AccountScreen() {
     deleteAccount,
     signOutAccount,
     pets,
+    exportAccountData,
+    dataRightsBusy,
+    dataRightsMessage,
+    dataRightsError,
+    appearanceMode,
+    setAppearanceMode,
+    isOnline,
+    offlineSnapshotAt,
+    offlineAccessEnabled,
+    updateOfflineAccess,
+    canManageMedical,
   } = usePawso();
 
   return (
@@ -155,8 +165,14 @@ export function AccountScreen() {
             onPress={() => confirmExistingAccountSignIn(pets.length, signInAccount)}
           />
           <SecondaryButton
-            title={accountBusy ? 'Sending…' : 'Forgot password'}
-            disabled={accountBusy}
+            title={
+              accountBusy
+                ? 'Sending…'
+                : passwordResetCooldown > 0
+                ? `Email sent · retry in ${passwordResetCooldown}s`
+                : 'Forgot password'
+            }
+            disabled={accountBusy || passwordResetCooldown > 0}
             onPress={requestPasswordReset}
           />
           <SecondaryButton
@@ -273,6 +289,17 @@ export function AccountScreen() {
         </>
       ) : null}
 
+      {SUPPORT_EMAIL ? (
+        <SecondaryButton
+          title="Contact Pawso support"
+          onPress={() =>
+            Linking.openURL(
+              `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Pawso support request')}`
+            )
+          }
+        />
+      ) : null}
+
       <SecondaryButton
         title="Reset AI document consent"
         onPress={resetAiProcessingConsent}
@@ -287,20 +314,81 @@ export function AccountScreen() {
         </Text>
       </View>
 
-      {!accountIsAnonymous ? (
-        <>
-          <Text style={styles.sectionTitle}>Account data</Text>
+      <Text style={styles.sectionTitle}>Account data</Text>
+      <Text style={styles.cardMuted}>
+        Save a portable JSON copy of the structured data you can access.
+        Original veterinary files remain available from Medical Records.
+      </Text>
+      <PrimaryButton
+        title={dataRightsBusy ? 'Preparing export…' : 'Export my Pawso data'}
+        disabled={dataRightsBusy}
+        onPress={exportAccountData}
+      />
+      <SecondaryButton
+        title={
+          accountBusy
+            ? 'Deleting account…'
+            : accountIsAnonymous
+            ? 'Delete temporary workspace'
+            : 'Delete my account'
+        }
+        disabled={accountBusy}
+        onPress={() => confirmDeleteAccount(deleteAccount)}
+      />
+      {dataRightsMessage ? (
+        <View style={styles.infoCard}>
+          <Text style={styles.cardStrong}>{dataRightsMessage}</Text>
+        </View>
+      ) : null}
+      {dataRightsError ? (
+        <View style={styles.errorCard}>
+          <Text style={styles.errorTitle}>Data action failed</Text>
+          <Text style={styles.errorText}>{dataRightsError}</Text>
+        </View>
+      ) : null}
+
+      <Text style={styles.sectionTitle}>Appearance</Text>
+      <View style={styles.scheduleWrap}>
+        {(['system', 'light', 'dark'] as const).map((mode) => (
+          <OptionButton
+            key={mode}
+            title={mode[0].toUpperCase() + mode.slice(1)}
+            selected={appearanceMode === mode}
+            onPress={() => setAppearanceMode(mode)}
+          />
+        ))}
+      </View>
+
+      <Text style={styles.sectionTitle}>Connection</Text>
+      <View style={isOnline ? styles.infoCard : styles.warningCard}>
+        <Text style={isOnline ? styles.cardStrong : styles.warningTitle}>
+          {isOnline ? 'Online' : 'Offline read-only mode'}
+        </Text>
+        <Text style={isOnline ? styles.cardMuted : styles.warningText}>
+          {isOnline
+            ? 'Pawso can sync changes.'
+            : offlineSnapshotAt
+            ? `Showing saved data from ${new Date(offlineSnapshotAt).toLocaleString()}. Reconnect before making changes.`
+            : 'Reconnect to load and change Pawso records.'}
+        </Text>
+      </View>
+      {canManageMedical ? (
+        <View style={styles.infoCard}>
+          <Text style={styles.cardStrong}>Offline access</Text>
           <Text style={styles.cardMuted}>
-            Account deletion is permanent. Download any original veterinary
-            files you need first. A complete Pawso data export is not available
-            yet.
+            {offlineAccessEnabled
+              ? 'Enabled. Pawso keeps a read-only copy of recent pet and care information in this app’s device storage and removes it when you sign out.'
+              : 'Off by default. Enable it only if you want recent pet and care information available when this phone has no connection.'}
           </Text>
           <SecondaryButton
-            title={accountBusy ? 'Deleting account…' : 'Delete my account'}
-            disabled={accountBusy}
-            onPress={() => confirmDeleteAccount(deleteAccount)}
+            title={offlineAccessEnabled ? 'Turn off and clear saved copy' : 'Enable offline access'}
+            onPress={() =>
+              updateOfflineAccess(!offlineAccessEnabled).catch(() =>
+                Alert.alert('Offline access', 'Pawso could not change this setting.')
+              )
+            }
           />
-        </>
+        </View>
       ) : null}
     </Page>
   );

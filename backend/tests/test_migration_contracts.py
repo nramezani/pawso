@@ -72,6 +72,87 @@ class MigrationContractTests(unittest.TestCase):
         self.assertIn("insert into public.medication_schedules", hardening)
         self.assertIn("update public.pets", hardening)
 
+    def test_complete_product_migration_covers_data_rights_and_workflows(self):
+        migration = (
+            MIGRATIONS / "20260929_complete_product_foundation.sql"
+        ).read_text(encoding="utf-8").lower()
+
+        for required_fragment in (
+            "add column if not exists time_zone",
+            "add column if not exists archived_at",
+            "add column if not exists snoozed_until",
+            "add column if not exists scheduled_due_at",
+            "function public.correct_medication_log",
+            "function public.save_medication_with_schedules",
+            "function public.record_medication_dose",
+            "function public.create_care_task_with_recurrence",
+            "function public.resolve_care_task",
+            "function public.create_household_invitation",
+            "function public.accept_household_invitation",
+            "function public.record_structured_symptom",
+            "function public.record_lab_result_entry",
+            "function public.record_weight_check_in",
+            "function public.consume_api_rate_limit",
+            "function public.confirm_vet_extraction",
+            "insert into storage.buckets",
+            "documents_metadata_length_check",
+            "pets_profile_length_check",
+        ):
+            self.assertIn(required_fragment, migration)
+
+        self.assertIn("revoke all on public.api_rate_limits", migration)
+        self.assertIn("from public, anon", migration)
+        self.assertIn("to authenticated", migration)
+        self.assertIn("bucket_id = 'pet-photos'", migration)
+        self.assertIn("(storage.foldername(name))[1] = auth.uid()::text", migration)
+        self.assertIn("coalesce(task_row.scheduled_due_at, task_row.due_at)", migration)
+        self.assertIn("log_row.user_id is distinct from auth.uid()", migration)
+        self.assertIn("archived medications cannot be edited", migration)
+        self.assertIn("dose time does not match the medication schedule", migration)
+        self.assertIn("a dose can only be logged for the current household day", migration)
+        self.assertIn("for update of schedule", migration)
+        self.assertIn("existing_log.schedule_id = target_schedule", migration)
+        self.assertIn("auth.jwt() ->> 'is_anonymous'", migration)
+        self.assertIn("secure your pawso account before sending invitations", migration)
+        self.assertIn("symptom date cannot be in the future", migration)
+        self.assertIn("lab date cannot be in the future", migration)
+        self.assertIn("laboratory value is outside pawso''s supported range", migration)
+        self.assertIn("weight date cannot be in the future", migration)
+        self.assertIn(
+            "foreign key (accepted_by) references auth.users(id) on delete set null",
+            migration,
+        )
+        self.assertIn("on conflict (extraction_id, field_type)", migration)
+        self.assertIn("visit date cannot be in the future", migration)
+        self.assertIn("jsonb_array_length(medications_payload) > 30", migration)
+        self.assertIn("revoke execute on function public.confirm_vet_extraction", migration)
+        self.assertIn(
+            "revoke insert, update, delete on public.medication_logs from authenticated",
+            migration,
+        )
+
+    def test_structured_health_writes_are_rpc_only(self):
+        migration = (
+            MIGRATIONS / "20260929_complete_product_foundation.sql"
+        ).read_text(encoding="utf-8").lower()
+
+        self.assertIn(
+            "revoke insert, update, delete on public.symptom_entries from authenticated",
+            migration,
+        )
+        self.assertIn(
+            "revoke insert, update, delete on public.lab_results from authenticated",
+            migration,
+        )
+        self.assertIn(
+            "grant execute on function public.record_structured_symptom",
+            migration,
+        )
+        self.assertIn(
+            "grant execute on function public.record_lab_result_entry",
+            migration,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

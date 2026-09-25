@@ -2,9 +2,12 @@
 
 Pawso is an AI-powered pet-care copilot for managing veterinary records, medications, care routines, reminders, household collaboration, and grounded pet-specific questions.
 
-The mobile experience includes accessible visual summaries for weight history,
-daily care progress, medication logging, current care tasks, health events,
-documents, household access, and AI source coverage.
+The mobile experience includes accessible visual summaries for weight, symptoms,
+lab values, daily care progress, medication logging, current care tasks, health
+events, documents, household access, and AI source coverage. It also includes
+pet photos, a shareable emergency card, recurring care, medication-course and
+refill management, household switching, owner-controlled offline access, data
+export/deletion, and light/dark appearance settings.
 
 ## Technology
 
@@ -74,11 +77,12 @@ http://127.0.0.1:8000/health
 
 ```powershell
 npm exec -- tsc --noEmit
+npm run lint:all
 ```
 
 ```powershell
 cd backend
-.\.venv\Scripts\python.exe -m py_compile main.py ask_router.py
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
 ## Production deployment
@@ -101,6 +105,11 @@ health endpoints are `/health` and `/ready`.
 - [Membership and pricing recommendation](docs/MEMBERSHIP_AND_PRICING.md)
 - [Release readiness review (2026-09-24)](docs/RELEASE_READINESS_REVIEW_2026-09-24.md)
 - [Deep product, workflow, UI, and engineering audit (2026-09-24)](docs/DEEP_AUDIT_2026-09-24.md)
+- [Architecture and trust boundaries](docs/ARCHITECTURE.md)
+- [External completion checklist](docs/EXTERNAL_COMPLETION_CHECKLIST.md)
+- [Data governance and vendor register](docs/DATA_GOVERNANCE_AND_VENDORS.md)
+- [Production operations runbook](docs/PRODUCTION_OPERATIONS.md)
+- [App Store and Play release checklist](docs/STORE_RELEASE_CHECKLIST.md)
 - [EAS environment setup](docs/EAS_ENVIRONMENT_SETUP.md)
 - [Backend deployment guide](docs/BACKEND_DEPLOYMENT.md)
 - [Baseline Supabase schema](supabase/migrations/20260911_core_schema.sql)
@@ -108,10 +117,15 @@ health endpoints are `/health` and `/ready`.
 - [Reconciled household role permissions](supabase/migrations/20260923_reconcile_household_role_rls.sql)
 
 Apply all Supabase migrations in filename order. The mobile app expects the
-transactional, invitation, and access-hardening fixes in migrations `20260925`
-through `20260928`.
+transactional, invitation, access-hardening, and product-completion changes in
+migrations `20260925` through `20260929`.
 
 ## Current status
 
-Pawso is a private-beta candidate under active development. Complete the P0
-items in the deep audit before distributing the next build.
+Pawso's planned private-beta feature and engineering work is implemented. It is
+a private-beta candidate after migration `20260929` is applied and the external
+security, deployment, staging, and physical-device gates in
+`docs/EXTERNAL_COMPLETION_CHECKLIST.md` pass. Public store release additionally
+requires legal review, published policies, store-console work, and a staged
+release. Paid membership remains intentionally deferred until beta retention
+and shared-care usage justify it.

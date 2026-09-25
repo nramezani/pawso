@@ -9,8 +9,21 @@ import {
   Text,
   TextInput,
   View,
+  type ImageStyle,
+  type TextStyle,
+  type ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+let activeColorScheme: 'light' | 'dark' = 'light';
+
+export function setPawsoColorScheme(colorScheme: 'light' | 'dark') {
+  activeColorScheme = colorScheme;
+}
+
+export function pawsoColor(light: string, dark: string) {
+  return activeColorScheme === 'dark' ? dark : light;
+}
 
 export function Page({
   children,
@@ -37,7 +50,7 @@ export function Page({
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" />
+      <StatusBar style={activeColorScheme === 'dark' ? 'light' : 'dark'} />
 
       {keyboard ? (
         <KeyboardAvoidingView
@@ -105,7 +118,7 @@ export function Input(props: any) {
   return (
     <TextInput
       {...props}
-      placeholderTextColor="#68746F"
+      placeholderTextColor={activeColorScheme === 'dark' ? '#AEBAB4' : '#68746F'}
       style={[
         styles.input,
         props.multiline && styles.textArea,
@@ -275,12 +288,14 @@ export function ReviewField({
   setValue,
   multiline = false,
   warning = false,
+  maxLength = 4000,
 }: {
   label: string;
   value: string;
   setValue: (value: string) => void;
   multiline?: boolean;
   warning?: boolean;
+  maxLength?: number;
 }) {
   return (
     <View style={styles.reviewField}>
@@ -305,6 +320,7 @@ export function ReviewField({
       <TextInput
         value={value}
         onChangeText={setValue}
+        maxLength={maxLength}
         multiline={multiline}
         style={[
           styles.reviewInput,
@@ -316,7 +332,7 @@ export function ReviewField({
   );
 }
 
-export const styles = StyleSheet.create({
+const styleDefinitions = {
   container: {
     flex: 1,
     backgroundColor: '#F8F6F1',
@@ -573,6 +589,19 @@ export const styles = StyleSheet.create({
 
   avatarEmoji: {
     fontSize: 50,
+  },
+  profilePhotoImage: {
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    backgroundColor: '#E2F0EB',
+  },
+  petListPhoto: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
 
   profileName: {
@@ -1021,6 +1050,20 @@ export const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     color: '#8A682E',
+  },
+  warningCard: {
+    marginTop: 14,
+    marginBottom: 14,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E9C6B5',
+    backgroundColor: '#FFF5DD',
+  },
+  warningTitle: {
+    color: '#8A682E',
+    fontSize: 15,
+    fontWeight: '800',
   },
 
   confirmCard: {
@@ -1584,4 +1627,113 @@ export const styles = StyleSheet.create({
     color: '#1F6B57',
     letterSpacing: 0.4,
   },
-});
+  chartValueLabel: {
+    color: '#56645F',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  chartAxisLabel: {
+    width: '100%',
+    minHeight: 18,
+    color: '#66736F',
+    fontSize: 9,
+    textAlign: 'center',
+  },
+  compactActionRow: {
+    marginTop: 12,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  compactActionButton: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: '#F0E7F5',
+  },
+  compactActionText: {
+    color: '#53166F',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+} satisfies Record<string, ViewStyle | TextStyle | ImageStyle>;
+
+const darkColorMap: Record<string, string> = {
+  '#F8F6F1': '#111512',
+  '#FFFFFF': '#1B211E',
+  '#1F2A27': '#F3F7F4',
+  '#26332F': '#EEF4F0',
+  '#34433E': '#E5ECE8',
+  '#53166F': '#D7A5EF',
+  '#2F6F63': '#78C8B2',
+  '#1F6B57': '#68C2A8',
+  '#284D45': '#B8D7CE',
+  '#385B53': '#B4CEC7',
+  '#48615A': '#B7C8C2',
+  '#56645F': '#B8C5BF',
+  '#59645F': '#BAC5C0',
+  '#59736C': '#AEC8C0',
+  '#5E6B67': '#B4C0BB',
+  '#5E6E68': '#B3C3BD',
+  '#5E6E69': '#B3C3BD',
+  '#66736F': '#B2BEB9',
+  '#68746F': '#AEBAB4',
+  '#9AA5A1': '#75817C',
+  '#9CCFC0': '#68A895',
+  '#B9C8C1': '#52615B',
+  '#D5E8E0': '#284038',
+  '#D8E0DD': '#39453F',
+  '#DCE6E2': '#33433C',
+  '#DFEAE5': '#2B4037',
+  '#E2F0EB': '#263C34',
+  '#E5E9E7': '#39433F',
+  '#EAEDEA': '#343D39',
+  '#F2F5F3': '#252C29',
+  '#F1F3F2': '#252C29',
+  '#EDF0EE': '#2D3531',
+  '#43514C': '#C7D2CD',
+  '#F2F8F5': '#20342C',
+  '#F4F8F6': '#21332C',
+  '#EDF6F2': '#20352C',
+  '#F0E7F5': '#33283A',
+  '#FFF5DD': '#493A1F',
+  '#FFF4EE': '#402C25',
+  '#FFF1ED': '#422A23',
+  '#FFF9F6': '#2A211E',
+  '#F7ECE8': '#3A2924',
+  '#F8DED2': '#4A2D26',
+  '#E7C9C1': '#654237',
+  '#E8C1B5': '#72483C',
+  '#E9C6B5': '#68463A',
+};
+
+function remapDark(value: unknown): any {
+  if (Array.isArray(value)) return value.map(remapDark);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+        key,
+        remapDark(item),
+      ])
+    );
+  }
+  return typeof value === 'string' ? darkColorMap[value] ?? value : value;
+}
+
+export function createPawsoStyles<
+  T extends StyleSheet.NamedStyles<T> | StyleSheet.NamedStyles<any>,
+>(definitions: T & StyleSheet.NamedStyles<any>) {
+  const light = StyleSheet.create(definitions);
+  const dark = StyleSheet.create(
+    remapDark(definitions) as T & StyleSheet.NamedStyles<any>
+  );
+  return new Proxy(light, {
+    get(_target, property: string | symbol) {
+      const source = activeColorScheme === 'dark' ? dark : light;
+      return source[property as keyof typeof source];
+    },
+  }) as typeof light;
+}
+
+export const styles = createPawsoStyles(styleDefinitions);

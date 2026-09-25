@@ -9,6 +9,7 @@ from pydantic import BaseModel
 class AuthenticatedUser(BaseModel):
     id: str
     email: str | None = None
+    is_anonymous: bool = False
     access_token: str
 
 
@@ -72,5 +73,6 @@ async def require_user(
     return AuthenticatedUser(
         id=user_id,
         email=email if isinstance(email, str) else None,
+        is_anonymous=bool(payload.get("is_anonymous")),
         access_token=token,
     )

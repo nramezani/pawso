@@ -70,6 +70,31 @@ class DocumentExtractionTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("genuine PDF", response.json()["message"])
 
+    def test_upload_read_is_bounded_by_configured_limit(self):
+        with patch.object(main, "MAX_FILE_SIZE", 16):
+            response = self.client.post(
+                "/api/v1/documents/extract",
+                files={"file": ("large.pdf", b"%PDF-1.4\n" + b"x" * 32, "application/pdf")},
+            )
+        self.assertEqual(response.status_code, 413)
+
+    def test_rejects_oversized_filename(self):
+        response = self.client.post(
+            "/api/v1/documents/extract",
+            files={"file": ("a" * 252 + ".pdf", b"%PDF-1.4\ntest", "application/pdf")},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("file name", response.json()["message"].lower())
+
+    def test_missing_ai_configuration_is_sanitized(self):
+        with patch.object(main, "get_client", side_effect=RuntimeError("secret setup detail")):
+            response = self.client.post(
+                "/api/v1/documents/extract",
+                files={"file": ("visit.pdf", b"%PDF-1.4\ntest", "application/pdf")},
+            )
+        self.assertEqual(response.status_code, 503)
+        self.assertNotIn("secret setup detail", response.text)
+
 
 if __name__ == "__main__":
     unittest.main()

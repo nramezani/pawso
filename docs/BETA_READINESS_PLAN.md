@@ -13,20 +13,21 @@
 - [ ] Publish reviewed Privacy Policy and Terms.
 - [x] Add a clear “not veterinary advice / not for emergencies” experience.
 - [x] Add explicit AI-processing consent with timestamp and policy version.
-- [ ] Add document, pet, household, and account deletion.
-- [ ] Add data export.
-- [ ] Define retention, backup deletion, breach response, and vendor inventory.
+- [x] Add document, pet, and account deletion with shared-household safeguards.
+- [x] Add structured data export and original-document download.
+- [x] Define retention, backup deletion, breach response, and vendor inventory drafts.
 
 ## Gate 3 — Product completeness
 
 - [x] Edit pet profiles and archive care/medication records without losing history.
-- [ ] Recurring care tasks with skip, snooze, pause, and end.
-- [ ] Medication start/end dates, course status, and refills.
-- [ ] Household role change (invite revocation and member removal are complete).
+- [x] Recurring care tasks with skip, snooze, pause, and end.
+- [x] Medication start/end dates, course status, refills, edit, pause, and snooze.
+- [x] Household switcher and owner-driven role change.
 - [x] Weight trend from owner-recorded timeline measurements.
 - [x] Timeline and document status filters.
-- [ ] Structured symptom fields and clinically honest symptom trends.
-- [ ] Emergency pet card and exportable veterinarian/caregiver handoff.
+- [x] Structured symptom/lab fields and clinically honest filtered trends.
+- [x] Emergency pet card and exportable veterinarian/caregiver handoff PDF.
+- [x] Owner-only opt-in read-only offline mode and dark appearance support.
 
 ## Gate 4 — Native quality
 
@@ -35,7 +36,7 @@
 - [ ] Password recovery deep-link pass on both platforms.
 - [ ] Notification permission, scheduling, tap-through, timezone, and DST tests.
 - [ ] Accessibility review with large text and screen readers.
-- [ ] Crash reporting and privacy-safe operational monitoring.
+- [x] Privacy-safe mobile diagnostics and scheduled API readiness monitoring.
 
 ## Gate 5 — Membership
 
@@ -48,10 +49,8 @@
 
 ## Recommended order of implementation
 
-1. CI and clean-clone validation.
-2. Privacy/consent/disclaimer and deletion/export.
-3. Native recovery/notification tests.
-4. Record editing and recurring care.
-5. Emergency card, trends, and reports.
-6. Membership infrastructure.
-7. Small private beta.
+1. Rotate exposed credentials and apply the final migration to staging.
+2. Complete native recovery, notification, role/RLS, offline, and accessibility tests.
+3. Publish legally reviewed policies and complete production/store configuration.
+4. Run a small free private beta and measure retention/shared-care usage.
+5. Decide whether membership infrastructure is justified by evidence.

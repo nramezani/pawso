@@ -1,196 +1,141 @@
-# Pawso Deep Product, Workflow, UI, and Engineering Audit — 2026-09-24
+# Pawso deep product, workflow, UI, and engineering audit — 2026-09-24
 
 ## Executive result
 
-Pawso is a coherent and useful **private-beta product** once the new database
-migration is applied and the external release checks below are completed. The
-core loop now makes sense end to end: create or recover an account, add a pet,
-record care and medication activity, upload and confirm veterinary records,
-ask grounded questions, share care with another person, and revoke access.
+The code-side P0, P1, and P2 roadmap is complete for the intended private-beta
+scope. Pawso now supports the full owner/caregiver/sitter journey from account
+creation and pet setup through daily care, medical history, household handoff,
+export, and deletion. The remaining release gates are intentionally external:
+credential rotation, applying the final migration, production configuration,
+live staging RLS tests, physical-device testing, legal publication, and store
+submission.
 
-No unresolved TypeScript, lint, Expo configuration, mobile bundle, or backend
-test failure was found in this audit. Pawso is **not yet ready for a public app
-store release** because data export/deletion controls, legal publication,
-production operations, staging RLS verification, and store work remain.
+No unresolved TypeScript, lint, Expo configuration, SQL parsing, mobile bundle,
+or backend-test failure was found. This is still not a veterinary diagnostic
+product, and passing static/automated checks does not replace live RLS and
+physical-device verification.
 
 ## Scope and method
 
-The review covered:
+The review covered every screen and role; authentication and recovery; pet,
+document, medication, care, symptom, lab, and timeline workflows; household
+invitations and access removal; AI boundaries; notifications; offline behavior;
+data rights; storage; Supabase RLS/RPCs; FastAPI security and operations;
+accessibility; visual hierarchy; charts; Expo/EAS; CI; dependencies; and release
+documentation.
 
-- Every mobile screen and navigation path on owner, caregiver, and sitter roles.
-- Authentication, password recovery, temporary-account upgrade, invitation,
-  member removal, and invitation revocation.
-- Pet profiles, medical timeline, documents, AI review, medications, care tasks,
-  notifications, Ask Pawso, Smart Care, and Vet Visit Prep.
-- Supabase schema, RLS migrations, state-changing RPCs, and cross-pet state.
-- FastAPI authentication, upload validation, rate limits, AI boundaries,
-  invitation email, and account deletion.
-- Color contrast, touch targets, safe areas, empty/error/loading states,
-  information density, and chart semantics.
-- Expo/EAS configuration, CI, dependencies, Android/iOS bundling, and release
-  documentation.
+## Completed P0 — safety and correctness
 
-This was a static and automated review. It does not replace the physical-device
-and live staging-project tests listed below.
+- Authenticated backend routes, bounded AI inputs, shared Postgres rate limits,
+  safe request IDs, privacy-safe errors/metrics, upload validation, and readiness
+  monitoring.
+- Ordered reproducible migrations, restricted function privileges, role-aware
+  RLS, atomic medication/care/weight/extraction writes, correction audit trails,
+  and pet/household relationship validation.
+- Recovery and invitation deep-link handling, verification redirects, account
+  upgrade guidance, request cooldowns, household persistence, and blank-screen
+  recovery paths.
+- Owner/caregiver/sitter navigation and data visibility. Sitters are excluded
+  from documents, medical timelines, health trends, and medical AI surfaces.
+- Authorized, coordinated account/pet/document deletion, private storage cleanup, JSON
+  export, no-store responses, local-state cleanup, and explicit archive versus
+  permanent-delete language.
+- CI gates for clean install, typecheck, zero-warning lint, Expo Doctor/config,
+  Android/iOS bundles, backend tests, dependency audit, and secret scanning.
 
-## Improvements completed in this pass
+## Completed P1 — complete daily-care workflows
 
-### Data correctness and safety
+- Pet edit, structured date of birth, photo upload/removal, archive/restore,
+  permanent delete, and emergency details.
+- Medication edit, start/end dates, temporary courses, refill fields,
+  pause/resume, reminder snooze, multiple schedules, give/skip, and audited
+  correction of a logged outcome.
+- Recurring care with daily/weekly/monthly/custom cadence, complete/skip,
+  snooze, pause/resume, end, preserved recurrence cadence, and actor history.
+- Household switcher, timezone setting, role changes, pending-invite revocation,
+  member removal, recipient-bound codes, direct email delivery, and fallback
+  share text/download links.
+- Production operations, privacy-safe mobile diagnostics, scheduled readiness
+  check, retention/vendor register, backup/restore procedure, and support path.
+- Search, pagination/show-more behavior, filters, date ranges, honest empty and
+  error states, Android-safe bottom navigation, accessible targets, and reduced
+  dense-screen overload.
 
-- Care loading now retains completed records instead of fetching only active
-  tasks. The active list, progress, history, Ask Pawso, and Vet Visit Prep now
-  agree about what was completed and by whom.
-- Medication history now loads seven days of actual `given`/`skipped` outcomes.
-  The UI no longer invents a `missed` status that does not exist in the schema.
-- Medication creation and weight check-in now use transactional RPCs, avoiding
-  a medication without schedules or a weight event without a matching profile
-  update after a partial failure.
-- Care completion is constrained to one completion per task and direct client
-  inserts are removed; the audited completion RPC remains the write path.
-- Public/anonymous execution is revoked from Pawso's exposed helper and
-  state-changing database functions; authenticated execution is explicit.
-- Switching pets clears pet-scoped records before the next fetch, preventing a
-  failed or slow request from temporarily showing the previous pet's data.
-- Temporary document-picker files are deleted after upload/persistence and the
-  extraction response is no longer printed to the development console.
+## Completed P2 — useful enhancements
 
-### Workflow and UI clarity
+- Shareable emergency pet-card PDF with owner-controlled contact and medical
+  summary fields.
+- Structured symptoms (category, severity, frequency, duration) and category-
+  specific visualization.
+- Structured lab results (test, numeric value, unit, reference range, date) and
+  trend visualization that refuses to combine units or inconsistent ranges.
+- Pet photos stored in a private bucket and displayed using expiring signed URLs.
+- Owner-only, opt-in, read-only offline snapshots that strip signed photo URLs,
+  block mutation while offline, and clear on disable/sign-out/deletion.
+- System/light/dark appearance selection and theme-aware status/navigation/UI.
+- Extracted mobile service boundaries for data rights, pet photos, emergency
+  cards, offline cache, notifications, and diagnostics. The context provider
+  remains the orchestration layer; further store splitting is maintainability
+  work, not a missing user workflow.
 
-- Owners alone see pet-creation controls; medical and care tools now match the
-  active household role more consistently.
-- Signing into a different account from a temporary workspace now warns that
-  records will not be transferred.
-- The account screen states truthfully that full data export is not available
-  yet, including in the destructive deletion warning.
-- Manual household shares include a `pawso://invite/...` link, the one-time
-  code, and the correct **Account → People & access** fallback instructions.
-- Care completion history is available in context, sorted newest first, with
-  actor and timestamp. The screen caps the rendered list at ten and says so.
-- Timeline and document filters reduce long-list overload without hiding data.
-- Important press targets are at least 44 points high; archive actions have
-  full-size circular targets; muted text contrast was strengthened.
-- Health check-in errors appear next to the action and incomplete submissions
-  are disabled.
-- A native branded splash configuration now uses the Pawso mark in release
-  builds rather than relying only on the in-app loading screen.
+## Visualization decisions
 
-### Automated release protection
-
-- CI now type-checks, lints, parses Expo configuration, runs backend/security
-  tests, scans dependencies/secrets, and creates both Android and iOS bundles.
-
-## Visualization review
-
-Charts are used only when the underlying data supports an honest comparison.
-They show exact values and include text or accessibility labels; none claims to
-diagnose health or infer an unrecorded event.
-
-| Area | Decision | Reason |
+| Area | Visualization | Safety rule |
 | --- | --- | --- |
-| Today | Keep progress and compact metrics | Best view of work remaining today |
-| Pet profile | Keep weight trend | Repeated numeric measurements support a real trend |
-| Medications | Added seven-day given/skipped activity | Uses recorded outcomes; explicitly does not infer adherence |
-| Care | Keep progress; add completion history | A list with actor/time is more useful than another chart |
-| Health timeline | Added six-month activity chart and filters | Shows record volume/category, not clinical improvement |
-| Documents | Keep status metrics; add status filters | Status counts and a list are more actionable than a chart |
-| People & access | Keep role metrics | Small categorical summary; no chart needed |
-| Ask/Vet Prep/Smart Care | Keep source/category metrics | Makes evidence coverage visible without distracting from output |
-| Symptoms | Defer trend chart | Symptoms lack structured category/severity/frequency fields |
-| Lab results | Defer trend chart | Labs lack test name, unit, reference range, and numeric schema |
-| Refills/courses | Defer chart | Medication start/end/refill data is not modeled yet |
+| Today | Completion progress and compact counts | Shows recorded work only |
+| Pet profile | Weight trend | Exact values; no diagnosis or ideal-weight claim |
+| Medication | Seven-day given/skipped activity | No inferred adherence or dosing advice |
+| Care | Progress and actor-stamped history | Completion history stays textual and auditable |
+| Timeline | Six-month event activity | Measures record volume, not health improvement |
+| Symptoms | Category-filtered severity/frequency trend | Never combines unrelated symptom categories |
+| Labs | Test/unit-specific value trend | Reference band appears only when ranges are consistent |
+| Documents/household/AI | Status and evidence summaries | Small summaries avoid decorative charts |
 
-Adding symptom, lab, or adherence charts now would create false precision. Add
-those visualizations only after the structured data models in the roadmap exist.
+## Workflow decisions
 
-## Workflow findings
+| Workflow | Result |
+| --- | --- |
+| Temporary → secured account | Preserves the anonymous user ID and records; guides email verification |
+| Existing-account sign-in | Verifies the destination account first, then explicitly discards the temporary workspace only after confirmation; temporary records are never silently merged |
+| Password recovery | App callback and recovery state are implemented; fresh-link device retest remains external |
+| Shared care | Email, code, link, recipient binding, role change, switch, revoke, and remove are implemented |
+| Medical record | Upload, consent, extract, uncertainty review, atomic confirm, reopen, archive, download, and delete |
+| Medication | Full lifecycle, notifications, outcome logging, snooze, correction, and history |
+| Care | One-time/recurring lifecycle with audit-preserving history |
+| Data rights | JSON export plus document, pet, and account deletion with private-object cleanup |
+| Offline | Owner-opted read-only snapshot; writes wait for reconnection |
 
-| Workflow | Current status | Remaining risk or next improvement |
-| --- | --- | --- |
-| Temporary account → secured account | Coherent, with password guidance | Retest verification link on both physical platforms |
-| Existing account sign-in | Coherent, with temporary-data warning | A true merge/transfer workflow is not implemented |
-| Password recovery | Deep-link handling exists | Retest one fresh link per physical platform and verify Supabase production URLs |
-| Add/edit pet | Owner-gated and understandable | Add pet archive/delete and structured DOB later |
-| Veterinary upload/review | Consent, uncertainty, warnings, reopen, atomic confirm | Add document delete and retention controls |
-| Medication | Add schedule, today log, archive, seven-day history | Add edit, course dates, refills, pause, correction audit, timezone model |
-| Care | Add, complete, archive, actor history | Add recurring tasks, snooze/skip/pause, pagination |
-| Household sharing | Email/share/code/deep link, recipient binding, revoke/remove | Add role changes and explicit multi-household switching |
-| AI features | Authenticated, grounded, source-labeled, capped | Add privacy-safe monitoring and graceful source pagination |
-| Notifications | Local reminders and tap routing | Physical-device permission, timezone, DST, and relaunch tests |
-| Account deletion | Implemented with shared-owner safeguards | Full export, pet deletion, document deletion, retention validation |
+## Automated verification evidence
 
-## Prioritized remaining work
-
-### P0 — complete before the next private-beta build
-
-1. Apply `supabase/migrations/20260928_harden_rpc_access_and_care_history.sql`
-   to the same Supabase project used by the preview build. Medication creation
-   and weight check-in in this version depend on its RPCs.
-2. Rotate the OpenAI key that was previously pasted into chat, update Render,
-   and revoke the old key. Never place the replacement in GitHub or EAS public
-   variables.
-3. Verify Render has `ENVIRONMENT=production`, the account-deletion service key,
-   Resend configuration, invitation deep-link base, and current beta download
-   URLs. Confirm `/ready` after redeploying.
-4. Build a fresh EAS preview for Android and iOS. Test owner, caregiver, and
-   sitter flows on physical devices, including app relaunch and revoked access.
-5. Run the live RLS suite against a disposable staging Supabase project with
-   dedicated owner/caregiver/sitter accounts.
-6. Retest password recovery and invitation deep links with one fresh email on
-   each platform; confirm no route falls back to localhost.
-
-### P1 — complete before a public store release
-
-1. Implement downloadable structured data export plus pet and document
-   archive/delete. Verify storage deletion and documented retention windows.
-2. Obtain legal review, publish the Privacy Policy and Terms, set their EAS
-   environment URLs, and complete App Store privacy/Play data-safety forms.
-3. Add privacy-safe crash reporting, API error/latency metrics, uptime checks,
-   alerts, backup/restore drills, and a support contact/process.
-4. Model medication schedules with an explicit household/pet timezone and test
-   DST/travel behavior; add an audit-preserving way to correct dose logs.
-5. Add medication edit, start/end dates, course/refill state, and reminder
-   pause/snooze controls.
-6. Add recurring care schedules with skip/snooze/pause/end behavior.
-7. Add an explicit household switcher and owner-driven role changes. Confirm
-   and document exactly which profile health fields sitters may see.
-8. Rename the Expo project/slug from `pawso-temp`, prepare store metadata,
-   screenshots, support/privacy URLs, signed production builds, and submission
-   checklists.
-
-### P2 — useful product enhancements after beta evidence
-
-1. Emergency pet card and veterinarian/caregiver handoff PDF/share flow.
-2. Structured symptom tracking (category, severity, frequency, duration) and
-   only then symptom visualizations.
-3. Structured lab results (test, value, unit, range, date) and only then lab
-   trends with unit/range safeguards.
-4. Search, pagination, and date-range filters for larger histories.
-5. Offline/read-only resilience and clearer connectivity recovery.
-6. Refactor the oversized `PawsoContext.tsx` into typed auth, pets, medical,
-   medication, care, household, and AI services/stores. Reduce the existing lint
-   warning backlog while preserving behavior with tests.
-7. Move rate-limit counters to Redis/Postgres before running more than one API
-   instance.
-8. Keep the beta free; design server-verified memberships and store receipt
-   validation only after retention and shared-care usage justify them.
-
-## Verification evidence
-
-- TypeScript (`tsc --noEmit`): pass.
-- ESLint blocking rules: pass.
+- TypeScript: pass.
+- ESLint zero-warning policy: pass.
+- Expo configuration: pass; app version `1.1.0`, native build number/code `2`,
+  automatic appearance.
 - Expo Doctor: 21/21 checks pass.
-- Expo configuration parse: pass.
-- Android production-style Metro export: pass (1,076 modules).
-- iOS production-style Metro export: pass (1,079 modules).
-- Backend/security/migration contract tests: 20 pass.
+- Android and iOS Metro exports: pass.
+- Backend/security/migration contract tests: 32 tests pass.
+- SQL: all 10 migrations parse; 415 statements total.
+- Python compilation: pass.
 - Python dependency audit: no known vulnerabilities.
-- npm audit: 11 moderate, 0 high, 0 critical. Findings are in the supported
-  Expo/build-tool chain; the suggested forced fix incorrectly downgrades Expo,
-  so upgrades must stay within an Expo-supported SDK path.
-- Tracked-file secret pattern scan: no committed production secret found.
+- npm audit: 13 moderate, 0 high, 0 critical. The reported items are transitive
+  Expo/build-chain advisories; the proposed forced fix is incompatible with the
+  supported Expo SDK and must not be applied blindly.
+- Tracked-file secret scan: no committed production credential found. CI also
+  runs Gitleaks against full history.
+
+## Remaining release gates — not code tasks
+
+The authoritative, ordered owner checklist is
+`docs/EXTERNAL_COMPLETION_CHECKLIST.md`. The first action is rotating the OpenAI
+key previously exposed in chat. Apply migration `20260929`, redeploy Render,
+run live role/RLS tests on disposable staging, build fresh iOS/Android binaries,
+and complete the physical-device matrix. Public release additionally requires
+legal review/publication, verified retention wording, store privacy forms,
+metadata/screenshots, support readiness, and staged rollout.
 
 ## Release decision
 
-Proceed to a small private beta after all P0 items pass. Do not market Pawso as
-publicly launch-ready until the P1 privacy, data-rights, operations, timezone,
-and store requirements are completed.
+Proceed to a small private beta only after every section 1–6 item in the
+external checklist passes. Proceed to a public store rollout only after section
+7 and `STORE_RELEASE_CHECKLIST.md` pass. Keep the beta free; paid membership and
+receipt validation are a post-evidence business decision, not a current gap.

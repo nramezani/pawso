@@ -3,6 +3,7 @@ import unittest
 
 from fastapi import HTTPException
 
+from main import safe_request_id
 from rate_limit import UsageLimiter
 from upload_validation import content_type_matches, detect_supported_file
 
@@ -45,6 +46,19 @@ class UsageLimiterTests(unittest.IsolatedAsyncioTestCase):
             await limiter.check("user-a")
         self.assertEqual(context.exception.status_code, 429)
 
+
+class RequestIdSafetyTests(unittest.TestCase):
+    def test_preserves_compact_log_safe_request_id(self):
+        self.assertEqual(safe_request_id("mobile.123:retry-2"), "mobile.123:retry-2")
+
+    def test_replaces_log_injection_and_oversized_values(self):
+        for unsafe in ("line-one\nline-two", "a" * 81, "email@example.com", ""):
+            generated = safe_request_id(unsafe)
+            self.assertNotEqual(generated, unsafe)
+            self.assertRegex(
+                generated,
+                r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            )
 
 if __name__ == "__main__":
     unittest.main()

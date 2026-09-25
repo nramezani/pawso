@@ -6,6 +6,7 @@ import {
   Input,
   Label,
   Page,
+  OptionButton,
   PrimaryButton,
   styles,
 } from '../components/ui';
@@ -25,6 +26,12 @@ export function HealthCheckInScreen() {
     setCheckInWeight,
     checkInSaving,
     checkInError,
+    symptomSeverity,
+    setSymptomSeverity,
+    symptomFrequency,
+    setSymptomFrequency,
+    symptomDuration,
+    setSymptomDuration,
     saveHealthCheckIn,
   } = usePawso();
 
@@ -56,15 +63,50 @@ export function HealthCheckInScreen() {
         onChangeText={setCheckInDate}
         placeholder="YYYY-MM-DD"
         autoCapitalize="none"
+        maxLength={10}
       />
 
       {isSymptom ? (
         <>
-          <Label text="What did you notice?" />
+          <Label text="Symptom or observation category" />
           <Input
             value={checkInTitle}
             onChangeText={setCheckInTitle}
-            placeholder="Example: Vomited yellow liquid with hair"
+            placeholder="Example: Vomiting, appetite, mobility"
+            maxLength={80}
+          />
+          <Label text="Severity (your observation)" />
+          <View style={styles.scheduleWrap}>
+            {([1, 2, 3, 4, 5] as const).map((value) => (
+              <OptionButton
+                key={value}
+                title={String(value)}
+                selected={symptomSeverity === value}
+                onPress={() => setSymptomSeverity(value)}
+              />
+            ))}
+          </View>
+          <Text style={styles.reminderFinePrint}>1 = mild · 5 = most severe you observed</Text>
+
+          <Label text="Frequency" />
+          <View style={styles.scheduleWrap}>
+            {(['single', 'intermittent', 'frequent', 'constant'] as const).map((value) => (
+              <OptionButton
+                key={value}
+                title={value[0].toUpperCase() + value.slice(1)}
+                selected={symptomFrequency === value}
+                onPress={() => setSymptomFrequency(value)}
+              />
+            ))}
+          </View>
+
+          <Label text="Duration in minutes (optional)" />
+          <Input
+            value={symptomDuration}
+            onChangeText={setSymptomDuration}
+            placeholder="Example: 15"
+            keyboardType="number-pad"
+            maxLength={6}
           />
         </>
       ) : (
@@ -75,6 +117,7 @@ export function HealthCheckInScreen() {
             onChangeText={setCheckInWeight}
             placeholder="Example: 4.2"
             keyboardType="decimal-pad"
+            maxLength={12}
           />
         </>
       )}
@@ -89,6 +132,7 @@ export function HealthCheckInScreen() {
             : 'Example: Weighed before breakfast on the home scale'
         }
         multiline
+        maxLength={2000}
       />
 
       {checkInError ? (
