@@ -29,6 +29,8 @@ export type RootStackParamList = {
   Household: undefined;
   VetVisitPrep: undefined;
   HealthCheckIn: undefined;
+  HealthTrends: undefined;
+  EmergencyCard: undefined;
   SmartCarePlan: undefined;
 };
 
@@ -104,6 +106,12 @@ export function navigateToScreen(screen: Screen) {
       return;
     case 'healthCheckIn':
       navigateWhenReady('HealthCheckIn');
+      return;
+    case 'healthTrends':
+      navigateWhenReady('HealthTrends');
+      return;
+    case 'emergencyCard':
+      navigateWhenReady('EmergencyCard');
       return;
     case 'smartCarePlan':
       navigateWhenReady('SmartCarePlan');

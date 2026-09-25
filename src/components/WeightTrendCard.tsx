@@ -1,6 +1,7 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import type { TimelineEvent } from '../types';
+import { createPawsoStyles } from './ui';
 
 type WeightPoint = {
   id: string;
@@ -193,7 +194,7 @@ export function WeightTrendCard({
   );
 }
 
-const chartStyles = StyleSheet.create({
+const chartStyles = createPawsoStyles({
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 18,

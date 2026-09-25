@@ -1,196 +1,50 @@
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { Alert, Image, Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
 import { WeightTrendCard } from '../components/WeightTrendCard';
 import {
   Page,
   Header,
-  Label,
-  Input,
-  OptionButton,
   PrimaryButton,
   SecondaryButton,
   Card,
   Info,
-  QuickAction,
-  ReviewField,
   styles,
 } from '../components/ui';
 
 export function PetProfileScreen() {
   const {
     setScreen,
-    apiStatus,
-    setApiStatus,
-    authReady,
-    setAuthReady,
-    authError,
-    setAuthError,
-    databaseError,
-    setDatabaseError,
-    isSavingPet,
-    setIsSavingPet,
-    isConfirmingExtraction,
-    setIsConfirmingExtraction,
+    petPhotoUrl,
+    petPhotoPath,
+    petPhotoBusy,
+    updatePetPhoto,
+    removePetPhoto,
+    openHealthTrends,
+    archiveCurrentPet,
+    deleteCurrentPet,
+    dataRightsBusy,
+    dataRightsMessage,
+    dataRightsError,
     currentPetId,
-    setCurrentPetId,
     petName,
-    setPetName,
     petType,
-    setPetType,
     breed,
-    setBreed,
     petAge,
-    setPetAge,
+    petDateOfBirth,
     petSex,
-    setPetSex,
-    alteredStatus,
-    setAlteredStatus,
     weight,
-    setWeight,
-    microchip,
-    setMicrochip,
     conditions,
-    setConditions,
     allergies,
-    setAllergies,
     medications,
-    setMedications,
-    vetClinic,
-    setVetClinic,
-    documentName,
-    setDocumentName,
-    documentSize,
-    setDocumentSize,
-    documentContentType,
-    setDocumentContentType,
-    currentDocumentId,
-    setCurrentDocumentId,
-    currentExtractionId,
-    setCurrentExtractionId,
-    uploadError,
-    setUploadError,
-    visitDate,
-    setVisitDate,
-    clinic,
-    setClinic,
-    finding,
-    setFinding,
-    diagnosis,
-    setDiagnosis,
-    followUp,
-    setFollowUp,
     timelineEvents,
-    setTimelineEvents,
-    petDocuments,
-    setPetDocuments,
-    documentsLoading,
-    setDocumentsLoading,
-    documentsError,
-    setDocumentsError,
-    openingDocumentId,
-    setOpeningDocumentId,
-    medicationList,
-    setMedicationList,
-    medicationSchedules,
-    setMedicationSchedules,
-    medicationLogs,
-    setMedicationLogs,
-    medicationsLoading,
-    setMedicationsLoading,
-    medicationsError,
-    setMedicationsError,
-    isSavingMedication,
-    setIsSavingMedication,
-    loggingDoseId,
-    setLoggingDoseId,
-    newMedicationName,
-    setNewMedicationName,
-    newMedicationDose,
-    setNewMedicationDose,
-    newMedicationUnit,
-    setNewMedicationUnit,
-    newMedicationInstructions,
-    setNewMedicationInstructions,
-    careTasks,
-    setCareTasks,
-    taskCompletions,
-    setTaskCompletions,
-    careLoading,
-    setCareLoading,
-    careError,
-    setCareError,
-    savingCareTask,
-    setSavingCareTask,
-    completingTaskId,
-    setCompletingTaskId,
-    newCareTitle,
-    setNewCareTitle,
-    newCareNotes,
-    setNewCareNotes,
-    newCareDate,
-    setNewCareDate,
-    newCareTime,
-    setNewCareTime,
-    askQuestion,
-    setAskQuestion,
-    askAnswer,
-    setAskAnswer,
-    askSources,
-    setAskSources,
-    askLoading,
-    setAskLoading,
-    askError,
-    setAskError,
-    initializeSupabase,
-    loadExistingPet,
-    loadTimeline,
-    askPawso,
-    openAskScreen,
-    getAskSourceLabel,
-    loadCareData,
-    parseCareDateTime,
-    openCareScreen,
-    createCareTask,
-    completeCareTask,
-    formatDueLabel,
-    getMedicationUrgency,
-    loadMedicationData,
-    buildScheduledDate,
-    getTodayMedicationDoses,
-    formatMedicationTime,
-    openMedicationsScreen,
-    createMedication,
-    logMedicationDose,
-    loadDocuments,
-    openDocumentsScreen,
-    openOriginalDocument,
-    formatDocumentDate,
-    formatDocumentSize,
-    normalizeEventDate,
-    parseWeightKg,
-    createPetProfile,
+    canViewMedical,
     canManageMedical,
     startEditPet,
     openHealthCheckIn,
-    checkBackend,
-    canCreateProfile,
     petEmoji,
     alteredLabel,
     alteredValue,
-    persistExtractionProposal,
-    pickVetRecord,
-    confirmExtraction,
-    todayMedicationDoses,
-    pendingMedicationDoses,
-    completedMedicationDoses,
-    activeCareTasks,
-    overdueMedicationDoses,
-    dueSoonMedicationDoses,
-    laterMedicationDoses,
-    overdueCareTasks,
-    upcomingCareTasks,
-    followUpEvents
   } = usePawso();
 
 return (
@@ -198,11 +52,17 @@ return (
         <Header back={() => setScreen('pets')} title="Pawso" />
 
         <View style={styles.profileHeader}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarEmoji}>
-              {petEmoji}
-            </Text>
-          </View>
+          {petPhotoUrl ? (
+            <Image
+              source={{ uri: petPhotoUrl }}
+              style={styles.profilePhotoImage}
+              accessibilityLabel={`${petName}'s photo`}
+            />
+          ) : (
+            <View style={styles.avatar}>
+              <Text style={styles.avatarEmoji}>{petEmoji}</Text>
+            </View>
+          )}
 
           <Text style={styles.profileName}>
             {petName}
@@ -222,10 +82,32 @@ return (
           </View>
         )}
 
+        {canManageMedical ? (
+          <>
+            <SecondaryButton
+              title={petPhotoBusy ? 'Updating photo…' : petPhotoPath ? 'Change photo' : 'Add photo'}
+              disabled={petPhotoBusy}
+              onPress={updatePetPhoto}
+            />
+            {petPhotoPath ? (
+              <SecondaryButton
+                title="Remove photo"
+                disabled={petPhotoBusy}
+                onPress={() =>
+                  Alert.alert('Remove pet photo?', 'The stored photo will be permanently deleted.', [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Remove', style: 'destructive', onPress: removePetPhoto },
+                  ])
+                }
+              />
+            ) : null}
+          </>
+        ) : null}
+
         <Card title="About">
           <Info
             label="Age / DOB"
-            value={petAge || 'Not provided'}
+            value={petDateOfBirth || petAge || 'Not provided'}
           />
 
           <Info
@@ -250,14 +132,16 @@ return (
           />
         </Card>
 
-        <WeightTrendCard
-          timelineEvents={timelineEvents}
-          currentWeight={weight}
-          petName={petName}
-          onRecordWeight={
-            canManageMedical ? () => openHealthCheckIn('weight') : undefined
-          }
-        />
+        {canViewMedical ? (
+          <WeightTrendCard
+            timelineEvents={timelineEvents}
+            currentWeight={weight}
+            petName={petName}
+            onRecordWeight={
+              canManageMedical ? () => openHealthCheckIn('weight') : undefined
+            }
+          />
+        ) : null}
 
         <Card title="Health">
           <Info
@@ -281,8 +165,54 @@ return (
           onPress={() => setScreen('today')}
         />
 
+        {canViewMedical ? (
+          <SecondaryButton title="Health trends" onPress={openHealthTrends} />
+        ) : null}
+        <SecondaryButton title="Emergency card & PDF" onPress={() => setScreen('emergencyCard')} />
+
         {canManageMedical ? (
-          <SecondaryButton title="Edit pet details" onPress={startEditPet} />
+          <>
+            <SecondaryButton title="Edit pet details" onPress={startEditPet} />
+            <Text style={styles.sectionTitle}>Pet data</Text>
+            <SecondaryButton
+              title={dataRightsBusy ? 'Working…' : 'Archive pet'}
+              disabled={dataRightsBusy}
+              onPress={() =>
+                Alert.alert(
+                  'Archive this pet?',
+                  'The pet will leave active views, but its records remain until you permanently delete it.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Archive', onPress: archiveCurrentPet },
+                  ]
+                )
+              }
+            />
+            <SecondaryButton
+              title={dataRightsBusy ? 'Working…' : 'Delete pet permanently'}
+              disabled={dataRightsBusy}
+              onPress={() =>
+                Alert.alert(
+                  `Delete ${petName}?`,
+                  'This permanently deletes the pet, medical history, care records, photos, and stored veterinary files. This cannot be undone.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Delete permanently', style: 'destructive', onPress: deleteCurrentPet },
+                  ]
+                )
+              }
+            />
+          </>
+        ) : null}
+
+        {dataRightsMessage ? (
+          <View style={styles.infoCard}><Text style={styles.cardStrong}>{dataRightsMessage}</Text></View>
+        ) : null}
+        {dataRightsError ? (
+          <View style={styles.errorCard}>
+            <Text style={styles.errorTitle}>Pet data action failed</Text>
+            <Text style={styles.errorText}>{dataRightsError}</Text>
+          </View>
         ) : null}
       </Page>
     );

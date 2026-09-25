@@ -1,6 +1,7 @@
 import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
+import { addDaysToDateInput, formatDateInputInTimeZone } from '../utils/dateTime';
 import {
   ActivityBarChart,
   ProgressOverview,
@@ -8,15 +9,8 @@ import {
 import {
   Page,
   Header,
-  Label,
-  Input,
-  OptionButton,
   PrimaryButton,
   SecondaryButton,
-  Card,
-  Info,
-  QuickAction,
-  ReviewField,
   styles,
 } from '../components/ui';
 
@@ -24,177 +18,27 @@ export function MedicationsScreen() {
   const {
     setScreen,
     canManageMedical,
-    apiStatus,
-    setApiStatus,
-    authReady,
-    setAuthReady,
-    authError,
-    setAuthError,
-    databaseError,
-    setDatabaseError,
-    isSavingPet,
-    setIsSavingPet,
-    isConfirmingExtraction,
-    setIsConfirmingExtraction,
-    currentPetId,
-    setCurrentPetId,
+    accountUserId,
     petName,
-    setPetName,
-    petType,
-    setPetType,
-    breed,
-    setBreed,
-    petAge,
-    setPetAge,
-    petSex,
-    setPetSex,
-    alteredStatus,
-    setAlteredStatus,
-    weight,
-    setWeight,
-    microchip,
-    setMicrochip,
-    conditions,
-    setConditions,
-    allergies,
-    setAllergies,
-    medications,
-    setMedications,
-    vetClinic,
-    setVetClinic,
-    documentName,
-    setDocumentName,
-    documentSize,
-    setDocumentSize,
-    documentContentType,
-    setDocumentContentType,
-    currentDocumentId,
-    setCurrentDocumentId,
-    currentExtractionId,
-    setCurrentExtractionId,
-    uploadError,
-    setUploadError,
-    visitDate,
-    setVisitDate,
-    clinic,
-    setClinic,
-    finding,
-    setFinding,
-    diagnosis,
-    setDiagnosis,
-    followUp,
-    setFollowUp,
-    timelineEvents,
-    setTimelineEvents,
-    petDocuments,
-    setPetDocuments,
-    documentsLoading,
-    setDocumentsLoading,
-    documentsError,
-    setDocumentsError,
-    openingDocumentId,
-    setOpeningDocumentId,
     medicationList,
     deleteMedication,
+    startAddMedication,
+    startEditMedication,
+    setMedicationState,
     deletingMedicationId,
-    setMedicationList,
     medicationSchedules,
-    setMedicationSchedules,
-    medicationLogs,
-    setMedicationLogs,
     medicationHistoryLogs,
     medicationsLoading,
-    setMedicationsLoading,
     medicationsError,
-    setMedicationsError,
-    isSavingMedication,
-    setIsSavingMedication,
     loggingDoseId,
-    setLoggingDoseId,
-    newMedicationName,
-    setNewMedicationName,
-    newMedicationDose,
-    setNewMedicationDose,
-    newMedicationUnit,
-    setNewMedicationUnit,
-    newMedicationInstructions,
-    setNewMedicationInstructions,
-    careTasks,
-    setCareTasks,
-    taskCompletions,
-    setTaskCompletions,
-    careLoading,
-    setCareLoading,
-    careError,
-    setCareError,
-    savingCareTask,
-    setSavingCareTask,
-    completingTaskId,
-    setCompletingTaskId,
-    newCareTitle,
-    setNewCareTitle,
-    newCareNotes,
-    setNewCareNotes,
-    newCareDate,
-    setNewCareDate,
-    newCareTime,
-    setNewCareTime,
-    askQuestion,
-    setAskQuestion,
-    askAnswer,
-    setAskAnswer,
-    askSources,
-    setAskSources,
-    askLoading,
-    setAskLoading,
-    askError,
-    setAskError,
-    initializeSupabase,
-    loadExistingPet,
-    loadTimeline,
-    askPawso,
-    openAskScreen,
-    getAskSourceLabel,
-    loadCareData,
-    parseCareDateTime,
-    openCareScreen,
-    createCareTask,
-    completeCareTask,
-    formatDueLabel,
-    getMedicationUrgency,
-    loadMedicationData,
     buildScheduledDate,
-    getTodayMedicationDoses,
     formatMedicationTime,
-    openMedicationsScreen,
-    createMedication,
     logMedicationDose,
-    loadDocuments,
-    openDocumentsScreen,
-    openOriginalDocument,
-    formatDocumentDate,
-    formatDocumentSize,
-    normalizeEventDate,
-    parseWeightKg,
-    createPetProfile,
-    checkBackend,
-    canCreateProfile,
-    petEmoji,
-    alteredLabel,
-    alteredValue,
-    persistExtractionProposal,
-    pickVetRecord,
-    confirmExtraction,
     todayMedicationDoses,
     pendingMedicationDoses,
     completedMedicationDoses,
-    activeCareTasks,
-    overdueMedicationDoses,
-    dueSoonMedicationDoses,
-    laterMedicationDoses,
-    overdueCareTasks,
-    upcomingCareTasks,
-    followUpEvents
+    isOnline,
+    householdTimeZone,
   } = usePawso();
 
   const givenToday = todayMedicationDoses.filter(
@@ -203,25 +47,26 @@ export function MedicationsScreen() {
   const skippedToday = todayMedicationDoses.filter(
     (dose) => dose.log?.status === 'skipped'
   ).length;
+  const householdToday = formatDateInputInTimeZone(new Date(), householdTimeZone);
   const medicationActivityBuckets = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date();
-    date.setHours(0, 0, 0, 0);
-    date.setDate(date.getDate() - (6 - index));
-    const dayStart = date.getTime();
-    const nextDate = new Date(date);
-    nextDate.setDate(nextDate.getDate() + 1);
-    const dayEnd = nextDate.getTime();
-    const logs = medicationHistoryLogs.filter((log) => {
-      const scheduledFor = new Date(log.scheduled_for).getTime();
-      return scheduledFor >= dayStart && scheduledFor < dayEnd;
-    });
+    const dateValue = addDaysToDateInput(householdToday, -(6 - index));
+    const logs = medicationHistoryLogs.filter(
+      (log) =>
+        formatDateInputInTimeZone(
+          new Date(log.scheduled_for),
+          householdTimeZone
+        ) === dateValue
+    );
 
     return {
-      key: `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`,
+      key: dateValue,
       label:
         index === 6
           ? 'Today'
-          : date.toLocaleDateString([], { weekday: 'short' }),
+          : new Date(`${dateValue}T12:00:00Z`).toLocaleDateString([], {
+              weekday: 'short',
+              timeZone: 'UTC',
+            }),
       values: {
         given: logs.filter((log) => log.status === 'given').length,
         skipped: logs.filter((log) => log.status === 'skipped').length,
@@ -304,7 +149,47 @@ return (
                     {formatMedicationTime(dose.scheduledFor)}
                     {dose.log?.actor_name ? ` · ${dose.log.actor_name}` : ''}
                   </Text>
+                  {dose.log?.corrected_at ? (
+                    <Text style={styles.reminderFinePrint}>
+                      Corrected {new Date(dose.log.corrected_at).toLocaleString()}
+                      {dose.log.correction_reason
+                        ? ` · ${dose.log.correction_reason}`
+                        : ''}
+                    </Text>
+                  ) : null}
                 </View>
+                {canManageMedical || dose.log?.user_id === accountUserId ? (
+                  <Pressable
+                    style={styles.compactActionButton}
+                    disabled={!isOnline || loggingDoseId === dose.schedule.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Correct ${dose.medication.name} to ${
+                      dose.log?.status === 'given' ? 'skipped' : 'given'
+                    }`}
+                    onPress={() =>
+                      Alert.alert(
+                        'Correct dose record?',
+                        `Change ${dose.medication.name} from ${dose.log?.status} to ${
+                          dose.log?.status === 'given' ? 'skipped' : 'given'
+                        }? Pawso keeps an audit record of this correction.`,
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          {
+                            text: 'Correct record',
+                            onPress: () =>
+                              logMedicationDose(
+                                dose,
+                                dose.log?.status === 'given' ? 'skipped' : 'given',
+                                'Corrected an inaccurate dose outcome in Pawso.'
+                              ),
+                          },
+                        ]
+                      )
+                    }
+                  >
+                    <Text style={styles.compactActionText}>Correct</Text>
+                  </Pressable>
+                ) : null}
               </View>
             ))}
           </>
@@ -313,7 +198,7 @@ return (
         {canManageMedical ? (
           <PrimaryButton
             title="Add Medication"
-            onPress={() => setScreen('addMedication')}
+            onPress={startAddMedication}
           />
         ) : (
           <View style={styles.infoCard}>
@@ -399,6 +284,20 @@ return (
                   </Text>
                 ) : null}
 
+                <Text style={styles.documentCardMeta}>
+                  {medication.paused_at
+                    ? 'Reminders paused'
+                    : [
+                        medication.start_date ? `Starts ${medication.start_date}` : null,
+                        medication.end_date ? `Ends ${medication.end_date}` : null,
+                        medication.refills_remaining !== null
+                          ? `${medication.refills_remaining} refill${medication.refills_remaining === 1 ? '' : 's'} left`
+                          : null,
+                        medication.refill_due_date ? `Refill due ${medication.refill_due_date}` : null,
+                      ].filter(Boolean).join(' · ') || 'Ongoing course'
+                  }
+                </Text>
+
                 <View style={styles.scheduleWrap}>
                   {schedules.map((schedule) => (
                     <View key={schedule.id} style={styles.scheduleChip}>
@@ -408,6 +307,35 @@ return (
                     </View>
                   ))}
                 </View>
+
+                {canManageMedical ? (
+                  <View style={styles.compactActionRow}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Edit ${medication.name}`}
+                      style={styles.compactActionButton}
+                      onPress={() => startEditMedication(medication)}
+                    >
+                      <Text style={styles.compactActionText}>Edit</Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`${medication.paused_at ? 'Resume' : 'Pause'} ${medication.name}`}
+                      style={styles.compactActionButton}
+                      disabled={deletingMedicationId === medication.id}
+                      onPress={() =>
+                        setMedicationState(
+                          medication,
+                          medication.paused_at ? 'resume' : 'pause'
+                        )
+                      }
+                    >
+                      <Text style={styles.compactActionText}>
+                        {medication.paused_at ? 'Resume reminders' : 'Pause reminders'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : null}
               </View>
             );
           })

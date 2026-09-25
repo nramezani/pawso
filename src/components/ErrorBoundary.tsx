@@ -2,6 +2,8 @@ import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { reportClientCrash } from '../services/telemetry';
+
 type Props = { children: ReactNode };
 type State = { error: Error | null };
 
@@ -13,7 +15,10 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error('Pawso screen error:', error, info.componentStack);
+    if (__DEV__) {
+      console.error('Pawso screen error:', error, info.componentStack);
+    }
+    void reportClientCrash(error);
   }
 
   render() {

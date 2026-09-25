@@ -15,6 +15,8 @@ export type Screen =
   | 'ask'
   | 'vetVisitPrep'
   | 'healthCheckIn'
+  | 'healthTrends'
+  | 'emergencyCard'
   | 'smartCarePlan'
   | 'account'
   | 'household';
@@ -41,6 +43,7 @@ export type PetDocument = {
   storage_path: string | null;
   created_at: string;
   linked_events: number;
+  archived_at?: string | null;
 };
 
 export type Medication = {
@@ -50,16 +53,23 @@ export type Medication = {
   unit: string | null;
   instructions: string | null;
   is_active: boolean;
+  start_date: string | null;
+  end_date: string | null;
+  refills_remaining: number | null;
+  refill_due_date: string | null;
+  paused_at: string | null;
 };
 
 export type MedicationSchedule = {
   id: string;
   medication_id: string;
   time_of_day: string;
+  snoozed_until: string | null;
 };
 
 export type MedicationLog = {
   id: string;
+  user_id: string | null;
   medication_id: string;
   schedule_id: string | null;
   scheduled_for: string;
@@ -67,6 +77,8 @@ export type MedicationLog = {
   logged_at: string;
   note: string | null;
   actor_name?: string | null;
+  corrected_at?: string | null;
+  correction_reason?: string | null;
 };
 
 export type TodayMedicationDose = {
@@ -83,6 +95,13 @@ export type CareTask = {
   due_at: string;
   task_type: string;
   is_active: boolean;
+  series_id: string;
+  recurrence_frequency: 'none' | 'daily' | 'weekly' | 'monthly';
+  recurrence_interval: number;
+  recurrence_ends_on: string | null;
+  occurrence_number: number;
+  paused_at: string | null;
+  snoozed_until: string | null;
 };
 
 export type TaskCompletion = {
@@ -90,6 +109,42 @@ export type TaskCompletion = {
   task_id: string;
   completed_at: string;
   actor_name?: string | null;
+  outcome?: 'completed' | 'skipped';
+};
+
+export type HouseholdSummary = {
+  household_id: string;
+  name: string;
+  role: 'owner' | 'caregiver' | 'sitter';
+  time_zone: string;
+};
+
+export type SymptomEntry = {
+  id: string;
+  pet_id: string;
+  observed_on: string;
+  category: string;
+  severity: 1 | 2 | 3 | 4 | 5;
+  frequency: 'single' | 'intermittent' | 'frequent' | 'constant';
+  duration_minutes: number | null;
+  notes: string | null;
+  created_at: string;
+};
+
+export type LabResult = {
+  id: string;
+  pet_id: string;
+  document_id: string | null;
+  collected_on: string;
+  test_name: string;
+  numeric_value: number | null;
+  text_value: string | null;
+  unit: string | null;
+  reference_low: number | null;
+  reference_high: number | null;
+  reference_text: string | null;
+  notes: string | null;
+  created_at: string;
 };
 
 export type HouseholdMember = {
@@ -144,6 +199,7 @@ export type PetSummary = {
   species: PetType;
   breed: string | null;
   approximate_age: string | null;
+  date_of_birth: string | null;
   sex: PetSex | null;
   spayed_neutered: boolean | null;
   weight_kg: number | null;
@@ -152,6 +208,12 @@ export type PetSummary = {
   allergies: string | null;
   medications: string | null;
   vet_clinic: string | null;
+  photo_path: string | null;
+  photo_url?: string | null;
+  archived_at: string | null;
+  emergency_notes: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
   created_at: string;
 };
 

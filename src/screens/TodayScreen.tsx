@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
+import { formatDateInputInTimeZone, getHourInTimeZone } from '../utils/dateTime';
 import {
   Page,
   PrimaryButton,
@@ -40,6 +41,7 @@ export function TodayScreen() {
     loggingDoseId,
     completingTaskId,
     logMedicationDose,
+    snoozeMedicationDose,
     completeCareTask,
     formatMedicationTime,
     formatDueLabel,
@@ -62,10 +64,14 @@ export function TodayScreen() {
     notificationError,
     enableNotifications,
     disableNotifications,
+    isOnline,
+    offlineSnapshotAt,
+    openHealthTrends,
+    householdTimeZone,
   } = usePawso();
 
   const showAllPets = pets.length > 1 && todayView === 'all';
-  const localHour = new Date().getHours();
+  const localHour = getHourInTimeZone(new Date(), householdTimeZone);
   const greeting =
     localHour < 12
       ? 'Good morning'
@@ -80,9 +86,9 @@ export function TodayScreen() {
     );
     return (
       (task.is_active || hasCompletion) &&
-      due.getFullYear() === now.getFullYear() &&
-      due.getMonth() === now.getMonth() &&
-      due.getDate() === now.getDate()
+      !task.paused_at &&
+      formatDateInputInTimeZone(due, householdTimeZone) ===
+        formatDateInputInTimeZone(now, householdTimeZone)
     );
   });
   const completedCareTasks = todayCareTasks.filter((task) =>
@@ -97,8 +103,8 @@ export function TodayScreen() {
       : 0;
 
   async function openPetToday(petId: string) {
-    await selectPet(petId);
-    setTodayView('pet');
+    const selected = await selectPet(petId);
+    if (selected) setTodayView('pet');
   }
 
   return (
@@ -119,6 +125,17 @@ export function TodayScreen() {
       </View>
 
       <Text style={styles.logo}>Pawso</Text>
+
+      {!isOnline ? (
+        <View style={styles.warningCard}>
+          <Text style={styles.warningTitle}>Offline · read only</Text>
+          <Text style={styles.warningText}>
+            {offlineSnapshotAt
+              ? `Showing saved data from ${new Date(offlineSnapshotAt).toLocaleString()}. Reconnect before logging care or changing records.`
+              : 'Reconnect before logging care or changing records.'}
+          </Text>
+        </View>
+      ) : null}
 
       {apiStatus !== 'Backend connected' ? (
       <Pressable
@@ -214,7 +231,11 @@ export function TodayScreen() {
           <Text style={styles.reminderFinePrint}>
             Reminders use only the medication times and care due dates you saved.
           </Text>
-        ) : null}
+        ) : (
+          <Text style={styles.reminderFinePrint}>
+            Reminder previews can show pet, medication, dose, or care-task names on your lock screen, depending on device settings.
+          </Text>
+        )}
       </View>
 
       {uploadError !== '' ? (
@@ -392,7 +413,7 @@ export function TodayScreen() {
               <View style={styles.medicationActionRow}>
                 <Pressable
                   style={styles.givenButton}
-                  disabled={loggingDoseId === dose.schedule.id}
+                  disabled={!isOnline || loggingDoseId === dose.schedule.id}
                   onPress={() => logMedicationDose(dose, 'given')}
                   accessibilityRole="button"
                   accessibilityLabel={`Mark ${dose.medication.name} as given`}
@@ -403,7 +424,7 @@ export function TodayScreen() {
                 </Pressable>
                 <Pressable
                   style={styles.skipDoseButton}
-                  disabled={loggingDoseId === dose.schedule.id}
+                  disabled={!isOnline || loggingDoseId === dose.schedule.id}
                   onPress={() => logMedicationDose(dose, 'skipped')}
                   accessibilityRole="button"
                   accessibilityLabel={`Skip ${dose.medication.name} dose`}
@@ -411,6 +432,15 @@ export function TodayScreen() {
                   <Text style={styles.skipDoseButtonText}>Skip</Text>
                 </Pressable>
               </View>
+              <Pressable
+                style={styles.compactActionButton}
+                disabled={!isOnline || loggingDoseId === dose.schedule.id}
+                onPress={() => snoozeMedicationDose(dose, 30)}
+                accessibilityRole="button"
+                accessibilityLabel={`Remind me about ${dose.medication.name} in 30 minutes`}
+              >
+                <Text style={styles.compactActionText}>Remind me in 30 minutes</Text>
+              </Pressable>
             </View>
           ))}
 
@@ -424,7 +454,7 @@ export function TodayScreen() {
               ) : null}
               <Pressable
                 style={styles.completeCareButton}
-                disabled={completingTaskId === task.id}
+                disabled={!isOnline || completingTaskId === task.id}
                 onPress={() => completeCareTask(task)}
                 accessibilityRole="button"
                 accessibilityLabel={`Mark ${task.title} complete`}
@@ -473,7 +503,7 @@ export function TodayScreen() {
               <View style={styles.medicationActionRow}>
                 <Pressable
                   style={styles.givenButton}
-                  disabled={loggingDoseId === dose.schedule.id}
+                  disabled={!isOnline || loggingDoseId === dose.schedule.id}
                   onPress={() => logMedicationDose(dose, 'given')}
                   accessibilityRole="button"
                   accessibilityLabel={`Mark ${dose.medication.name} as given`}
@@ -482,7 +512,7 @@ export function TodayScreen() {
                 </Pressable>
                 <Pressable
                   style={styles.skipDoseButton}
-                  disabled={loggingDoseId === dose.schedule.id}
+                  disabled={!isOnline || loggingDoseId === dose.schedule.id}
                   onPress={() => logMedicationDose(dose, 'skipped')}
                   accessibilityRole="button"
                   accessibilityLabel={`Skip ${dose.medication.name} dose`}
@@ -490,6 +520,15 @@ export function TodayScreen() {
                   <Text style={styles.skipDoseButtonText}>Skip</Text>
                 </Pressable>
               </View>
+              <Pressable
+                style={styles.compactActionButton}
+                disabled={!isOnline || loggingDoseId === dose.schedule.id}
+                onPress={() => snoozeMedicationDose(dose, 30)}
+                accessibilityRole="button"
+                accessibilityLabel={`Remind me about ${dose.medication.name} in 30 minutes`}
+              >
+                <Text style={styles.compactActionText}>Remind me in 30 minutes</Text>
+              </Pressable>
             </View>
           ))}
 
@@ -599,23 +638,27 @@ export function TodayScreen() {
             </View>
           )}
 
-          <Text style={styles.sectionTitle}>Pawso AI</Text>
-          <View style={styles.aiCard}>
-            <Text style={styles.aiBadge}>AI PET MEMORY</Text>
-            <Text style={styles.aiTitle}>Ask about {petName}</Text>
-            <Text style={styles.aiText}>
-              Pawso answers from {petName}'s confirmed health timeline,
-              medications, and care records.
-            </Text>
-            <Pressable
-              style={styles.outlineButton}
-              onPress={openAskScreen}
-              accessibilityRole="button"
-              accessibilityLabel="Ask Pawso"
-            >
-              <Text style={styles.outlineButtonText}>✨ Ask Pawso</Text>
-            </Pressable>
-          </View>
+          {canViewMedical ? (
+            <>
+              <Text style={styles.sectionTitle}>Pawso AI</Text>
+              <View style={styles.aiCard}>
+                <Text style={styles.aiBadge}>AI PET MEMORY</Text>
+                <Text style={styles.aiTitle}>Ask about {petName}</Text>
+                <Text style={styles.aiText}>
+                  Pawso answers from {petName}'s confirmed health timeline,
+                  medications, and care records.
+                </Text>
+                <Pressable
+                  style={styles.outlineButton}
+                  onPress={openAskScreen}
+                  accessibilityRole="button"
+                  accessibilityLabel="Ask Pawso"
+                >
+                  <Text style={styles.outlineButtonText}>✨ Ask Pawso</Text>
+                </Pressable>
+              </View>
+            </>
+          ) : null}
 
           <Text style={styles.sectionTitle}>Quick actions</Text>
           <View style={styles.quickGrid}>
@@ -648,12 +691,12 @@ export function TodayScreen() {
           />
           {showMoreTools ? (
             <View style={styles.infoCard}>
-              <SecondaryButton
-                title="Health timeline"
-                onPress={() => setScreen('timeline')}
-              />
               {canViewMedical ? (
                 <>
+                  <SecondaryButton
+                    title="Health timeline"
+                    onPress={() => setScreen('timeline')}
+                  />
                   <SecondaryButton
                     title="Veterinary documents"
                     onPress={openDocumentsScreen}
@@ -673,6 +716,13 @@ export function TodayScreen() {
               <SecondaryButton
                 title="Health profile & weight trend"
                 onPress={() => setScreen('petProfile')}
+              />
+              {canViewMedical ? (
+                <SecondaryButton title="Symptoms & lab trends" onPress={openHealthTrends} />
+              ) : null}
+              <SecondaryButton
+                title="Emergency card & shareable PDF"
+                onPress={() => setScreen('emergencyCard')}
               />
             </View>
           ) : null}

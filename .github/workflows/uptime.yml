@@ -1,0 +1,19 @@
+name: Production readiness check
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ready:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify Pawso API readiness
+        run: |
+          response="$(curl --fail-with-body --silent --show-error --retry 2 --retry-all-errors --retry-delay 10 --max-time 90 https://pawso.onrender.com/ready)"
+          python -c 'import json,sys; payload=json.loads(sys.argv[1]); assert payload.get("status") == "ready", payload' "$response"

@@ -30,6 +30,7 @@ export function ReviewScreen() {
   const {
     setScreen,
     databaseError,
+    isOnline,
     isConfirmingExtraction,
     petName,
     documentName,
@@ -101,9 +102,18 @@ export function ReviewScreen() {
         </View>
       ) : null}
 
+      {!isOnline ? (
+        <View style={styles.mockNotice}>
+          <Text style={styles.mockNoticeTitle}>Review available offline</Text>
+          <Text style={styles.mockNoticeText}>
+            You can check and edit this draft now. Reconnect before confirming it to the health history.
+          </Text>
+        </View>
+      ) : null}
+
       <Text style={styles.sectionTitle}>Visit</Text>
-      <ReviewField label="Visit date" value={visitDate} setValue={setVisitDate} />
-      <ReviewField label="Clinic" value={clinic} setValue={setClinic} />
+      <ReviewField label="Visit date" value={visitDate} setValue={setVisitDate} maxLength={10} />
+      <ReviewField label="Clinic" value={clinic} setValue={setClinic} maxLength={200} />
 
       <Text style={styles.sectionTitle}>Finding</Text>
       <ReviewField label="Finding" value={finding} setValue={setFinding} multiline />
@@ -178,7 +188,7 @@ export function ReviewScreen() {
             ? 'Saving health history…'
             : 'Confirm and add to health history'
         }
-        disabled={isConfirmingExtraction}
+        disabled={isConfirmingExtraction || !isOnline}
         onPress={confirmExtraction}
       />
       <SecondaryButton title="Review later" onPress={() => setScreen('today')} />

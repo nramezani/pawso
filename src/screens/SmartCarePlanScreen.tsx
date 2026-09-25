@@ -85,7 +85,7 @@ export function SmartCarePlanScreen() {
           <Text style={styles.cardStrong}>{suggestion.title}</Text>
           <Text style={styles.cardMuted}>{suggestion.reason}</Text>
           <Text style={styles.label}>Supporting records</Text>
-          {suggestion.source_ids.map((sourceId) => (
+          {[...new Set(suggestion.source_ids)].map((sourceId) => (
             <Text key={sourceId} style={styles.cardMuted}>• {getSmartCareSourceLabel(sourceId)}</Text>
           ))}
           {canManageCare ? (

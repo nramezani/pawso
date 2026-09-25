@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
 import { parseLocalDateTime } from '../utils/dateTime';
@@ -13,13 +13,8 @@ import {
   Header,
   Label,
   Input,
-  OptionButton,
   PrimaryButton,
   SecondaryButton,
-  Card,
-  Info,
-  QuickAction,
-  ReviewField,
   styles,
 } from '../components/ui';
 
@@ -28,191 +23,42 @@ type TimelineFilter =
   | 'Veterinary visit'
   | 'Owner observation'
   | 'Weight'
+  | 'Lab result'
   | 'Follow-up';
 
 export function TimelineScreen() {
   const [eventFilter, setEventFilter] = useState<TimelineFilter>('all');
+  const [eventSearch, setEventSearch] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [visibleCount, setVisibleCount] = useState(25);
   const {
     setScreen,
     canViewMedical,
     canManageMedical,
-    apiStatus,
-    setApiStatus,
-    authReady,
-    setAuthReady,
-    authError,
-    setAuthError,
-    databaseError,
-    setDatabaseError,
-    isSavingPet,
-    setIsSavingPet,
-    isConfirmingExtraction,
-    setIsConfirmingExtraction,
-    currentPetId,
-    setCurrentPetId,
     petName,
-    setPetName,
-    petType,
-    setPetType,
-    breed,
-    setBreed,
-    petAge,
-    setPetAge,
-    petSex,
-    setPetSex,
-    alteredStatus,
-    setAlteredStatus,
-    weight,
-    setWeight,
-    microchip,
-    setMicrochip,
-    conditions,
-    setConditions,
-    allergies,
-    setAllergies,
-    medications,
-    setMedications,
-    vetClinic,
-    setVetClinic,
-    documentName,
-    setDocumentName,
-    documentSize,
-    setDocumentSize,
-    documentContentType,
-    setDocumentContentType,
-    currentDocumentId,
-    setCurrentDocumentId,
-    currentExtractionId,
-    setCurrentExtractionId,
-    uploadError,
-    setUploadError,
-    visitDate,
-    setVisitDate,
-    clinic,
-    setClinic,
-    finding,
-    setFinding,
-    diagnosis,
-    setDiagnosis,
-    followUp,
-    setFollowUp,
     timelineEvents,
-    setTimelineEvents,
-    petDocuments,
-    setPetDocuments,
-    documentsLoading,
-    setDocumentsLoading,
-    documentsError,
-    setDocumentsError,
-    openingDocumentId,
-    setOpeningDocumentId,
-    medicationList,
-    setMedicationList,
-    medicationSchedules,
-    setMedicationSchedules,
-    medicationLogs,
-    setMedicationLogs,
-    medicationsLoading,
-    setMedicationsLoading,
-    medicationsError,
-    setMedicationsError,
-    isSavingMedication,
-    setIsSavingMedication,
-    loggingDoseId,
-    setLoggingDoseId,
-    newMedicationName,
-    setNewMedicationName,
-    newMedicationDose,
-    setNewMedicationDose,
-    newMedicationUnit,
-    setNewMedicationUnit,
-    newMedicationInstructions,
-    setNewMedicationInstructions,
-    careTasks,
-    setCareTasks,
-    taskCompletions,
-    setTaskCompletions,
-    careLoading,
-    setCareLoading,
-    careError,
-    setCareError,
-    savingCareTask,
-    setSavingCareTask,
-    completingTaskId,
-    setCompletingTaskId,
-    newCareTitle,
-    setNewCareTitle,
-    newCareNotes,
-    setNewCareNotes,
-    newCareDate,
-    setNewCareDate,
-    newCareTime,
-    setNewCareTime,
-    askQuestion,
-    setAskQuestion,
-    askAnswer,
-    setAskAnswer,
-    askSources,
-    setAskSources,
-    askLoading,
-    setAskLoading,
-    askError,
-    setAskError,
-    initializeSupabase,
-    loadExistingPet,
-    loadTimeline,
-    askPawso,
-    openAskScreen,
-    getAskSourceLabel,
-    loadCareData,
-    parseCareDateTime,
-    openCareScreen,
-    createCareTask,
-    completeCareTask,
-    formatDueLabel,
-    getMedicationUrgency,
-    loadMedicationData,
-    buildScheduledDate,
-    getTodayMedicationDoses,
-    formatMedicationTime,
-    openMedicationsScreen,
-    createMedication,
-    logMedicationDose,
-    loadDocuments,
-    openDocumentsScreen,
-    openOriginalDocument,
-    formatDocumentDate,
-    formatDocumentSize,
-    normalizeEventDate,
-    parseWeightKg,
-    createPetProfile,
-    checkBackend,
-    canCreateProfile,
     petEmoji,
-    alteredLabel,
-    alteredValue,
-    persistExtractionProposal,
     pickVetRecord,
-    confirmExtraction,
-    todayMedicationDoses,
-    pendingMedicationDoses,
-    completedMedicationDoses,
-    activeCareTasks,
-    overdueMedicationDoses,
-    dueSoonMedicationDoses,
-    laterMedicationDoses,
-    overdueCareTasks,
-    upcomingCareTasks,
-    followUpEvents
   } = usePawso();
 
   const countEvents = (type: string) =>
     timelineEvents.filter((event) => event.type === type).length;
 
-  const filteredEvents =
+  const typeFilteredEvents =
     eventFilter === 'all'
       ? timelineEvents
       : timelineEvents.filter((event) => event.type === eventFilter);
+  const filteredEvents = typeFilteredEvents.filter((event) => {
+    const query = eventSearch.trim().toLowerCase();
+    const matchesSearch =
+      !query || `${event.title} ${event.detail} ${event.source}`.toLowerCase().includes(query);
+    const normalizedDate = /^\d{4}-\d{2}-\d{2}/.exec(event.date)?.[0] ?? '';
+    const matchesStart = !startDate || !normalizedDate || normalizedDate >= startDate;
+    const matchesEnd = !endDate || !normalizedDate || normalizedDate <= endDate;
+    return matchesSearch && matchesStart && matchesEnd;
+  });
+  const visibleEvents = filteredEvents.slice(0, visibleCount);
 
   const activityBuckets = Array.from({ length: 6 }, (_, index) => {
     const month = new Date();
@@ -235,6 +81,7 @@ export function TimelineScreen() {
           'Veterinary visit',
           'Owner observation',
           'Weight',
+          'Lab result',
           'Follow-up',
         ].includes(event.type)
     ).length;
@@ -249,6 +96,7 @@ export function TimelineScreen() {
           (event) => event.type === 'Owner observation'
         ).length,
         weight: eventsThisMonth.filter((event) => event.type === 'Weight').length,
+        lab: eventsThisMonth.filter((event) => event.type === 'Lab result').length,
         followUp: eventsThisMonth.filter((event) => event.type === 'Follow-up')
           .length,
         other: otherCount,
@@ -261,20 +109,35 @@ export function TimelineScreen() {
     0
   );
   const hasOtherEvents = activityBuckets.some((bucket) => bucket.values.other > 0);
-  const timelineFilterOptions: Array<{
+  const timelineFilterOptions: {
     value: TimelineFilter;
     label: string;
     count: number;
-  }> = [{ value: 'all', label: 'All', count: timelineEvents.length }];
+  }[] = [{ value: 'all', label: 'All', count: timelineEvents.length }];
 
   for (const option of [
     { value: 'Veterinary visit', label: 'Vet' },
     { value: 'Owner observation', label: 'Notes' },
     { value: 'Weight', label: 'Weight' },
+    { value: 'Lab result', label: 'Labs' },
     { value: 'Follow-up', label: 'Follow-ups' },
   ] as const) {
     const count = countEvents(option.value);
     if (count > 0) timelineFilterOptions.push({ ...option, count });
+  }
+
+  if (!canViewMedical) {
+    return (
+      <Page scroll>
+        <Header back={() => setScreen('today')} title="Health Timeline" />
+        <View style={styles.infoCard}>
+          <Text style={styles.cardStrong}>Health history is private</Text>
+          <Text style={styles.cardMuted}>
+            Sitter access is limited to day-to-day care and medication instructions.
+          </Text>
+        </View>
+      </Page>
+    );
   }
 
 return (
@@ -343,6 +206,7 @@ return (
             { key: 'vet', label: 'Vet visit', color: '#6F3C86' },
             { key: 'observation', label: 'Observation', color: '#2F6F63' },
             { key: 'weight', label: 'Weight', color: '#4E79A7' },
+            { key: 'lab', label: 'Lab', color: '#9A4F3D' },
             { key: 'followUp', label: 'Follow-up', color: '#D98B2B' },
             ...(hasOtherEvents
               ? [{ key: 'other', label: 'Other', color: '#8A9691' }]
@@ -359,6 +223,38 @@ return (
           onSelect={setEventFilter}
           options={timelineFilterOptions}
         />
+      ) : null}
+
+      {timelineEvents.length > 0 ? (
+        <View style={styles.infoCard}>
+          <Label text="Search history" />
+          <Input
+            value={eventSearch}
+            onChangeText={(value: string) => {
+              setEventSearch(value);
+              setVisibleCount(25);
+            }}
+            placeholder="Search titles, details, or source"
+          />
+          <View style={styles.medicationDoseRow}>
+            <View style={{ flex: 1 }}>
+              <Label text="From" />
+              <Input
+                value={startDate}
+                onChangeText={setStartDate}
+                placeholder="YYYY-MM-DD"
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Label text="To" />
+              <Input
+                value={endDate}
+                onChangeText={setEndDate}
+                placeholder="YYYY-MM-DD"
+              />
+            </View>
+          </View>
+        </View>
       ) : null}
 
       {timelineEvents.length === 0 ? (
@@ -378,7 +274,7 @@ return (
           </Text>
         </View>
       ) : (
-        filteredEvents.map((event) => (
+        visibleEvents.map((event) => (
           <View
             key={event.id}
             style={styles.timelineEvent}
@@ -409,6 +305,13 @@ return (
           </View>
         ))
       )}
+
+      {visibleEvents.length < filteredEvents.length ? (
+        <SecondaryButton
+          title={`Show ${Math.min(25, filteredEvents.length - visibleEvents.length)} more events`}
+          onPress={() => setVisibleCount((count) => count + 25)}
+        />
+      ) : null}
 
       {canManageMedical ? (
         <PrimaryButton

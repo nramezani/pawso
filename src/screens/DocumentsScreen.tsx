@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
 import { FilterChipRow, MetricStrip } from '../components/VisualSummary';
@@ -8,13 +8,7 @@ import {
   Header,
   Label,
   Input,
-  OptionButton,
-  PrimaryButton,
   SecondaryButton,
-  Card,
-  Info,
-  QuickAction,
-  ReviewField,
   styles,
 } from '../components/ui';
 
@@ -22,179 +16,27 @@ type DocumentFilter = 'all' | 'review_required' | 'confirmed';
 
 export function DocumentsScreen() {
   const [documentFilter, setDocumentFilter] = useState<DocumentFilter>('all');
+  const [documentSearch, setDocumentSearch] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
   const {
     setScreen,
     canViewMedical,
     canManageMedical,
-    apiStatus,
-    setApiStatus,
-    authReady,
-    setAuthReady,
-    authError,
-    setAuthError,
-    databaseError,
-    setDatabaseError,
-    isSavingPet,
-    setIsSavingPet,
-    isConfirmingExtraction,
-    setIsConfirmingExtraction,
-    currentPetId,
-    setCurrentPetId,
     petName,
-    setPetName,
-    petType,
-    setPetType,
-    breed,
-    setBreed,
-    petAge,
-    setPetAge,
-    petSex,
-    setPetSex,
-    alteredStatus,
-    setAlteredStatus,
-    weight,
-    setWeight,
-    microchip,
-    setMicrochip,
-    conditions,
-    setConditions,
-    allergies,
-    setAllergies,
-    medications,
-    setMedications,
-    vetClinic,
-    setVetClinic,
-    documentName,
-    setDocumentName,
-    documentSize,
-    setDocumentSize,
-    documentContentType,
-    setDocumentContentType,
-    currentDocumentId,
-    setCurrentDocumentId,
-    currentExtractionId,
-    setCurrentExtractionId,
-    uploadError,
-    setUploadError,
-    visitDate,
-    setVisitDate,
-    clinic,
-    setClinic,
-    finding,
-    setFinding,
-    diagnosis,
-    setDiagnosis,
-    followUp,
-    setFollowUp,
-    timelineEvents,
-    setTimelineEvents,
     petDocuments,
-    setPetDocuments,
+    archivedPetDocuments,
     documentsLoading,
-    setDocumentsLoading,
     documentsError,
-    setDocumentsError,
     openingDocumentId,
-    setOpeningDocumentId,
-    medicationList,
-    setMedicationList,
-    medicationSchedules,
-    setMedicationSchedules,
-    medicationLogs,
-    setMedicationLogs,
-    medicationsLoading,
-    setMedicationsLoading,
-    medicationsError,
-    setMedicationsError,
-    isSavingMedication,
-    setIsSavingMedication,
-    loggingDoseId,
-    setLoggingDoseId,
-    newMedicationName,
-    setNewMedicationName,
-    newMedicationDose,
-    setNewMedicationDose,
-    newMedicationUnit,
-    setNewMedicationUnit,
-    newMedicationInstructions,
-    setNewMedicationInstructions,
-    careTasks,
-    setCareTasks,
-    taskCompletions,
-    setTaskCompletions,
-    careLoading,
-    setCareLoading,
-    careError,
-    setCareError,
-    savingCareTask,
-    setSavingCareTask,
-    completingTaskId,
-    setCompletingTaskId,
-    newCareTitle,
-    setNewCareTitle,
-    newCareNotes,
-    setNewCareNotes,
-    newCareDate,
-    setNewCareDate,
-    newCareTime,
-    setNewCareTime,
-    askQuestion,
-    setAskQuestion,
-    askAnswer,
-    setAskAnswer,
-    askSources,
-    setAskSources,
-    askLoading,
-    setAskLoading,
-    askError,
-    setAskError,
-    initializeSupabase,
-    loadExistingPet,
-    loadTimeline,
-    askPawso,
-    openAskScreen,
-    getAskSourceLabel,
-    loadCareData,
-    parseCareDateTime,
-    openCareScreen,
-    createCareTask,
-    completeCareTask,
-    formatDueLabel,
-    getMedicationUrgency,
-    loadMedicationData,
-    buildScheduledDate,
-    getTodayMedicationDoses,
-    formatMedicationTime,
-    openMedicationsScreen,
-    createMedication,
-    logMedicationDose,
-    loadDocuments,
-    openDocumentsScreen,
+    deletingDocumentId,
+    archiveDocument,
+    restoreDocument,
+    deleteDocumentPermanently,
     resumeExtractionReview,
     openOriginalDocument,
     formatDocumentDate,
     formatDocumentSize,
-    normalizeEventDate,
-    parseWeightKg,
-    createPetProfile,
-    checkBackend,
-    canCreateProfile,
-    petEmoji,
-    alteredLabel,
-    alteredValue,
-    persistExtractionProposal,
     pickVetRecord,
-    confirmExtraction,
-    todayMedicationDoses,
-    pendingMedicationDoses,
-    completedMedicationDoses,
-    activeCareTasks,
-    overdueMedicationDoses,
-    dueSoonMedicationDoses,
-    laterMedicationDoses,
-    overdueCareTasks,
-    upcomingCareTasks,
-    followUpEvents
   } = usePawso();
 
   const confirmedDocuments = petDocuments.filter(
@@ -207,15 +49,18 @@ export function DocumentsScreen() {
     (total, document) => total + document.linked_events,
     0
   );
-  const filteredDocuments =
+  const statusFilteredDocuments =
     documentFilter === 'all'
       ? petDocuments
       : petDocuments.filter((document) => document.status === documentFilter);
-  const documentFilterOptions: Array<{
+  const filteredDocuments = statusFilteredDocuments.filter((document) =>
+    document.filename.toLowerCase().includes(documentSearch.trim().toLowerCase())
+  );
+  const documentFilterOptions: {
     value: DocumentFilter;
     label: string;
     count: number;
-  }> = [{ value: 'all', label: 'All', count: petDocuments.length }];
+  }[] = [{ value: 'all', label: 'All', count: petDocuments.length }];
   if (documentsNeedingReview > 0) {
     documentFilterOptions.push({
       value: 'review_required',
@@ -305,12 +150,21 @@ return (
         )}
 
         {canViewMedical && petDocuments.length > 0 ? (
-          <FilterChipRow
-            label="Filter medical records"
-            selected={documentFilter}
-            onSelect={setDocumentFilter}
-            options={documentFilterOptions}
-          />
+          <>
+            <Label text="Search records" />
+            <Input
+              value={documentSearch}
+              onChangeText={setDocumentSearch}
+              placeholder="Search by filename"
+              autoCorrect={false}
+            />
+            <FilterChipRow
+              label="Filter medical records"
+              selected={documentFilter}
+              onSelect={setDocumentFilter}
+              options={documentFilterOptions}
+            />
+          </>
         ) : null}
 
         {documentsError !== '' && (
@@ -419,9 +273,108 @@ return (
                   <Text style={styles.outlineButtonText}>Continue AI review</Text>
                 </Pressable>
               ) : null}
+
+              {canManageMedical ? (
+                <View style={styles.compactActionRow}>
+                  <Pressable
+                    style={styles.compactActionButton}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Archive ${document.filename}`}
+                    disabled={deletingDocumentId === document.id}
+                    onPress={() => archiveDocument(document)}
+                  >
+                    <Text style={styles.compactActionText}>Archive</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.compactActionButton}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Delete ${document.filename} permanently`}
+                    disabled={deletingDocumentId === document.id}
+                    onPress={() =>
+                      Alert.alert(
+                        'Delete document permanently?',
+                        'The original file, AI extraction, and document record will be deleted. Timeline items already confirmed remain but lose their document link.',
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          {
+                            text: 'Delete permanently',
+                            style: 'destructive',
+                            onPress: () => deleteDocumentPermanently(document),
+                          },
+                        ]
+                      )
+                    }
+                  >
+                    <Text style={styles.compactActionText}>
+                      {deletingDocumentId === document.id ? 'Working…' : 'Delete'}
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
             </View>
           ))
         )}
+
+        {canManageMedical && archivedPetDocuments.length > 0 ? (
+          <View style={{ marginTop: 12 }}>
+            <Pressable
+              style={styles.outlineButton}
+              accessibilityRole="button"
+              accessibilityLabel={`${showArchived ? 'Hide' : 'Show'} archived documents`}
+              accessibilityState={{ expanded: showArchived }}
+              onPress={() => setShowArchived((value) => !value)}
+            >
+              <Text style={styles.outlineButtonText}>
+                {showArchived ? 'Hide' : 'Show'} archived records ({archivedPetDocuments.length})
+              </Text>
+            </Pressable>
+            {showArchived
+              ? archivedPetDocuments.map((document) => (
+                  <View key={`archived-${document.id}`} style={styles.documentCard}>
+                    <Text style={styles.documentCardTitle}>{document.filename}</Text>
+                    <Text style={styles.documentCardMeta}>
+                      Archived · {formatDocumentDate(document.created_at)}
+                    </Text>
+                    <View style={styles.compactActionRow}>
+                      <Pressable
+                        style={styles.compactActionButton}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Restore ${document.filename}`}
+                        disabled={deletingDocumentId === document.id}
+                        accessibilityState={{ disabled: deletingDocumentId === document.id }}
+                        onPress={() => restoreDocument(document)}
+                      >
+                        <Text style={styles.compactActionText}>Restore</Text>
+                      </Pressable>
+                      <Pressable
+                        style={styles.compactActionButton}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Delete ${document.filename} permanently`}
+                        disabled={deletingDocumentId === document.id}
+                        accessibilityState={{ disabled: deletingDocumentId === document.id }}
+                        onPress={() =>
+                          Alert.alert(
+                            'Delete archived document?',
+                            'The original file and document record will be permanently removed. This cannot be undone.',
+                            [
+                              { text: 'Cancel', style: 'cancel' },
+                              {
+                                text: 'Delete permanently',
+                                style: 'destructive',
+                                onPress: () => deleteDocumentPermanently(document),
+                              },
+                            ]
+                          )
+                        }
+                      >
+                        <Text style={styles.compactActionText}>Delete</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ))
+              : null}
+          </View>
+        ) : null}
 
         <SecondaryButton title="Back to Today" onPress={() => setScreen('today')} />
       </Page>

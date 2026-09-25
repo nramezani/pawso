@@ -18,7 +18,14 @@ export function HouseholdScreen() {
   const {
     setScreen,
     householdName,
+    householdId,
+    householdOptions,
+    switchHousehold,
+    householdTimeZone,
+    updateHouseholdTimeZone,
+    updateHouseholdMemberRole,
     householdRole,
+    accountIsAnonymous,
     householdMembers,
     householdInvitations,
     householdBusy,
@@ -41,7 +48,9 @@ export function HouseholdScreen() {
   } = usePawso();
   const [showJoin, setShowJoin] = useState(Boolean(joinCode));
   const [shareError, setShareError] = useState('');
-  const canInvite = householdRole === 'owner';
+  const [timeZoneDraft, setTimeZoneDraft] = useState<string | null>(null);
+  const isOwner = householdRole === 'owner';
+  const canInvite = isOwner && !accountIsAnonymous;
   const joinFormVisible = showJoin || Boolean(joinCode);
   const ownerCount = householdMembers.filter((member) => member.role === 'owner').length;
   const caregiverCount = householdMembers.filter(
@@ -134,12 +143,67 @@ This one-time code expires after 7 days.`
         Give each caregiver their own access—no shared passwords.
       </Text>
 
+      {householdOptions.length > 1 ? (
+        <View style={styles.infoCard}>
+          <Text style={styles.cardStrong}>Switch household</Text>
+          <Text style={styles.cardMuted}>
+            Choose which household and pets are active on this device.
+          </Text>
+          <View style={styles.compactActionRow}>
+            {householdOptions.map((option) => (
+              <OptionButton
+                key={option.household_id}
+                title={`${option.name} · ${option.role}`}
+                selected={householdId === option.household_id}
+                onPress={() => {
+                  setTimeZoneDraft(null);
+                  switchHousehold(option.household_id);
+                }}
+              />
+            ))}
+          </View>
+        </View>
+      ) : null}
+
       <View style={styles.infoCard}>
         <Text style={styles.cardStrong}>Your role · {householdRole || 'member'}</Text>
         <Text style={styles.cardMuted}>
           Owners manage everything. Caregivers manage routine care. Sitters can
           follow and complete assigned care.
         </Text>
+        <Text style={styles.reminderFinePrint}>
+          Sitters can see pet identity, emergency details, allergies, conditions,
+          active medication instructions, and care tasks. They cannot see veterinary
+          documents, the medical timeline, AI answers, or change health records.
+        </Text>
+      </View>
+
+      <View style={styles.infoCard}>
+        <Text style={styles.cardStrong}>Reminder time zone</Text>
+        <Text style={styles.cardMuted}>
+          Medication and care times use this household time zone, including across DST and travel.
+        </Text>
+        {isOwner ? (
+          <>
+            <Input
+              value={timeZoneDraft ?? householdTimeZone}
+              onChangeText={setTimeZoneDraft}
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder="America/Vancouver"
+            />
+            <SecondaryButton
+              title="Save time zone"
+              disabled={householdBusy || !(timeZoneDraft ?? householdTimeZone).trim()}
+              onPress={() => {
+                updateHouseholdTimeZone((timeZoneDraft ?? householdTimeZone).trim());
+                setTimeZoneDraft(null);
+              }}
+            />
+          </>
+        ) : (
+          <Text style={styles.inviteCodeText}>{householdTimeZone}</Text>
+        )}
       </View>
 
       {householdMembers.length > 0 ? (
@@ -174,20 +238,27 @@ This one-time code expires after 7 days.`
           Paste a code here if someone invited you. When an invitation names an
           email address, you must sign in with that same address.
         </Text>
-        <SecondaryButton
-          title={joinFormVisible ? 'Hide join form' : 'Join with an invite code'}
-          onPress={() => {
-            if (joinFormVisible) {
-              setShowJoin(false);
-              setJoinCode('');
-            } else {
-              setShowJoin(true);
-            }
-          }}
-        />
+        {accountIsAnonymous ? (
+          <PrimaryButton
+            title="Secure account to join"
+            onPress={() => setScreen('account')}
+          />
+        ) : (
+          <SecondaryButton
+            title={joinFormVisible ? 'Hide join form' : 'Join with an invite code'}
+            onPress={() => {
+              if (joinFormVisible) {
+                setShowJoin(false);
+                setJoinCode('');
+              } else {
+                setShowJoin(true);
+              }
+            }}
+          />
+        )}
       </View>
 
-      {joinFormVisible ? (
+      {joinFormVisible && !accountIsAnonymous ? (
         <>
           <Text style={styles.sectionTitle}>Join another household</Text>
           <Label text="Your display name" />
@@ -218,12 +289,26 @@ This one-time code expires after 7 days.`
           <View key={member.id} style={styles.documentCard}>
             <Text style={styles.cardStrong}>{member.display_name || 'Pawso member'}</Text>
             <Text style={styles.cardMuted}>{member.role}</Text>
-            {canInvite && member.role !== 'owner' ? (
-              <SecondaryButton
-                title="Remove access"
-                disabled={householdBusy}
-                onPress={() => confirmRemoveMember(member)}
-              />
+            {isOwner && member.role !== 'owner' ? (
+              <>
+                <View style={styles.row}>
+                  <OptionButton
+                    title="Caregiver"
+                    selected={member.role === 'caregiver'}
+                    onPress={() => updateHouseholdMemberRole(member.id, 'caregiver')}
+                  />
+                  <OptionButton
+                    title="Sitter"
+                    selected={member.role === 'sitter'}
+                    onPress={() => updateHouseholdMemberRole(member.id, 'sitter')}
+                  />
+                </View>
+                <SecondaryButton
+                  title="Remove access"
+                  disabled={householdBusy}
+                  onPress={() => confirmRemoveMember(member)}
+                />
+              </>
             ) : null}
           </View>
         ))
@@ -237,7 +322,7 @@ This one-time code expires after 7 days.`
         onPress={refreshHousehold}
       />
 
-      {canInvite && householdInvitations.length > 0 ? (
+      {isOwner && householdInvitations.length > 0 ? (
         <>
           <Text style={styles.sectionTitle}>Pending invitations</Text>
           {householdInvitations.map((invitation: any) => (
@@ -316,6 +401,14 @@ This one-time code expires after 7 days.`
             </View>
           ) : null}
         </>
+      ) : isOwner && accountIsAnonymous ? (
+        <View style={styles.infoCard}>
+          <Text style={styles.cardStrong}>Secure your account to share care</Text>
+          <Text style={styles.cardMuted}>
+            Add your email and password before inviting a caregiver or sitter so access can be recovered safely.
+          </Text>
+          <PrimaryButton title="Secure account" onPress={() => setScreen('account')} />
+        </View>
       ) : null}
 
       {shareError ? (

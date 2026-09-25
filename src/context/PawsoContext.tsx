@@ -2,17 +2,22 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as DocumentPicker from 'expo-document-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { decode } from 'base64-arraybuffer';
-import { Alert } from 'react-native';
+import { Alert, Appearance } from 'react-native';
 import {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
 import * as Linking from 'expo-linking';
 
-import { SUPABASE_CONFIGURATION_ERROR, supabase } from '../../lib/supabase';
+import {
+  createTransientAuthClient,
+  SUPABASE_CONFIGURATION_ERROR,
+  supabase,
+} from '../../lib/supabase';
 import { API_BASE_URL } from '../config';
 import {
   clearPawsoLocalNotifications,
@@ -24,10 +29,33 @@ import {
   syncPawsoLocalNotifications,
 } from '../services/notifications';
 import { navigateToScreen } from '../navigation/navigationRef';
+import { setPawsoColorScheme } from '../components/ui';
 import {
+  permanentlyDeleteDocument,
+  permanentlyDeletePet,
+  shareStructuredDataExport,
+} from '../services/dataRights';
+import {
+  chooseAndUploadPetPhoto,
+  createPetPhotoUrl,
+  removePetPhoto as removeStoredPetPhoto,
+} from '../services/petPhotos';
+import { shareEmergencyPetCard } from '../services/emergencyCard';
+import {
+  clearUserSnapshots,
+  isDeviceOnline,
+  loadLatestPetSnapshot,
+  loadPetSnapshot,
+  savePetSnapshot,
+  subscribeToConnectivity,
+} from '../services/offlineCache';
+import {
+  addDaysToDateInput,
+  formatDateInputInTimeZone,
   formatLocalDateInput,
+  getDayBoundsInTimeZone,
   isValidLocalDate,
-  parseLocalDateTime,
+  parseDateTimeInTimeZone,
 } from '../utils/dateTime';
 import type {
   Screen,
@@ -49,10 +77,37 @@ import type {
   PetSummary,
   PetTodaySummary,
   HouseholdMember,
+  HouseholdSummary,
+  SymptomEntry,
+  LabResult,
 } from '../types';
 
 const ACTIVE_HOUSEHOLD_KEY_PREFIX = 'pawso.activeHousehold';
 const AI_PROCESSING_CONSENT_VERSION = '2026-09-24';
+const APPEARANCE_KEY = 'pawso.appearance';
+const PET_SELECT = [
+  'id',
+  'household_id',
+  'name',
+  'species',
+  'breed',
+  'approximate_age',
+  'date_of_birth',
+  'sex',
+  'spayed_neutered',
+  'weight_kg',
+  'microchip_number',
+  'conditions',
+  'allergies',
+  'medications',
+  'vet_clinic',
+  'photo_path',
+  'archived_at',
+  'emergency_notes',
+  'emergency_contact_name',
+  'emergency_contact_phone',
+  'created_at',
+].join(', ');
 
 type DiagnosisCertainty =
   | 'confirmed'
@@ -71,6 +126,15 @@ const DIAGNOSIS_CERTAINTY_LABELS: Record<DiagnosisCertainty, string> = {
   unknown: 'Not stated',
 };
 
+function logDevelopmentError(label: string, error: unknown) {
+  if (!__DEV__) return;
+  console.log(label, error instanceof Error ? error.message : error);
+}
+
+function withoutSignedPhotoUrl(pet: PetSummary): PetSummary {
+  return { ...pet, photo_url: undefined };
+}
+
 function normalizeDiagnosisCertainty(value: unknown): DiagnosisCertainty {
   return typeof value === 'string' && value in DIAGNOSIS_CERTAINTY_LABELS
     ? (value as DiagnosisCertainty)
@@ -85,6 +149,10 @@ function aiConsentStorageKey(userId: string) {
   return `pawso.aiProcessingConsent.${userId}`;
 }
 
+function offlineAccessStorageKey(userId: string) {
+  return `pawso.offlineAccessEnabled.${userId}`;
+}
+
 function usePawsoState() {
   const setScreen = (screen: Screen) => navigateToScreen(screen);
 
@@ -92,6 +160,7 @@ function usePawsoState() {
   const [authReady, setAuthReady] = useState(false);
   const [authError, setAuthError] = useState('');
   const [accountEmail, setAccountEmail] = useState('');
+  const [accountUserId, setAccountUserId] = useState('');
   const [accountIsAnonymous, setAccountIsAnonymous] = useState(true);
   const [accountBusy, setAccountBusy] = useState(false);
   const [accountMessage, setAccountMessage] = useState('');
@@ -101,10 +170,13 @@ function usePawsoState() {
   const [accountAuthMode, setAccountAuthMode] = useState<'secure' | 'signin'>('secure');
   const [signInEmail, setSignInEmail] = useState('');
   const [signInPassword, setSignInPassword] = useState('');
+  const [passwordResetCooldown, setPasswordResetCooldown] = useState(0);
   const [accountRecoveryMode, setAccountRecoveryMode] = useState(false);
   const [recoveryPassword, setRecoveryPassword] = useState('');
   const [householdId, setHouseholdId] = useState<string | null>(null);
   const [householdName, setHouseholdName] = useState('My Pawso Household');
+  const [householdTimeZone, setHouseholdTimeZone] = useState('UTC');
+  const [householdOptions, setHouseholdOptions] = useState<HouseholdSummary[]>([]);
   const [householdRole, setHouseholdRole] = useState<'owner' | 'caregiver' | 'sitter' | null>(null);
   const [householdMembers, setHouseholdMembers] = useState<HouseholdMember[]>([]);
   const [householdInvitations, setHouseholdInvitations] = useState<any[]>([]);
@@ -126,8 +198,20 @@ function usePawsoState() {
   const [isConfirmingExtraction, setIsConfirmingExtraction] = useState(false);
   const [currentPetId, setCurrentPetId] = useState<string | null>(null);
   const [pets, setPets] = useState<PetSummary[]>([]);
+  const selectPetRef = useRef<
+    (petId: string, destination?: Screen) => Promise<boolean>
+  >(async () => false);
+  const [archivedPets, setArchivedPets] = useState<PetSummary[]>([]);
   const [allPetsToday, setAllPetsToday] = useState<PetTodaySummary[]>([]);
   const [todayView, setTodayView] = useState<'all' | 'pet'>('pet');
+  const [petPhotoPath, setPetPhotoPath] = useState<string | null>(null);
+  const [petPhotoUrl, setPetPhotoUrl] = useState<string | null>(null);
+  const [petPhotoBusy, setPetPhotoBusy] = useState(false);
+  const petPhotoRequestRef = useRef(0);
+  const [petDateOfBirth, setPetDateOfBirth] = useState('');
+  const [emergencyNotes, setEmergencyNotes] = useState('');
+  const [emergencyContactName, setEmergencyContactName] = useState('');
+  const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
 
   const [petName, setPetName] = useState('');
   const [petType, setPetType] = useState<PetType | null>(null);
@@ -166,9 +250,11 @@ function usePawsoState() {
 
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
   const [petDocuments, setPetDocuments] = useState<PetDocument[]>([]);
+  const [archivedPetDocuments, setArchivedPetDocuments] = useState<PetDocument[]>([]);
   const [documentsLoading, setDocumentsLoading] = useState(false);
   const [documentsError, setDocumentsError] = useState('');
   const [openingDocumentId, setOpeningDocumentId] = useState<string | null>(null);
+  const [deletingDocumentId, setDeletingDocumentId] = useState<string | null>(null);
 
   const [medicationList, setMedicationList] = useState<Medication[]>([]);
   const [medicationSchedules, setMedicationSchedules] = useState<MedicationSchedule[]>([]);
@@ -185,6 +271,12 @@ function usePawsoState() {
   const [newMedicationUnit, setNewMedicationUnit] = useState('');
   const [newMedicationInstructions, setNewMedicationInstructions] = useState('');
   const [newMedicationTimes, setNewMedicationTimes] = useState<string[]>(['08:00']);
+  const [editingMedicationId, setEditingMedicationId] = useState<string | null>(null);
+  const [newMedicationStartDate, setNewMedicationStartDate] = useState('');
+  const [newMedicationEndDate, setNewMedicationEndDate] = useState('');
+  const [newMedicationRefills, setNewMedicationRefills] = useState('');
+  const [newMedicationRefillDate, setNewMedicationRefillDate] = useState('');
+  const [newMedicationPaused, setNewMedicationPaused] = useState(false);
 
   const [careTasks, setCareTasks] = useState<CareTask[]>([]);
   const [taskCompletions, setTaskCompletions] = useState<TaskCompletion[]>([]);
@@ -198,6 +290,11 @@ function usePawsoState() {
   const [newCareNotes, setNewCareNotes] = useState('');
   const [newCareDate, setNewCareDate] = useState('');
   const [newCareTime, setNewCareTime] = useState('09:00');
+  const [newCareFrequency, setNewCareFrequency] = useState<
+    'none' | 'daily' | 'weekly' | 'monthly'
+  >('none');
+  const [newCareInterval, setNewCareInterval] = useState('1');
+  const [newCareEndsOn, setNewCareEndsOn] = useState('');
 
   const [askQuestion, setAskQuestion] = useState('');
   const [askAnswer, setAskAnswer] = useState<AskAnswer | null>(null);
@@ -216,6 +313,23 @@ function usePawsoState() {
   const [checkInWeight, setCheckInWeight] = useState('');
   const [checkInSaving, setCheckInSaving] = useState(false);
   const [checkInError, setCheckInError] = useState('');
+  const [symptomEntries, setSymptomEntries] = useState<SymptomEntry[]>([]);
+  const [labResults, setLabResults] = useState<LabResult[]>([]);
+  const [healthDataLoading, setHealthDataLoading] = useState(false);
+  const [healthDataError, setHealthDataError] = useState('');
+  const [symptomSeverity, setSymptomSeverity] = useState<1 | 2 | 3 | 4 | 5>(3);
+  const [symptomFrequency, setSymptomFrequency] = useState<
+    'single' | 'intermittent' | 'frequent' | 'constant'
+  >('single');
+  const [symptomDuration, setSymptomDuration] = useState('');
+  const [newLabDate, setNewLabDate] = useState(formatLocalDateInput());
+  const [newLabTest, setNewLabTest] = useState('');
+  const [newLabValue, setNewLabValue] = useState('');
+  const [newLabUnit, setNewLabUnit] = useState('');
+  const [newLabLow, setNewLabLow] = useState('');
+  const [newLabHigh, setNewLabHigh] = useState('');
+  const [newLabNotes, setNewLabNotes] = useState('');
+  const [healthDataSaving, setHealthDataSaving] = useState(false);
   const [smartCareSuggestions, setSmartCareSuggestions] = useState<SmartCareSuggestion[]>([]);
   const [smartCareSources, setSmartCareSources] = useState<AskSource[]>([]);
   const [smartCareLoading, setSmartCareLoading] = useState(false);
@@ -227,6 +341,19 @@ function usePawsoState() {
   const [notificationSyncing, setNotificationSyncing] = useState(false);
   const [scheduledNotificationCount, setScheduledNotificationCount] = useState(0);
   const [notificationError, setNotificationError] = useState('');
+  const [dataRightsBusy, setDataRightsBusy] = useState(false);
+  const [dataRightsMessage, setDataRightsMessage] = useState('');
+  const [dataRightsError, setDataRightsError] = useState('');
+  const [isOnline, setIsOnline] = useState(true);
+  const [offlineSnapshotAt, setOfflineSnapshotAt] = useState<string | null>(null);
+  const [offlineAccessEnabled, setOfflineAccessEnabledState] = useState(false);
+  const [appearanceMode, setAppearanceModeState] = useState<'system' | 'light' | 'dark'>('system');
+  const [systemAppearance, setSystemAppearance] = useState<'light' | 'dark'>(
+    Appearance.getColorScheme() === 'dark' ? 'dark' : 'light'
+  );
+  const resolvedAppearance =
+    appearanceMode === 'system' ? systemAppearance : appearanceMode;
+  setPawsoColorScheme(resolvedAppearance);
 
   async function getApiAuthHeaders(contentType?: string) {
     const { data: { session }, error } = await supabase.auth.getSession();
@@ -239,6 +366,12 @@ function usePawsoState() {
       Authorization: `Bearer ${session.access_token}`,
       ...(contentType ? { 'Content-Type': contentType } : {}),
     };
+  }
+
+  function requireOnline(setError: (message: string) => void) {
+    if (isOnline) return true;
+    setError('Pawso is offline. Reconnect before making changes.');
+    return false;
   }
 
   function getApiErrorMessage(body: any, fallback: string) {
@@ -297,7 +430,116 @@ function usePawsoState() {
   useEffect(() => {
     checkBackend();
     initializeSupabase();
+    // Provider bootstrap must run exactly once; auth changes are handled by Supabase listeners.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (passwordResetCooldown <= 0) return;
+    const timer = setTimeout(
+      () => setPasswordResetCooldown((value) => Math.max(0, value - 1)),
+      1000
+    );
+    return () => clearTimeout(timer);
+  }, [passwordResetCooldown]);
+
+  useEffect(() => {
+    if (
+      !offlineAccessEnabled ||
+      householdRole !== 'owner' ||
+      !currentPetId ||
+      !householdId
+    ) return;
+    const pet = pets.find((item) => item.id === currentPetId);
+    if (!pet) return;
+    supabase.auth.getUser().then(({ data }) => {
+      if (!data.user) return;
+      savePetSnapshot(data.user.id, householdId, currentPetId, {
+        householdName,
+        householdTimeZone,
+        householdRole,
+        householdMembers,
+        pets: pets.map(withoutSignedPhotoUrl),
+        pet: withoutSignedPhotoUrl(pet),
+        timelineEvents: timelineEvents.slice(0, 100),
+        petDocuments: petDocuments.slice(0, 50),
+        medicationList,
+        medicationSchedules,
+        medicationLogs,
+        medicationHistoryLogs: medicationHistoryLogs.slice(-100),
+        careTasks: careTasks.slice(0, 100),
+        taskCompletions: taskCompletions.slice(0, 100),
+        symptomEntries: symptomEntries.slice(0, 100),
+        labResults: labResults.slice(0, 100),
+      }).catch(() => undefined);
+    });
+  }, [
+    currentPetId,
+    householdId,
+    householdName,
+    householdTimeZone,
+    householdRole,
+    householdMembers,
+    pets,
+    timelineEvents,
+    petDocuments,
+    medicationList,
+    medicationSchedules,
+    medicationLogs,
+    medicationHistoryLogs,
+    careTasks,
+    taskCompletions,
+    symptomEntries,
+    labResults,
+    offlineAccessEnabled,
+  ]);
+
+  useEffect(() => {
+    AsyncStorage.getItem(APPEARANCE_KEY)
+      .then((value) => {
+        if (value === 'system' || value === 'light' || value === 'dark') {
+          setAppearanceModeState(value);
+        }
+      })
+      .catch(() => undefined);
+
+    isDeviceOnline().then(setIsOnline).catch(() => undefined);
+    const networkSubscription = subscribeToConnectivity(setIsOnline);
+    const appearanceSubscription = Appearance.addChangeListener(({ colorScheme }) => {
+      setSystemAppearance(colorScheme === 'dark' ? 'dark' : 'light');
+    });
+    return () => {
+      networkSubscription.remove();
+      appearanceSubscription.remove();
+    };
+  }, []);
+
+  async function setAppearanceMode(mode: 'system' | 'light' | 'dark') {
+    setAppearanceModeState(mode);
+    await AsyncStorage.setItem(APPEARANCE_KEY, mode);
+  }
+
+  async function updateOfflineAccess(enabled: boolean) {
+    if (enabled && householdRole !== 'owner') {
+      throw new Error('Only a household owner can enable offline medical access.');
+    }
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+    if (error) throw error;
+    if (!user) throw new Error('Pawso session is not ready.');
+
+    await AsyncStorage.setItem(
+      offlineAccessStorageKey(user.id),
+      enabled ? 'true' : 'false'
+    );
+    setOfflineAccessEnabledState(enabled);
+    if (!enabled) {
+      await clearUserSnapshots(user.id);
+      setOfflineSnapshotAt(null);
+    }
+  }
 
   useEffect(() => {
     if (SUPABASE_CONFIGURATION_ERROR) return;
@@ -309,19 +551,21 @@ function usePawsoState() {
       const petId = typeof data.petId === 'string' ? data.petId : '';
       if (!petId) return;
 
-      await selectPet(petId);
+      const selected = await selectPetRef.current(petId);
+      if (!selected) return;
       setScreen(data.kind === 'care_task' ? 'care' : 'medications');
     })
       .then((cleanup) => {
         if (active) unsubscribe = cleanup;
         else cleanup();
       })
-      .catch((error) => console.log('Notification response error:', error));
+      .catch((error) => logDevelopmentError('Notification response error:', error));
 
     return () => {
       active = false;
       unsubscribe();
     };
+    // Notification taps subscribe once and dispatch through selectPetRef.
   }, []);
 
   useEffect(() => {
@@ -335,6 +579,8 @@ function usePawsoState() {
 
     const subscription = Linking.addEventListener('url', handleUrl);
     return () => subscription.remove();
+    // Linking subscribes once; callback processing obtains the current auth session itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function refreshNotificationState(petRows?: PetSummary[]) {
@@ -356,12 +602,12 @@ function usePawsoState() {
       if (enabled && permission === 'granted') {
         const rows = petRows ?? pets;
         if (rows.length > 0) {
-          const count = await syncPawsoLocalNotifications(rows);
+          const count = await syncPawsoLocalNotifications(rows, householdTimeZone);
           setScheduledNotificationCount(count);
         }
       }
     } catch (error) {
-      console.log('Notification state error:', error);
+      logDevelopmentError('Notification state error:', error);
       setNotificationError(
         error instanceof Error
           ? error.message
@@ -394,10 +640,10 @@ function usePawsoState() {
       await setLocalReminderPreference(true);
       setNotificationsEnabled(true);
 
-      const count = await syncPawsoLocalNotifications(pets);
+      const count = await syncPawsoLocalNotifications(pets, householdTimeZone);
       setScheduledNotificationCount(count);
     } catch (error) {
-      console.log('Enable notifications error:', error);
+      logDevelopmentError('Enable notifications error:', error);
       setNotificationError(
         error instanceof Error
           ? error.message
@@ -417,7 +663,7 @@ function usePawsoState() {
       setNotificationsEnabled(false);
       setScheduledNotificationCount(0);
     } catch (error) {
-      console.log('Disable notifications error:', error);
+      logDevelopmentError('Disable notifications error:', error);
       setNotificationError(
         error instanceof Error
           ? error.message
@@ -439,10 +685,10 @@ function usePawsoState() {
       const rows = petRows ?? pets;
       if (rows.length === 0) return;
 
-      const count = await syncPawsoLocalNotifications(rows);
+      const count = await syncPawsoLocalNotifications(rows, householdTimeZone);
       setScheduledNotificationCount(count);
     } catch (error) {
-      console.log('Notification sync error:', error);
+      logDevelopmentError('Notification sync error:', error);
       setNotificationError(
         error instanceof Error
           ? error.message
@@ -461,6 +707,24 @@ function usePawsoState() {
 
     setHouseholdId(data as string);
     return data as string;
+  }
+
+  async function loadHouseholdOptions(userId: string) {
+    const { data, error } = await supabase
+      .from('household_members')
+      .select('household_id, role, households!inner(name, time_zone)')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+
+    const options: HouseholdSummary[] = (data ?? []).map((row: any) => ({
+      household_id: row.household_id,
+      role: row.role,
+      name: row.households?.name ?? 'Pawso household',
+      time_zone: row.households?.time_zone ?? 'UTC',
+    }));
+    setHouseholdOptions(options);
+    return options;
   }
 
   async function rememberActiveHousehold(userId: string, activeHouseholdId: string) {
@@ -482,6 +746,8 @@ function usePawsoState() {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
+
+    await loadHouseholdOptions(userId);
 
     const rememberedMembership = (memberships ?? []).find(
       (membership) => membership.household_id === rememberedHouseholdId
@@ -516,7 +782,7 @@ function usePawsoState() {
         { data: members, error: membersError },
         { data: invitations, error: invitationsError },
       ] = await Promise.all([
-        supabase.from('households').select('id, name').eq('id', id).single(),
+        supabase.from('households').select('id, name, time_zone').eq('id', id).single(),
         supabase
           .from('household_members')
           .select('id, household_id, user_id, display_name, role, created_at')
@@ -533,6 +799,7 @@ function usePawsoState() {
       if (householdLoadError) throw householdLoadError;
       if (membersError) throw membersError;
       setHouseholdName(household?.name ?? 'My Pawso Household');
+      setHouseholdTimeZone(household?.time_zone ?? 'UTC');
       setHouseholdMembers((members ?? []) as HouseholdMember[]);
 
       const currentMember = (members ?? []).find(
@@ -557,11 +824,87 @@ function usePawsoState() {
 
       return id;
     } catch (error) {
-      console.log('Load household error:', error);
+      logDevelopmentError('Load household error:', error);
       setHouseholdError(
         error instanceof Error ? error.message : 'Could not load household.'
       );
       throw error;
+    }
+  }
+
+  async function switchHousehold(targetHouseholdId: string) {
+    if (!requireOnline(setHouseholdError)) return;
+    if (!targetHouseholdId || targetHouseholdId === householdId) return;
+    try {
+      setHouseholdBusy(true);
+      setHouseholdError('');
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
+      if (error) throw error;
+      if (!session?.user) throw new Error('Pawso session is not ready.');
+
+      await rememberActiveHousehold(session.user.id, targetHouseholdId);
+      clearPetScopedState();
+      await loadExistingPet(session.user.id, targetHouseholdId);
+      setScreen('today');
+    } catch (error) {
+      setHouseholdError(
+        error instanceof Error ? error.message : 'Could not switch households.'
+      );
+    } finally {
+      setHouseholdBusy(false);
+    }
+  }
+
+  async function updateHouseholdTimeZone(timeZone: string) {
+    if (!requireOnline(setHouseholdError)) return;
+    if (!householdId || householdRole !== 'owner') return;
+    try {
+      Intl.DateTimeFormat(undefined, { timeZone }).format(new Date());
+      const { error } = await supabase
+        .from('households')
+        .update({ time_zone: timeZone })
+        .eq('id', householdId);
+      if (error) throw error;
+      setHouseholdTimeZone(timeZone);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) await loadHouseholdOptions(session.user.id);
+      await syncNotificationsIfEnabled();
+    } catch (error) {
+      setHouseholdError(
+        error instanceof RangeError
+          ? 'Enter a valid IANA time zone, such as America/Vancouver.'
+          : error instanceof Error
+          ? error.message
+          : 'Could not update the household time zone.'
+      );
+    }
+  }
+
+  async function updateHouseholdMemberRole(
+    memberId: string,
+    role: 'caregiver' | 'sitter'
+  ) {
+    if (!requireOnline(setHouseholdError)) return;
+    if (!householdId) return;
+    try {
+      setHouseholdBusy(true);
+      setHouseholdError('');
+      const { error } = await supabase.rpc('update_household_member_role', {
+        target_household: householdId,
+        target_member: memberId,
+        target_role: role,
+      });
+      if (error) throw error;
+      await loadHousehold(householdId);
+    } catch (error) {
+      setHouseholdError(
+        error instanceof Error ? error.message : 'Could not change this role.'
+      );
+    } finally {
+      setHouseholdBusy(false);
     }
   }
 
@@ -576,6 +919,7 @@ function usePawsoState() {
   }
 
   async function removeHouseholdMember(memberId: string) {
+    if (!requireOnline(setHouseholdError)) return;
     if (!householdId) return;
     try {
       setHouseholdBusy(true);
@@ -596,6 +940,7 @@ function usePawsoState() {
   }
 
   async function cancelHouseholdInvitation(invitationId: string) {
+    if (!requireOnline(setHouseholdError)) return;
     if (!householdId) return;
     try {
       setHouseholdBusy(true);
@@ -616,7 +961,12 @@ function usePawsoState() {
   }
 
   async function createHouseholdInvite() {
+    if (!requireOnline(setHouseholdError)) return;
     if (!householdId) return;
+    if (accountIsAnonymous) {
+      setHouseholdError('Secure your Pawso account before sending invitations.');
+      return;
+    }
 
     try {
       setHouseholdBusy(true);
@@ -661,7 +1011,7 @@ function usePawsoState() {
         }
       }
     } catch (error) {
-      console.log('Create household invitation error:', error);
+      logDevelopmentError('Create household invitation error:', error);
       setHouseholdError(
         error instanceof Error ? error.message : 'Could not create invitation.'
       );
@@ -671,6 +1021,11 @@ function usePawsoState() {
   }
 
   async function acceptHouseholdInvite() {
+    if (!requireOnline(setHouseholdError)) return;
+    if (accountIsAnonymous) {
+      setHouseholdError('Secure or sign in to your Pawso account before joining a household.');
+      return;
+    }
     const code = joinCode.trim();
     if (!code) return;
 
@@ -701,7 +1056,7 @@ function usePawsoState() {
         await loadExistingPet(session.user.id, joinedHouseholdId);
       }
     } catch (error) {
-      console.log('Accept household invitation error:', error);
+      logDevelopmentError('Accept household invitation error:', error);
       setHouseholdError(
         error instanceof Error ? error.message : 'Could not join household.'
       );
@@ -710,6 +1065,7 @@ function usePawsoState() {
     }
   }
   function hydrateAccount(user: any) {
+    setAccountUserId(user?.id ?? '');
     setAccountEmail(user?.email ?? '');
     setAccountIsAnonymous(Boolean(user?.is_anonymous));
     if (user?.email) {
@@ -719,15 +1075,19 @@ function usePawsoState() {
 
   function resetUserScopedState() {
     setAccountEmail('');
+    setAccountUserId('');
     setAccountIsAnonymous(true);
     setSecureAccountEmail('');
     setSecureAccountPassword('');
     setSignInEmail('');
     setSignInPassword('');
+    setPasswordResetCooldown(0);
     setAccountRecoveryMode(false);
     setRecoveryPassword('');
     setHouseholdId(null);
     setHouseholdName('My Pawso Household');
+    setHouseholdTimeZone('UTC');
+    setHouseholdOptions([]);
     setHouseholdRole(null);
     setHouseholdMembers([]);
     setHouseholdInvitations([]);
@@ -746,6 +1106,7 @@ function usePawsoState() {
     setPetType(null);
     setBreed('');
     setPetAge('');
+    setPetDateOfBirth('');
     setPetSex(null);
     setAlteredStatus(null);
     setWeight('');
@@ -754,6 +1115,11 @@ function usePawsoState() {
     setAllergies('');
     setMedications('');
     setVetClinic('');
+    setPetPhotoPath(null);
+    setPetPhotoUrl(null);
+    setEmergencyNotes('');
+    setEmergencyContactName('');
+    setEmergencyContactPhone('');
     setDocumentName('');
     setDocumentSize(null);
     setDocumentContentType('');
@@ -771,12 +1137,24 @@ function usePawsoState() {
     setExtractionPromptVersion('');
     setTimelineEvents([]);
     setPetDocuments([]);
+    setArchivedPetDocuments([]);
     setMedicationList([]);
     setMedicationSchedules([]);
     setMedicationLogs([]);
     setMedicationHistoryLogs([]);
+    setEditingMedicationId(null);
+    setNewMedicationStartDate('');
+    setNewMedicationEndDate('');
+    setNewMedicationRefills('');
+    setNewMedicationRefillDate('');
+    setNewMedicationPaused(false);
     setCareTasks([]);
     setTaskCompletions([]);
+    setNewCareFrequency('none');
+    setNewCareInterval('1');
+    setNewCareEndsOn('');
+    setSymptomEntries([]);
+    setLabResults([]);
     setAskQuestion('');
     setAskAnswer(null);
     setAskSources([]);
@@ -795,6 +1173,10 @@ function usePawsoState() {
     setVetVisitPrepError('');
     setSmartCareError('');
     setNotificationError('');
+    setDataRightsMessage('');
+    setDataRightsError('');
+    setOfflineSnapshotAt(null);
+    setOfflineAccessEnabledState(false);
   }
 
   async function prepareAnonymousWorkspace() {
@@ -810,6 +1192,7 @@ function usePawsoState() {
   }
 
   async function signInAccount() {
+    if (!requireOnline(setAccountError)) return;
     try {
       setAccountBusy(true);
       setAccountError('');
@@ -823,13 +1206,61 @@ function usePawsoState() {
         throw new Error('Enter your Pawso password.');
       }
 
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const {
+        data: { session: currentSession },
+        error: currentSessionError,
+      } = await supabase.auth.getSession();
+      if (currentSessionError) throw currentSessionError;
+
+      // Verify the destination credentials without replacing the persistent
+      // anonymous session. This lets Pawso safely remove the temporary
+      // workspace before changing accounts instead of orphaning its records.
+      const transientAuth = createTransientAuthClient();
+      const { data: verified, error } = await transientAuth.auth.signInWithPassword({
         email,
         password: signInPassword,
       });
 
       if (error) throw error;
-      if (!data.user) throw new Error('Pawso could not sign in to that account.');
+      if (!verified.user || !verified.session) {
+        throw new Error('Pawso could not sign in to that account.');
+      }
+
+      const previousUser = currentSession?.user;
+      if (previousUser?.is_anonymous && previousUser.id !== verified.user.id) {
+        if (!currentSession?.access_token) {
+          throw new Error('The temporary Pawso session is not ready. Please try again.');
+        }
+        const deleteResponse = await fetch(`${API_BASE_URL}/api/v1/account`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${currentSession.access_token}` },
+        });
+        const deleteBody = await deleteResponse.json().catch(() => null);
+        if (!deleteResponse.ok) {
+          throw new Error(
+            getApiErrorMessage(
+              deleteBody,
+              'Could not safely remove the temporary workspace. Please try again.'
+            )
+          );
+        }
+
+        await AsyncStorage.multiRemove([
+          activeHouseholdStorageKey(previousUser.id),
+          aiConsentStorageKey(previousUser.id),
+          offlineAccessStorageKey(previousUser.id),
+        ]);
+        await clearUserSnapshots(previousUser.id);
+        await setLocalReminderPreference(false);
+        await clearPawsoLocalNotifications();
+      }
+
+      const { data, error: setSessionError } = await supabase.auth.setSession({
+        access_token: verified.session.access_token,
+        refresh_token: verified.session.refresh_token,
+      });
+      if (setSessionError) throw setSessionError;
+      if (!data.user) throw new Error('Pawso could not open that account.');
 
       clearPetScopedState();
       setHouseholdId(null);
@@ -837,6 +1268,9 @@ function usePawsoState() {
       setHouseholdMembers([]);
       setHouseholdInvitations([]);
       hydrateAccount(data.user);
+      setOfflineAccessEnabledState(
+        (await AsyncStorage.getItem(offlineAccessStorageKey(data.user.id))) === 'true'
+      );
       setSignInPassword('');
       const activeHouseholdId = await resolveActiveHousehold(
         data.user.id,
@@ -850,7 +1284,7 @@ function usePawsoState() {
       );
       setScreen(joinCode.trim() ? 'household' : 'pets');
     } catch (error) {
-      console.log('Sign in error:', error);
+      logDevelopmentError('Sign in error:', error);
       setAccountError(
         error instanceof Error ? error.message : 'Could not sign in.'
       );
@@ -860,6 +1294,7 @@ function usePawsoState() {
   }
 
   async function requestPasswordReset() {
+    if (!requireOnline(setAccountError)) return;
     try {
       setAccountBusy(true);
       setAccountError('');
@@ -875,11 +1310,12 @@ function usePawsoState() {
       });
 
       if (error) throw error;
+      setPasswordResetCooldown(60);
       setAccountMessage(
         'Password reset email sent. Open the link on this phone to return to Pawso.'
       );
     } catch (error) {
-      console.log('Password reset error:', error);
+      logDevelopmentError('Password reset error:', error);
       setAccountError(
         error instanceof Error
           ? error.message
@@ -941,9 +1377,20 @@ function usePawsoState() {
         setAccountRecoveryMode(true);
         setAccountMessage('Enter a new password for your Pawso account.');
         setScreen('account');
+      } else {
+        setOfflineAccessEnabledState(
+          (await AsyncStorage.getItem(offlineAccessStorageKey(data.user.id))) === 'true'
+        );
+        const activeHouseholdId = await resolveActiveHousehold(
+          data.user.id,
+          data.user.email?.split('@')[0]
+        );
+        await loadExistingPet(data.user.id, activeHouseholdId);
+        setAccountMessage('Email verified. Your Pawso records are ready.');
+        setScreen('pets');
       }
     } catch (error) {
-      console.log('Auth callback error:', error);
+      logDevelopmentError('Auth callback error:', error);
       setAccountError(
         error instanceof Error
           ? error.message
@@ -953,6 +1400,7 @@ function usePawsoState() {
   }
 
   async function completePasswordRecovery() {
+    if (!requireOnline(setAccountError)) return;
     try {
       setAccountBusy(true);
       setAccountError('');
@@ -970,6 +1418,9 @@ function usePawsoState() {
       if (!data.user) throw new Error('Pawso could not update the password.');
 
       hydrateAccount(data.user);
+      setOfflineAccessEnabledState(
+        (await AsyncStorage.getItem(offlineAccessStorageKey(data.user.id))) === 'true'
+      );
       setRecoveryPassword('');
       setAccountRecoveryMode(false);
       const activeHouseholdId = await resolveActiveHousehold(
@@ -980,7 +1431,7 @@ function usePawsoState() {
       setAccountMessage('Password updated. Your Pawso records are ready.');
       setScreen('pets');
     } catch (error) {
-      console.log('Complete password recovery error:', error);
+      logDevelopmentError('Complete password recovery error:', error);
       setAccountError(
         error instanceof Error
           ? error.message
@@ -992,6 +1443,7 @@ function usePawsoState() {
   }
 
   async function secureAccount() {
+    if (!requireOnline(setAccountError)) return;
     try {
       setAccountBusy(true);
       setAccountError('');
@@ -1021,6 +1473,8 @@ function usePawsoState() {
       const { data, error } = await supabase.auth.updateUser({
         email,
         password,
+      }, {
+        emailRedirectTo: Linking.createURL('auth/callback'),
       });
 
       if (error) throw error;
@@ -1041,7 +1495,7 @@ function usePawsoState() {
         );
       }
     } catch (error) {
-      console.log('Secure account error:', error);
+      logDevelopmentError('Secure account error:', error);
       setAccountError(
         error instanceof Error
           ? error.message
@@ -1074,6 +1528,7 @@ function usePawsoState() {
   }
 
   async function deleteAccount() {
+    if (!requireOnline(setAccountError)) return;
     try {
       setAccountBusy(true);
       setAccountError('');
@@ -1096,16 +1551,19 @@ function usePawsoState() {
         await AsyncStorage.multiRemove([
           activeHouseholdStorageKey(currentUser.id),
           aiConsentStorageKey(currentUser.id),
+          offlineAccessStorageKey(currentUser.id),
         ]);
+        await clearUserSnapshots(currentUser.id);
       }
       await supabase.auth.signOut({ scope: 'local' });
+      await setLocalReminderPreference(false);
       await clearPawsoLocalNotifications();
       resetUserScopedState();
       await prepareAnonymousWorkspace();
       setScreen('welcome');
       setAccountMessage('Account deleted. A new temporary workspace is ready.');
     } catch (error) {
-      console.log('Delete account error:', error);
+      logDevelopmentError('Delete account error:', error);
       setAccountError(
         error instanceof Error ? error.message : 'Could not delete your Pawso account.'
       );
@@ -1115,6 +1573,7 @@ function usePawsoState() {
   }
 
   async function signOutAccount() {
+    if (!requireOnline(setAccountError)) return;
     try {
       setAccountBusy(true);
       setAccountError('');
@@ -1126,16 +1585,19 @@ function usePawsoState() {
         );
       }
 
+      const { data: { session } } = await supabase.auth.getSession();
       const { error } = await supabase.auth.signOut({ scope: 'local' });
       if (error) throw error;
 
+      if (session?.user) await clearUserSnapshots(session.user.id);
+      await setLocalReminderPreference(false);
       await clearPawsoLocalNotifications();
       resetUserScopedState();
       await prepareAnonymousWorkspace();
       setScreen('welcome');
       setAccountMessage('Signed out.');
     } catch (error) {
-      console.log('Sign out error:', error);
+      logDevelopmentError('Sign out error:', error);
       setAccountError(
         error instanceof Error ? error.message : 'Could not sign out.'
       );
@@ -1180,30 +1642,81 @@ function usePawsoState() {
       }
 
       hydrateAccount(activeSession.user);
+      const offlinePreference =
+        (await AsyncStorage.getItem(
+          offlineAccessStorageKey(activeSession.user.id)
+        )) === 'true';
+      setOfflineAccessEnabledState(offlinePreference);
       const activeHouseholdId = await resolveActiveHousehold(
         activeSession.user.id,
         activeSession.user.email?.split('@')[0]
       );
       await loadExistingPet(activeSession.user.id, activeHouseholdId);
     } catch (error) {
-      console.log('Supabase initialization error:', error);
-
-      setAuthError(
-        error instanceof Error
-          ? error.message
-          : 'Could not connect Pawso to its database.'
-      );
+      logDevelopmentError('Supabase initialization error:', error);
+      const { data: { session } } = await supabase.auth.getSession();
+      const offlinePreference = session?.user
+        ? (await AsyncStorage.getItem(
+            offlineAccessStorageKey(session.user.id)
+          ).catch(() => null)) === 'true'
+        : false;
+      setOfflineAccessEnabledState(offlinePreference);
+      const snapshot = session?.user && offlinePreference
+        ? await loadLatestPetSnapshot(session.user.id).catch(() => null)
+        : null;
+      if (snapshot) {
+        hydrateAccount(session?.user);
+        restoreOfflineSnapshot(snapshot);
+        setIsOnline(false);
+        setAuthError('Offline read-only mode · showing the last saved Pawso snapshot.');
+        setScreen('today');
+      } else {
+        setAuthError(
+          error instanceof Error
+            ? error.message
+            : 'Could not connect Pawso to its database.'
+        );
+      }
     } finally {
       setAuthReady(true);
     }
   }
 
+  function restoreOfflineSnapshot(snapshot: {
+    householdId: string;
+    petId: string;
+    savedAt: string;
+    payload: Record<string, unknown>;
+  }) {
+    const payload = snapshot.payload as any;
+    setHouseholdId(snapshot.householdId);
+    setHouseholdName(payload.householdName ?? 'Pawso household');
+    setHouseholdTimeZone(payload.householdTimeZone ?? 'UTC');
+    setHouseholdRole(payload.householdRole ?? null);
+    setHouseholdMembers(payload.householdMembers ?? []);
+    setPets(payload.pets ?? []);
+    if (payload.pet) hydratePet(payload.pet as PetSummary);
+    setTimelineEvents(payload.timelineEvents ?? []);
+    setPetDocuments(payload.petDocuments ?? []);
+    setMedicationList(payload.medicationList ?? []);
+    setMedicationSchedules(payload.medicationSchedules ?? []);
+    setMedicationLogs(payload.medicationLogs ?? []);
+    setMedicationHistoryLogs(payload.medicationHistoryLogs ?? []);
+    setCareTasks(payload.careTasks ?? []);
+    setTaskCompletions(payload.taskCompletions ?? []);
+    setSymptomEntries(payload.symptomEntries ?? []);
+    setLabResults(payload.labResults ?? []);
+    setOfflineSnapshotAt(snapshot.savedAt);
+  }
+
   function hydratePet(data: PetSummary) {
+    const photoRequestId = ++petPhotoRequestRef.current;
     setCurrentPetId(data.id);
     setPetName(data.name ?? '');
     setPetType((data.species as PetType) ?? null);
     setBreed(data.breed ?? '');
     setPetAge(data.approximate_age ?? '');
+    setPetDateOfBirth(data.date_of_birth ?? '');
     setPetSex((data.sex as PetSex) ?? null);
 
     if (data.spayed_neutered === true) {
@@ -1224,16 +1737,32 @@ function usePawsoState() {
     setAllergies(data.allergies ?? '');
     setMedications(data.medications ?? '');
     setVetClinic(data.vet_clinic ?? '');
+    setPetPhotoPath(data.photo_path ?? null);
+    setPetPhotoUrl(data.photo_url ?? null);
+    if (data.photo_path && !data.photo_url) {
+      createPetPhotoUrl(data.photo_path)
+        .then((url) => {
+          if (petPhotoRequestRef.current === photoRequestId) setPetPhotoUrl(url);
+        })
+        .catch(() => {
+          if (petPhotoRequestRef.current === photoRequestId) setPetPhotoUrl(null);
+        });
+    }
+    setEmergencyNotes(data.emergency_notes ?? '');
+    setEmergencyContactName(data.emergency_contact_name ?? '');
+    setEmergencyContactPhone(data.emergency_contact_phone ?? '');
   }
 
   function clearPetScopedState() {
     setCurrentPetId(null);
     setPets([]);
+    setArchivedPets([]);
     setAllPetsToday([]);
     setPetName('');
     setPetType(null);
     setBreed('');
     setPetAge('');
+    setPetDateOfBirth('');
     setPetSex(null);
     setAlteredStatus(null);
     setWeight('');
@@ -1242,8 +1771,14 @@ function usePawsoState() {
     setAllergies('');
     setMedications('');
     setVetClinic('');
+    setPetPhotoPath(null);
+    setPetPhotoUrl(null);
+    setEmergencyNotes('');
+    setEmergencyContactName('');
+    setEmergencyContactPhone('');
     setTimelineEvents([]);
     setPetDocuments([]);
+    setArchivedPetDocuments([]);
     setMedicationList([]);
     setMedicationSchedules([]);
     setMedicationLogs([]);
@@ -1260,14 +1795,25 @@ function usePawsoState() {
     setNewMedicationUnit('');
     setNewMedicationInstructions('');
     setNewMedicationTimes(['08:00']);
+    setEditingMedicationId(null);
+    setNewMedicationStartDate('');
+    setNewMedicationEndDate('');
+    setNewMedicationRefills('');
+    setNewMedicationRefillDate('');
+    setNewMedicationPaused(false);
     setNewCareTitle('');
     setNewCareNotes('');
     setNewCareDate('');
     setNewCareTime('09:00');
+    setNewCareFrequency('none');
+    setNewCareInterval('1');
+    setNewCareEndsOn('');
     setCheckInDate(formatLocalDateInput());
     setCheckInTitle('');
     setCheckInDetails('');
     setCheckInWeight('');
+    setSymptomEntries([]);
+    setLabResults([]);
     setUploadError('');
     setCheckInError('');
   }
@@ -1275,6 +1821,7 @@ function usePawsoState() {
   function clearLoadedPetRecords() {
     setTimelineEvents([]);
     setPetDocuments([]);
+    setArchivedPetDocuments([]);
     setDocumentName('');
     setDocumentSize(null);
     setDocumentContentType('');
@@ -1297,6 +1844,8 @@ function usePawsoState() {
     setMedicationHistoryLogs([]);
     setCareTasks([]);
     setTaskCompletions([]);
+    setSymptomEntries([]);
+    setLabResults([]);
     setAskQuestion('');
     setAskAnswer(null);
     setAskSources([]);
@@ -1312,10 +1861,19 @@ function usePawsoState() {
     setNewMedicationUnit('');
     setNewMedicationInstructions('');
     setNewMedicationTimes(['08:00']);
+    setEditingMedicationId(null);
+    setNewMedicationStartDate('');
+    setNewMedicationEndDate('');
+    setNewMedicationRefills('');
+    setNewMedicationRefillDate('');
+    setNewMedicationPaused(false);
     setNewCareTitle('');
     setNewCareNotes('');
     setNewCareDate('');
     setNewCareTime('09:00');
+    setNewCareFrequency('none');
+    setNewCareInterval('1');
+    setNewCareEndsOn('');
     setCheckInDate(formatLocalDateInput());
     setCheckInTitle('');
     setCheckInDetails('');
@@ -1334,15 +1892,22 @@ function usePawsoState() {
 
     const { data, error } = await supabase
       .from('pets')
-      .select(
-        'id, household_id, name, species, breed, approximate_age, sex, spayed_neutered, weight_kg, microchip_number, conditions, allergies, medications, vet_clinic, created_at'
-      )
+      .select(PET_SELECT)
       .eq('household_id', activeHouseholdId)
       .order('created_at', { ascending: true });
 
     if (error) throw error;
 
-    const rows = (data ?? []) as PetSummary[];
+    const allRows = await Promise.all(
+      ((data ?? []) as unknown as PetSummary[]).map(async (pet) => ({
+        ...pet,
+        photo_url: pet.photo_path
+          ? await createPetPhotoUrl(pet.photo_path).catch(() => null)
+          : null,
+      }))
+    );
+    const rows = allRows.filter((pet) => !pet.archived_at);
+    setArchivedPets(allRows.filter((pet) => Boolean(pet.archived_at)));
     setPets(rows);
     return rows;
   }
@@ -1357,10 +1922,10 @@ function usePawsoState() {
 
       const petIds = rows.map((pet) => pet.id);
       const now = new Date();
-      const start = new Date(now);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(start);
-      end.setDate(end.getDate() + 1);
+      const bounds = getDayBoundsInTimeZone(now, householdTimeZone);
+      const start = bounds.start ?? new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const end = bounds.end ?? new Date(start.getTime() + 86400000);
+      const dateValue = bounds.dateValue;
 
       const [
         { data: careRows, error: careErrorValue },
@@ -1368,13 +1933,13 @@ function usePawsoState() {
       ] = await Promise.all([
         supabase
           .from('care_tasks')
-          .select('id, pet_id, due_at, is_active')
+          .select('id, pet_id, due_at, is_active, paused_at')
           .in('pet_id', petIds)
           .eq('is_active', true)
           .lt('due_at', end.toISOString()),
         supabase
           .from('medications')
-          .select('id, pet_id, is_active')
+          .select('id, pet_id, is_active, paused_at, start_date, end_date')
           .in('pet_id', petIds)
           .eq('is_active', true),
       ]);
@@ -1382,9 +1947,21 @@ function usePawsoState() {
       if (careErrorValue) throw careErrorValue;
       if (medicationErrorValue) throw medicationErrorValue;
 
-      const medicationIds = (medicationRows ?? []).map((item) => item.id);
-      let scheduleRows: Array<{ id: string; medication_id: string; pet_id: string; time_of_day: string }> = [];
-      let logRows: Array<{ schedule_id: string | null; pet_id: string; status: string }> = [];
+      const activeMedicationRows = (medicationRows ?? []).filter(
+        (item) =>
+          !item.paused_at &&
+          (!item.start_date || item.start_date <= dateValue) &&
+          (!item.end_date || item.end_date >= dateValue)
+      );
+      const medicationIds = activeMedicationRows.map((item) => item.id);
+      let scheduleRows: {
+        id: string;
+        medication_id: string;
+        pet_id: string;
+        time_of_day: string;
+        snoozed_until: string | null;
+      }[] = [];
+      let logRows: { schedule_id: string | null; pet_id: string; status: string }[] = [];
 
       if (medicationIds.length > 0) {
         const [
@@ -1393,7 +1970,7 @@ function usePawsoState() {
         ] = await Promise.all([
           supabase
             .from('medication_schedules')
-            .select('id, medication_id, pet_id, time_of_day')
+            .select('id, medication_id, pet_id, time_of_day, snoozed_until')
             .in('medication_id', medicationIds),
           supabase
             .from('medication_logs')
@@ -1410,7 +1987,7 @@ function usePawsoState() {
       }
 
       const medicationPetById = new Map(
-        (medicationRows ?? []).map((item) => [item.id, item.pet_id])
+        activeMedicationRows.map((item) => [item.id, item.pet_id])
       );
       const completedScheduleIds = new Set(
         logRows
@@ -1419,7 +1996,9 @@ function usePawsoState() {
       );
 
       const summaries: PetTodaySummary[] = rows.map((pet) => {
-        const petCare = (careRows ?? []).filter((task) => task.pet_id === pet.id);
+        const petCare = (careRows ?? []).filter(
+          (task) => task.pet_id === pet.id && !task.paused_at
+        );
         const dueCare = petCare.filter((task) => {
           const due = new Date(task.due_at);
           return due >= start && due < end;
@@ -1435,10 +2014,20 @@ function usePawsoState() {
           (schedule) => !completedScheduleIds.has(schedule.id)
         );
         const overdueMedication = pendingSchedules.filter((schedule) => {
-          const [hours, minutes] = schedule.time_of_day.split(':').map(Number);
-          const scheduled = new Date(now);
-          scheduled.setHours(hours || 0, minutes || 0, 0, 0);
-          return scheduled.getTime() < now.getTime() - 30 * 60 * 1000;
+          const snoozed = schedule.snoozed_until
+            ? new Date(schedule.snoozed_until)
+            : null;
+          const scheduled =
+            snoozed && !Number.isNaN(snoozed.getTime()) && snoozed > now
+              ? snoozed
+              : parseDateTimeInTimeZone(
+                  dateValue,
+                  schedule.time_of_day.slice(0, 5),
+                  householdTimeZone
+                );
+          return Boolean(
+            scheduled && scheduled.getTime() < now.getTime() - 30 * 60 * 1000
+          );
         });
 
         return {
@@ -1454,26 +2043,47 @@ function usePawsoState() {
 
       setAllPetsToday(summaries);
     } catch (error) {
-      console.log('Load all pets Today summary error:', error);
+      logDevelopmentError('Load all pets Today summary error:', error);
     }
   }
 
   async function selectPet(petId: string, destination?: Screen) {
     try {
       setDatabaseError('');
+
+      if (!isOnline && accountUserId) {
+        const cachedPet = pets.find((item) => item.id === petId);
+        const cachedHouseholdId = cachedPet?.household_id ?? householdId;
+        if (!cachedHouseholdId) {
+          throw new Error('This pet is not available in the offline snapshot.');
+        }
+        const snapshot = await loadPetSnapshot(
+          accountUserId,
+          cachedHouseholdId,
+          petId
+        );
+        if (!snapshot) {
+          throw new Error(
+            'This pet has no offline snapshot yet. Reconnect and open the pet once.'
+          );
+        }
+        restoreOfflineSnapshot(snapshot);
+        if (destination) setScreen(destination);
+        return true;
+      }
+
       let pet = pets.find((item) => item.id === petId);
 
       if (!pet) {
         const { data, error } = await supabase
           .from('pets')
-          .select(
-            'id, household_id, name, species, breed, approximate_age, sex, spayed_neutered, weight_kg, microchip_number, conditions, allergies, medications, vet_clinic, created_at'
-          )
+          .select(PET_SELECT)
           .eq('id', petId)
+          .is('archived_at', null)
           .single();
 
         if (error) throw error;
-        pet = data as PetSummary;
+        pet = data as unknown as PetSummary;
       }
 
       if (currentPetId !== pet.id) clearLoadedPetRecords();
@@ -1486,16 +2096,21 @@ function usePawsoState() {
         loadTimeline(pet.id),
         loadMedicationData(pet.id),
         loadCareData(pet.id),
+        loadHealthData(pet.id),
       ]);
 
       if (destination) setScreen(destination);
+      return true;
     } catch (error) {
-      console.log('Select pet error:', error);
+      logDevelopmentError('Select pet error:', error);
       setDatabaseError(
         error instanceof Error ? error.message : 'Could not switch pets.'
       );
+      return false;
     }
   }
+
+  selectPetRef.current = selectPet;
 
   function startAddPet() {
     if (!canManageMedical) {
@@ -1508,6 +2123,7 @@ function usePawsoState() {
     setPetType(null);
     setBreed('');
     setPetAge('');
+    setPetDateOfBirth('');
     setPetSex(null);
     setAlteredStatus(null);
     setWeight('');
@@ -1516,6 +2132,11 @@ function usePawsoState() {
     setAllergies('');
     setMedications('');
     setVetClinic('');
+    setPetPhotoPath(null);
+    setPetPhotoUrl(null);
+    setEmergencyNotes('');
+    setEmergencyContactName('');
+    setEmergencyContactPhone('');
     setDatabaseError('');
     setScreen('addPet');
   }
@@ -1567,6 +2188,7 @@ function usePawsoState() {
       loadTimeline(selected.id),
       loadMedicationData(selected.id),
       loadCareData(selected.id),
+      loadHealthData(selected.id),
       refreshAllPetsToday(rows),
     ]);
 
@@ -1606,6 +2228,8 @@ function usePawsoState() {
           ? 'Owner observation'
           : event.event_type === 'weight'
           ? 'Weight'
+          : event.event_type === 'lab_result'
+          ? 'Lab result'
           : event.event_type || 'Health event',
       title: event.title || 'Health event',
       detail: event.description || '',
@@ -1621,6 +2245,7 @@ function usePawsoState() {
   }
 
   async function askPawso(questionOverride?: string) {
+    if (!requireOnline(setAskError)) return;
     if (!currentPetId) return;
 
     const question = (questionOverride ?? askQuestion).trim();
@@ -1653,15 +2278,7 @@ function usePawsoState() {
           id: `medication:${medication.id}`,
           label: medication.name,
           source_type: 'Confirmed medication record',
-          text: [
-            medication.name,
-            medication.dose,
-            medication.unit,
-            medication.instructions,
-            scheduleTimes ? `Schedule: ${scheduleTimes}` : null,
-          ]
-            .filter(Boolean)
-            .join(' · '),
+          text: medicationSourceText(medication, scheduleTimes),
         });
       }
 
@@ -1722,7 +2339,7 @@ function usePawsoState() {
       setAskQuestion(question);
       setAskAnswer(body as AskAnswer);
     } catch (error) {
-      console.log('Ask Pawso error:', error);
+      logDevelopmentError('Ask Pawso error:', error);
       setAskError(
         error instanceof Error ? error.message : 'Pawso could not answer right now.'
       );
@@ -1748,6 +2365,7 @@ function usePawsoState() {
   }
 
   async function generateVetVisitPrep() {
+    if (!requireOnline(setVetVisitPrepError)) return;
     if (!currentPetId) return;
 
     try {
@@ -1772,13 +2390,7 @@ function usePawsoState() {
           id: `medication:${medication.id}`,
           label: medication.name,
           source_type: 'Confirmed medication record',
-          text: [
-            medication.name,
-            medication.dose,
-            medication.unit,
-            medication.instructions,
-            scheduleTimes ? `Schedule: ${scheduleTimes}` : null,
-          ].filter(Boolean).join(' · '),
+          text: medicationSourceText(medication, scheduleTimes),
         });
       }
 
@@ -1836,7 +2448,7 @@ function usePawsoState() {
 
       setVetVisitPrep(body as VetVisitPrep);
     } catch (error) {
-      console.log('Vet Visit Prep error:', error);
+      logDevelopmentError('Vet Visit Prep error:', error);
       setVetVisitPrepError(
         error instanceof Error ? error.message : 'Pawso could not prepare the visit right now.'
       );
@@ -1850,21 +2462,71 @@ function usePawsoState() {
     setScreen('vetVisitPrep');
   }
 
+  async function loadHealthData(petId: string) {
+    try {
+      setHealthDataLoading(true);
+      setHealthDataError('');
+      const [symptomsResult, labsResult] = await Promise.all([
+        supabase
+          .from('symptom_entries')
+          .select(
+            'id, pet_id, observed_on, category, severity, frequency, duration_minutes, notes, created_at'
+          )
+          .eq('pet_id', petId)
+          .order('observed_on', { ascending: false })
+          .limit(250),
+        supabase
+          .from('lab_results')
+          .select(
+            'id, pet_id, document_id, collected_on, test_name, numeric_value, text_value, unit, reference_low, reference_high, reference_text, notes, created_at'
+          )
+          .eq('pet_id', petId)
+          .order('collected_on', { ascending: false })
+          .limit(250),
+      ]);
+      if (symptomsResult.error) throw symptomsResult.error;
+      if (labsResult.error) throw labsResult.error;
+      setSymptomEntries((symptomsResult.data ?? []) as SymptomEntry[]);
+      setLabResults((labsResult.data ?? []) as LabResult[]);
+    } catch (error) {
+      setHealthDataError(
+        error instanceof Error ? error.message : 'Could not load health trends.'
+      );
+    } finally {
+      setHealthDataLoading(false);
+    }
+  }
+
+  async function openHealthTrends() {
+    if (!currentPetId) return;
+    await loadHealthData(currentPetId);
+    setNewLabDate(formatDateInputInTimeZone(new Date(), householdTimeZone));
+    setScreen('healthTrends');
+  }
+
   function openHealthCheckIn(type: 'symptom' | 'weight') {
     setCheckInType(type);
-    setCheckInDate(formatLocalDateInput());
+    setCheckInDate(formatDateInputInTimeZone(new Date(), householdTimeZone));
     setCheckInTitle('');
     setCheckInDetails('');
     setCheckInWeight('');
+    setSymptomSeverity(3);
+    setSymptomFrequency('single');
+    setSymptomDuration('');
     setCheckInError('');
     setScreen('healthCheckIn');
   }
 
   async function saveHealthCheckIn() {
+    if (!requireOnline(setCheckInError)) return;
     if (!currentPetId) return;
 
     if (!isValidLocalDate(checkInDate)) {
       setCheckInError('Enter a real date as YYYY-MM-DD.');
+      return;
+    }
+    if (checkInDate > formatDateInputInTimeZone(new Date(), householdTimeZone)) {
+      setCheckInError('A health check-in date cannot be in the future.');
       return;
     }
 
@@ -1875,6 +2537,10 @@ function usePawsoState() {
     }
     if (checkInType === 'weight' && (!Number.isFinite(weightValue) || weightValue <= 0)) {
       setCheckInError('Enter a valid weight in kilograms.');
+      return;
+    }
+    if (checkInType === 'weight' && weightValue > 999999.99) {
+      setCheckInError('That weight is outside Pawso’s supported range.');
       return;
     }
 
@@ -1903,27 +2569,87 @@ function usePawsoState() {
           pet.id === currentPetId ? { ...pet, weight_kg: weightValue } : pet
         ));
       } else {
-        const { error: insertError } = await supabase.from('medical_events').insert({
-          pet_id: currentPetId,
-          user_id: session.user.id,
-          event_type: 'owner_symptom',
-          event_date: checkInDate.trim(),
-          title: checkInTitle.trim(),
-          description: checkInDetails.trim() || 'No additional details provided.',
-          source_type: 'owner_note',
+        const duration = symptomDuration.trim() ? Number(symptomDuration.trim()) : null;
+        if (
+          duration !== null &&
+          (!Number.isInteger(duration) || duration <= 0 || duration > 525600)
+        ) {
+          throw new Error('Duration must be a whole number from 1 to 525600 minutes.');
+        }
+        const { error: insertError } = await supabase.rpc('record_structured_symptom', {
+          target_pet: currentPetId,
+          target_date: checkInDate.trim(),
+          target_category: checkInTitle.trim(),
+          target_severity: symptomSeverity,
+          target_frequency: symptomFrequency,
+          target_duration_minutes: duration,
+          target_notes: checkInDetails.trim() || null,
         });
         if (insertError) throw insertError;
       }
 
-      await loadTimeline(currentPetId);
-      setScreen('timeline');
+      await Promise.all([loadTimeline(currentPetId), loadHealthData(currentPetId)]);
+      setScreen(checkInType === 'symptom' ? 'healthTrends' : 'timeline');
     } catch (error) {
-      console.log('Health Check-In error:', error);
+      logDevelopmentError('Health Check-In error:', error);
       setCheckInError(
         error instanceof Error ? error.message : 'Could not save this check-in.'
       );
     } finally {
       setCheckInSaving(false);
+    }
+  }
+
+  async function saveLabResult() {
+    if (!requireOnline(setHealthDataError)) return;
+    if (!currentPetId) return;
+    try {
+      setHealthDataSaving(true);
+      setHealthDataError('');
+      if (!isValidLocalDate(newLabDate)) throw new Error('Use YYYY-MM-DD for the lab date.');
+      if (newLabDate > formatDateInputInTimeZone(new Date(), householdTimeZone)) {
+        throw new Error('A lab result date cannot be in the future.');
+      }
+      if (!newLabTest.trim()) throw new Error('Enter the lab test name.');
+      const value = Number(newLabValue.trim().replace(',', '.'));
+      if (!Number.isFinite(value)) throw new Error('Enter a numeric lab value.');
+      const low = newLabLow.trim() ? Number(newLabLow.trim().replace(',', '.')) : null;
+      const high = newLabHigh.trim() ? Number(newLabHigh.trim().replace(',', '.')) : null;
+      if (low !== null && !Number.isFinite(low)) throw new Error('Reference low is invalid.');
+      if (high !== null && !Number.isFinite(high)) throw new Error('Reference high is invalid.');
+      if ([value, low, high].some((item) => item !== null && Math.abs(item) > 1_000_000_000_000)) {
+        throw new Error('A laboratory value is outside Pawso’s supported range.');
+      }
+      if (low !== null && high !== null && high < low) {
+        throw new Error('Reference high cannot be below reference low.');
+      }
+      const { error } = await supabase.rpc('record_lab_result_entry', {
+        target_pet: currentPetId,
+        target_date: newLabDate,
+        target_test_name: newLabTest.trim(),
+        target_numeric_value: value,
+        target_text_value: null,
+        target_unit: newLabUnit.trim() || null,
+        target_reference_low: low,
+        target_reference_high: high,
+        target_reference_text: null,
+        target_notes: newLabNotes.trim() || null,
+        target_document: null,
+      });
+      if (error) throw error;
+      setNewLabTest('');
+      setNewLabValue('');
+      setNewLabUnit('');
+      setNewLabLow('');
+      setNewLabHigh('');
+      setNewLabNotes('');
+      await Promise.all([loadHealthData(currentPetId), loadTimeline(currentPetId)]);
+    } catch (error) {
+      setHealthDataError(
+        error instanceof Error ? error.message : 'Could not save this lab result.'
+      );
+    } finally {
+      setHealthDataSaving(false);
     }
   }
 
@@ -1933,6 +2659,7 @@ function usePawsoState() {
   }
 
   async function generateSmartCarePlan() {
+    if (!requireOnline(setSmartCareError)) return;
     if (!currentPetId) return;
     try {
       setSmartCareLoading(true);
@@ -1945,7 +2672,9 @@ function usePawsoState() {
         text: `${event.type}. ${event.title}. ${event.detail}`.trim(),
       }));
 
-      for (const medication of medicationList) {
+      for (const medication of medicationList.filter(
+        (item) => medicationLifecycleStatus(item) === 'Current'
+      )) {
         const times = medicationSchedules
           .filter((schedule) => schedule.medication_id === medication.id)
           .map((schedule) => schedule.time_of_day)
@@ -1954,8 +2683,7 @@ function usePawsoState() {
           id: `medication:${medication.id}`,
           label: medication.name,
           source_type: 'Confirmed medication record',
-          text: [medication.name, medication.dose, medication.unit, medication.instructions, times ? `Schedule: ${times}` : null]
-            .filter(Boolean).join(' · '),
+          text: medicationSourceText(medication, times),
         });
       }
 
@@ -1980,10 +2708,12 @@ function usePawsoState() {
         }),
       });
       const body = await response.json();
-      if (!response.ok) throw new Error(body.detail || 'Smart Care Plan request failed.');
+      if (!response.ok) {
+        throw new Error(getApiErrorMessage(body, 'Smart Care Plan request failed.'));
+      }
       setSmartCareSuggestions(body.suggestions as SmartCareSuggestion[]);
     } catch (error) {
-      console.log('Smart Care Plan error:', error);
+      logDevelopmentError('Smart Care Plan error:', error);
       setSmartCareError(error instanceof Error ? error.message : 'Could not create care suggestions.');
     } finally {
       setSmartCareLoading(false);
@@ -2010,7 +2740,9 @@ function usePawsoState() {
 
       const { data: tasks, error: tasksError } = await supabase
         .from('care_tasks')
-        .select('id, title, notes, due_at, task_type, is_active')
+        .select(
+          'id, title, notes, due_at, task_type, is_active, series_id, recurrence_frequency, recurrence_interval, recurrence_ends_on, occurrence_number, paused_at, snoozed_until'
+        )
         .eq('pet_id', petId)
         .order('due_at', { ascending: true });
 
@@ -2022,7 +2754,7 @@ function usePawsoState() {
       if (taskIds.length > 0) {
         const { data: completionRows, error: completionError } = await supabase
           .from('task_completions')
-          .select('id, task_id, completed_at, actor_name')
+          .select('id, task_id, completed_at, actor_name, outcome')
           .in('task_id', taskIds);
 
         if (completionError) throw completionError;
@@ -2032,7 +2764,7 @@ function usePawsoState() {
       setCareTasks((tasks ?? []) as CareTask[]);
       setTaskCompletions(completions);
     } catch (error) {
-      console.log('Load care data error:', error);
+      logDevelopmentError('Load care data error:', error);
       setCareError(
         error instanceof Error ? error.message : 'Could not load care tasks.'
       );
@@ -2053,7 +2785,7 @@ function usePawsoState() {
       throw new Error('Use HH:MM in 24-hour format for the care time.');
     }
 
-    const value = parseLocalDateTime(date, time);
+    const value = parseDateTimeInTimeZone(date, time, householdTimeZone);
 
     if (!value) {
       throw new Error('The care date or time is invalid.');
@@ -2069,6 +2801,7 @@ function usePawsoState() {
   }
 
   async function createCareTask() {
+    if (!requireOnline(setCareError)) return;
     if (!currentPetId || !newCareTitle.trim()) return;
 
     try {
@@ -2085,14 +2818,30 @@ function usePawsoState() {
       if (sessionError) throw sessionError;
       if (!session?.user) throw new Error('Pawso session is not ready.');
 
-      const { error } = await supabase.from('care_tasks').insert({
-        pet_id: currentPetId,
-        user_id: session.user.id,
-        title: newCareTitle.trim(),
-        notes: newCareNotes.trim() || null,
-        due_at: dueDate.toISOString(),
-        task_type: 'general',
-        is_active: true,
+      const interval = Number(newCareInterval);
+      if (!Number.isInteger(interval) || interval < 1 || interval > 52) {
+        throw new Error('Repeat interval must be a whole number from 1 to 52.');
+      }
+      if (newCareEndsOn && !isValidLocalDate(newCareEndsOn)) {
+        throw new Error('Repeat end date must use YYYY-MM-DD.');
+      }
+      if (
+        newCareFrequency !== 'none' &&
+        newCareEndsOn &&
+        newCareEndsOn < newCareDate
+      ) {
+        throw new Error('Repeat end date cannot be before the first task.');
+      }
+
+      const { error } = await supabase.rpc('create_care_task_with_recurrence', {
+        target_pet: currentPetId,
+        target_title: newCareTitle.trim(),
+        target_notes: newCareNotes.trim(),
+        target_due_at: dueDate.toISOString(),
+        target_frequency: newCareFrequency,
+        target_interval: interval,
+        target_ends_on:
+          newCareFrequency === 'none' ? null : newCareEndsOn || null,
       });
 
       if (error) throw error;
@@ -2101,13 +2850,16 @@ function usePawsoState() {
       setNewCareNotes('');
       setNewCareDate('');
       setNewCareTime('09:00');
+      setNewCareFrequency('none');
+      setNewCareInterval('1');
+      setNewCareEndsOn('');
 
       await loadCareData(currentPetId);
       await refreshAllPetsToday();
       await syncNotificationsIfEnabled();
       setScreen('care');
     } catch (error) {
-      console.log('Create care task error:', error);
+      logDevelopmentError('Create care task error:', error);
       setCareError(
         error instanceof Error ? error.message : 'Could not save this care task.'
       );
@@ -2117,6 +2869,7 @@ function usePawsoState() {
   }
 
   async function completeCareTask(task: CareTask) {
+    if (!requireOnline(setCareError)) return;
     if (!currentPetId) return;
 
     try {
@@ -2148,7 +2901,7 @@ function usePawsoState() {
       await refreshAllPetsToday();
       await syncNotificationsIfEnabled();
     } catch (error) {
-      console.log('Complete care task error:', error);
+      logDevelopmentError('Complete care task error:', error);
       setCareError(
         error instanceof Error ? error.message : 'Could not complete this care task.'
       );
@@ -2157,17 +2910,75 @@ function usePawsoState() {
     }
   }
 
+  async function skipCareTask(task: CareTask) {
+    if (!requireOnline(setCareError)) return;
+    if (!currentPetId) return;
+    try {
+      setCompletingTaskId(task.id);
+      setCareError('');
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!session?.user) throw new Error('Pawso session is not ready.');
+      const actorName =
+        householdMembers.find((member) => member.user_id === session.user.id)
+          ?.display_name ?? session.user.email?.split('@')[0] ?? 'Household member';
+      const { error } = await supabase.rpc('resolve_care_task', {
+        target_task: task.id,
+        actor_display_name: actorName,
+        target_outcome: 'skipped',
+      });
+      if (error) throw error;
+      await loadCareData(currentPetId);
+      await refreshAllPetsToday();
+      await syncNotificationsIfEnabled();
+    } catch (error) {
+      setCareError(error instanceof Error ? error.message : 'Could not skip this task.');
+    } finally {
+      setCompletingTaskId(null);
+    }
+  }
+
+  async function setCareTaskState(
+    task: CareTask,
+    action: 'snooze' | 'pause' | 'resume' | 'end',
+    snoozeUntil?: Date
+  ) {
+    if (!requireOnline(setCareError)) return;
+    if (!currentPetId) return;
+    try {
+      setDeletingTaskId(task.id);
+      setCareError('');
+      const { error } = await supabase.rpc('set_care_task_state', {
+        target_task: task.id,
+        target_action: action,
+        snooze_until: snoozeUntil?.toISOString() ?? null,
+      });
+      if (error) throw error;
+      await loadCareData(currentPetId);
+      await refreshAllPetsToday();
+      await syncNotificationsIfEnabled();
+    } catch (error) {
+      setCareError(
+        error instanceof Error ? error.message : 'Could not update this care schedule.'
+      );
+    } finally {
+      setDeletingTaskId(null);
+    }
+  }
+
   async function deleteCareTask(task: CareTask) {
+    if (!requireOnline(setCareError)) return;
     if (!currentPetId) return;
 
     try {
       setDeletingTaskId(task.id);
       setCareError('');
 
-      const { error } = await supabase
-        .from('care_tasks')
-        .update({ is_active: false })
-        .eq('id', task.id);
+      const { error } = await supabase.rpc('set_care_task_state', {
+        target_task: task.id,
+        target_action: 'end',
+        snooze_until: null,
+      });
 
       if (error) throw error;
 
@@ -2175,7 +2986,7 @@ function usePawsoState() {
       await refreshAllPetsToday();
       await syncNotificationsIfEnabled();
     } catch (error) {
-      console.log('Delete care task error:', error);
+      logDevelopmentError('Delete care task error:', error);
       setCareError(
         error instanceof Error ? error.message : 'Could not archive this care task.'
       );
@@ -2187,26 +2998,25 @@ function usePawsoState() {
   function formatDueLabel(value: string) {
     const due = new Date(value);
     const now = new Date();
-
-    const todayStart = new Date(now);
-    todayStart.setHours(0, 0, 0, 0);
-
-    const tomorrowStart = new Date(todayStart);
-    tomorrowStart.setDate(tomorrowStart.getDate() + 1);
-
-    const nextDayStart = new Date(tomorrowStart);
-    nextDayStart.setDate(nextDayStart.getDate() + 1);
+    const todayValue = formatDateInputInTimeZone(now, householdTimeZone);
+    const tomorrowValue = addDaysToDateInput(todayValue, 1);
+    const dueValue = formatDateInputInTimeZone(due, householdTimeZone);
 
     const time = due.toLocaleTimeString([], {
       hour: 'numeric',
       minute: '2-digit',
+      timeZone: householdTimeZone,
     });
 
-    if (due < now) return `Overdue · ${due.toLocaleDateString()} ${time}`;
-    if (due >= todayStart && due < tomorrowStart) return `Today · ${time}`;
-    if (due >= tomorrowStart && due < nextDayStart) return `Tomorrow · ${time}`;
+    if (due < now) {
+      return `Overdue · ${due.toLocaleDateString([], {
+        timeZone: householdTimeZone,
+      })} ${time}`;
+    }
+    if (dueValue === todayValue) return `Today · ${time}`;
+    if (dueValue === tomorrowValue) return `Tomorrow · ${time}`;
 
-    return `${due.toLocaleDateString()} · ${time}`;
+    return `${due.toLocaleDateString([], { timeZone: householdTimeZone })} · ${time}`;
   }
 
   function getMedicationUrgency(dose: TodayMedicationDose) {
@@ -2220,6 +3030,34 @@ function usePawsoState() {
     return 'later';
   }
 
+  function medicationLifecycleStatus(medication: Medication) {
+    const today = formatDateInputInTimeZone(new Date(), householdTimeZone);
+    if (!medication.is_active) return 'Archived';
+    if (medication.paused_at) return 'Paused';
+    if (medication.start_date && medication.start_date > today) {
+      return `Future course · starts ${medication.start_date}`;
+    }
+    if (medication.end_date && medication.end_date < today) {
+      return `Ended ${medication.end_date}`;
+    }
+    return 'Current';
+  }
+
+  function medicationSourceText(medication: Medication, scheduleTimes: string) {
+    return [
+      medication.name,
+      medication.dose,
+      medication.unit,
+      medication.instructions,
+      `Status: ${medicationLifecycleStatus(medication)}`,
+      medication.start_date ? `Start: ${medication.start_date}` : null,
+      medication.end_date ? `End: ${medication.end_date}` : null,
+      scheduleTimes ? `Schedule: ${scheduleTimes}` : null,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+  }
+
   async function loadMedicationData(petId: string) {
     try {
       setMedicationsLoading(true);
@@ -2227,7 +3065,9 @@ function usePawsoState() {
 
       const { data: meds, error: medsError } = await supabase
         .from('medications')
-        .select('id, name, dose, unit, instructions, is_active')
+        .select(
+          'id, name, dose, unit, instructions, is_active, start_date, end_date, refills_remaining, refill_due_date, paused_at'
+        )
         .eq('pet_id', petId)
         .eq('is_active', true)
         .order('created_at', { ascending: true });
@@ -2242,7 +3082,7 @@ function usePawsoState() {
       if (medicationIds.length > 0) {
         const { data: scheduleRows, error: schedulesError } = await supabase
           .from('medication_schedules')
-          .select('id, medication_id, time_of_day')
+          .select('id, medication_id, time_of_day, snoozed_until')
           .in('medication_id', medicationIds)
           .order('time_of_day', { ascending: true });
 
@@ -2251,16 +3091,17 @@ function usePawsoState() {
 
       }
 
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const historyStart = new Date(todayStart);
-      historyStart.setDate(historyStart.getDate() - 6);
-      const tomorrowStart = new Date(todayStart);
-      tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+      const bounds = getDayBoundsInTimeZone(new Date(), householdTimeZone);
+      const todayDate = bounds.dateValue;
+      const todayStart = bounds.start ?? new Date();
+      const tomorrowStart = bounds.end ?? new Date(todayStart.getTime() + 86400000);
+      const historyDate = addDaysToDateInput(todayDate, -6);
+      const historyStart =
+        parseDateTimeInTimeZone(historyDate, '00:00', householdTimeZone) ?? todayStart;
 
       const { data: historyRows, error: logsError } = await supabase
         .from('medication_logs')
-        .select('id, medication_id, schedule_id, scheduled_for, status, logged_at, note, actor_name')
+        .select('id, user_id, medication_id, schedule_id, scheduled_for, status, logged_at, note, actor_name, corrected_at, correction_reason')
         .eq('pet_id', petId)
         .gte('scheduled_for', historyStart.toISOString())
         .lt('scheduled_for', tomorrowStart.toISOString())
@@ -2281,7 +3122,7 @@ function usePawsoState() {
       setMedicationLogs(todayLogs);
       setMedicationHistoryLogs(historyLogs);
     } catch (error) {
-      console.log('Load medication data error:', error);
+      logDevelopmentError('Load medication data error:', error);
       setMedicationsError(
         error instanceof Error ? error.message : 'Could not load medications.'
       );
@@ -2291,10 +3132,11 @@ function usePawsoState() {
   }
 
   function buildScheduledDate(timeOfDay: string) {
-    const [hours, minutes] = timeOfDay.split(':').map(Number);
-    const date = new Date();
-    date.setHours(hours || 0, minutes || 0, 0, 0);
-    return date;
+    const dateValue = formatDateInputInTimeZone(new Date(), householdTimeZone);
+    return (
+      parseDateTimeInTimeZone(dateValue, timeOfDay.slice(0, 5), householdTimeZone) ??
+      new Date()
+    );
   }
 
   function getTodayMedicationDoses(): TodayMedicationDose[] {
@@ -2307,7 +3149,25 @@ function usePawsoState() {
 
       if (!medication) continue;
 
-      const scheduledFor = buildScheduledDate(schedule.time_of_day);
+      const todayDate = formatDateInputInTimeZone(new Date(), householdTimeZone);
+      if (
+        medication.paused_at ||
+        (medication.start_date && todayDate < medication.start_date) ||
+        (medication.end_date && todayDate > medication.end_date)
+      ) {
+        continue;
+      }
+
+      const scheduledTime = buildScheduledDate(schedule.time_of_day);
+      const snoozedTime = schedule.snoozed_until
+        ? new Date(schedule.snoozed_until)
+        : null;
+      const scheduledFor =
+        snoozedTime &&
+        !Number.isNaN(snoozedTime.getTime()) &&
+        snoozedTime.getTime() > scheduledTime.getTime()
+          ? snoozedTime
+          : scheduledTime;
       const log = medicationLogs.find(
         (item) => item.schedule_id === schedule.id
       ) ?? null;
@@ -2329,6 +3189,7 @@ function usePawsoState() {
     return date.toLocaleTimeString([], {
       hour: 'numeric',
       minute: '2-digit',
+      timeZone: householdTimeZone,
     });
   }
 
@@ -2338,7 +3199,49 @@ function usePawsoState() {
     setScreen('medications');
   }
 
+  function resetMedicationEditor() {
+    setEditingMedicationId(null);
+    setNewMedicationName('');
+    setNewMedicationDose('');
+    setNewMedicationUnit('');
+    setNewMedicationInstructions('');
+    setNewMedicationTimes(['08:00']);
+    setNewMedicationStartDate('');
+    setNewMedicationEndDate('');
+    setNewMedicationRefills('');
+    setNewMedicationRefillDate('');
+    setNewMedicationPaused(false);
+  }
+
+  function startAddMedication() {
+    resetMedicationEditor();
+    setMedicationsError('');
+    setScreen('addMedication');
+  }
+
+  function startEditMedication(medication: Medication) {
+    const times = medicationSchedules
+      .filter((schedule) => schedule.medication_id === medication.id)
+      .map((schedule) => schedule.time_of_day.slice(0, 5));
+    setEditingMedicationId(medication.id);
+    setNewMedicationName(medication.name);
+    setNewMedicationDose(medication.dose ?? '');
+    setNewMedicationUnit(medication.unit ?? '');
+    setNewMedicationInstructions(medication.instructions ?? '');
+    setNewMedicationTimes(times.length > 0 ? times : ['08:00']);
+    setNewMedicationStartDate(medication.start_date ?? '');
+    setNewMedicationEndDate(medication.end_date ?? '');
+    setNewMedicationRefills(
+      medication.refills_remaining === null ? '' : String(medication.refills_remaining)
+    );
+    setNewMedicationRefillDate(medication.refill_due_date ?? '');
+    setNewMedicationPaused(Boolean(medication.paused_at));
+    setMedicationsError('');
+    setScreen('addMedication');
+  }
+
   async function createMedication() {
+    if (!requireOnline(setMedicationsError)) return;
     if (!currentPetId || !newMedicationName.trim()) {
       return;
     }
@@ -2354,12 +3257,44 @@ function usePawsoState() {
       return;
     }
 
+    if (
+      (newMedicationStartDate && !isValidLocalDate(newMedicationStartDate)) ||
+      (newMedicationEndDate && !isValidLocalDate(newMedicationEndDate)) ||
+      (newMedicationRefillDate && !isValidLocalDate(newMedicationRefillDate))
+    ) {
+      setMedicationsError('Medication dates must use a real YYYY-MM-DD date.');
+      return;
+    }
+    if (
+      newMedicationStartDate &&
+      newMedicationEndDate &&
+      newMedicationEndDate < newMedicationStartDate
+    ) {
+      setMedicationsError('The medication end date cannot be before its start date.');
+      return;
+    }
+    if (
+      newMedicationStartDate &&
+      newMedicationRefillDate &&
+      newMedicationRefillDate < newMedicationStartDate
+    ) {
+      setMedicationsError('The refill date cannot be before the medication starts.');
+      return;
+    }
+    const refills = newMedicationRefills.trim()
+      ? Number(newMedicationRefills.trim())
+      : null;
+    if (refills !== null && (!Number.isInteger(refills) || refills < 0)) {
+      setMedicationsError('Refills remaining must be a whole number of zero or more.');
+      return;
+    }
+
     try {
       setIsSavingMedication(true);
       setMedicationsError('');
 
       const { error: medicationError } = await supabase.rpc(
-        'create_medication_with_schedules',
+        'save_medication_with_schedules',
         {
           target_pet: currentPetId,
           target_name: newMedicationName.trim(),
@@ -2367,23 +3302,25 @@ function usePawsoState() {
           target_unit: newMedicationUnit.trim(),
           target_instructions: newMedicationInstructions.trim(),
           target_times: times,
+          target_medication: editingMedicationId,
+          target_start_date: newMedicationStartDate || null,
+          target_end_date: newMedicationEndDate || null,
+          target_refills_remaining: refills,
+          target_refill_due_date: newMedicationRefillDate || null,
+          target_paused: newMedicationPaused,
         }
       );
 
       if (medicationError) throw medicationError;
 
-      setNewMedicationName('');
-      setNewMedicationDose('');
-      setNewMedicationUnit('');
-      setNewMedicationInstructions('');
-      setNewMedicationTimes(['08:00']);
+      resetMedicationEditor();
 
       await loadMedicationData(currentPetId);
       await refreshAllPetsToday();
       await syncNotificationsIfEnabled();
       setScreen('medications');
     } catch (error) {
-      console.log('Create medication error:', error);
+      logDevelopmentError('Create medication error:', error);
       setMedicationsError(
         error instanceof Error ? error.message : 'Could not save this medication.'
       );
@@ -2393,16 +3330,17 @@ function usePawsoState() {
   }
 
   async function deleteMedication(medication: Medication) {
+    if (!requireOnline(setMedicationsError)) return;
     if (!currentPetId) return;
 
     try {
       setDeletingMedicationId(medication.id);
       setMedicationsError('');
 
-      const { error } = await supabase
-        .from('medications')
-        .update({ is_active: false })
-        .eq('id', medication.id);
+      const { error } = await supabase.rpc('set_medication_state', {
+        target_medication: medication.id,
+        target_action: 'archive',
+      });
 
       if (error) throw error;
 
@@ -2410,7 +3348,7 @@ function usePawsoState() {
       await refreshAllPetsToday();
       await syncNotificationsIfEnabled();
     } catch (error) {
-      console.log('Delete medication error:', error);
+      logDevelopmentError('Delete medication error:', error);
       setMedicationsError(
         error instanceof Error ? error.message : 'Could not archive this medication.'
       );
@@ -2419,10 +3357,38 @@ function usePawsoState() {
     }
   }
 
+  async function setMedicationState(
+    medication: Medication,
+    action: 'pause' | 'resume' | 'archive'
+  ) {
+    if (!requireOnline(setMedicationsError)) return;
+    if (!currentPetId) return;
+    try {
+      setDeletingMedicationId(medication.id);
+      setMedicationsError('');
+      const { error } = await supabase.rpc('set_medication_state', {
+        target_medication: medication.id,
+        target_action: action,
+      });
+      if (error) throw error;
+      await loadMedicationData(currentPetId);
+      await refreshAllPetsToday();
+      await syncNotificationsIfEnabled();
+    } catch (error) {
+      setMedicationsError(
+        error instanceof Error ? error.message : 'Could not update this medication.'
+      );
+    } finally {
+      setDeletingMedicationId(null);
+    }
+  }
+
   async function logMedicationDose(
     dose: TodayMedicationDose,
-    status: 'given' | 'skipped'
+    status: 'given' | 'skipped',
+    correctionReason?: string
   ) {
+    if (!requireOnline(setMedicationsError)) return;
     if (!currentPetId) return;
 
     try {
@@ -2442,47 +3408,76 @@ function usePawsoState() {
       );
 
       if (existingLog) {
-        const { error } = await supabase
-          .from('medication_logs')
-          .update({
-            status,
-            actor_name:
-              householdMembers.find((member) => member.user_id === session.user.id)
-                ?.display_name ??
-              session.user.email?.split('@')[0] ??
-              'Household member',
-            logged_at: new Date().toISOString(),
-          })
-          .eq('id', existingLog.id);
+        if (existingLog.status === status) return;
+        const actorName =
+          householdMembers.find((member) => member.user_id === session.user.id)
+            ?.display_name ??
+          session.user.email?.split('@')[0] ??
+          'Household member';
+        const { error } = await supabase.rpc('correct_medication_log', {
+          target_log: existingLog.id,
+          target_status: status,
+          target_note: existingLog.note,
+          correction_explanation:
+            correctionReason?.trim() ||
+            `Changed dose outcome from ${existingLog.status} to ${status}.`,
+          actor_display_name: actorName,
+        });
 
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from('medication_logs')
-          .insert({
-            medication_id: dose.medication.id,
-            schedule_id: dose.schedule.id,
-            pet_id: currentPetId,
-            user_id: session.user.id,
-            actor_name:
-              householdMembers.find((member) => member.user_id === session.user.id)
-                ?.display_name ??
-              session.user.email?.split('@')[0] ??
-              'Household member',
-            scheduled_for: dose.scheduledFor.toISOString(),
-            status,
-            logged_at: new Date().toISOString(),
-          });
+        const actorName =
+          householdMembers.find((member) => member.user_id === session.user.id)
+            ?.display_name ??
+          session.user.email?.split('@')[0] ??
+          'Household member';
+        const { error } = await supabase.rpc('record_medication_dose', {
+          target_schedule: dose.schedule.id,
+          target_scheduled_for: dose.scheduledFor.toISOString(),
+          target_status: status,
+          actor_display_name: actorName,
+          target_note: null,
+        });
 
         if (error) throw error;
       }
 
       await loadMedicationData(currentPetId);
       await refreshAllPetsToday();
+      await syncNotificationsIfEnabled();
     } catch (error) {
-      console.log('Log medication dose error:', error);
+      logDevelopmentError('Log medication dose error:', error);
       setMedicationsError(
         error instanceof Error ? error.message : 'Could not update this dose.'
+      );
+    } finally {
+      setLoggingDoseId(null);
+    }
+  }
+
+  async function snoozeMedicationDose(
+    dose: TodayMedicationDose,
+    minutes = 30
+  ) {
+    if (!requireOnline(setMedicationsError)) return;
+    if (!currentPetId) return;
+    try {
+      setLoggingDoseId(dose.schedule.id);
+      setMedicationsError('');
+      const targetUntil = new Date(
+        Math.max(Date.now(), dose.scheduledFor.getTime()) + minutes * 60_000
+      ).toISOString();
+      const { error } = await supabase.rpc('set_medication_schedule_snooze', {
+        target_schedule: dose.schedule.id,
+        target_until: targetUntil,
+      });
+      if (error) throw error;
+      await loadMedicationData(currentPetId);
+      await refreshAllPetsToday();
+      await syncNotificationsIfEnabled();
+    } catch (error) {
+      setMedicationsError(
+        error instanceof Error ? error.message : 'Could not snooze this dose.'
       );
     } finally {
       setLoggingDoseId(null);
@@ -2494,10 +3489,11 @@ function usePawsoState() {
       setDocumentsLoading(true);
       setDocumentsError('');
       setPetDocuments([]);
+      setArchivedPetDocuments([]);
 
       const { data: documents, error: documentsQueryError } = await supabase
         .from('documents')
-        .select('id, filename, content_type, size_bytes, status, storage_path, created_at')
+        .select('id, filename, content_type, size_bytes, status, storage_path, created_at, archived_at')
         .eq('pet_id', petId)
         .order('created_at', { ascending: false });
 
@@ -2518,12 +3514,16 @@ function usePawsoState() {
         }
       }
 
-      setPetDocuments((documents ?? []).map((document) => ({
+      const documentRows = (documents ?? []).map((document) => ({
         ...document,
         linked_events: counts.get(document.id) ?? 0,
-      })));
+      }));
+      setPetDocuments(documentRows.filter((document) => !document.archived_at));
+      setArchivedPetDocuments(
+        documentRows.filter((document) => Boolean(document.archived_at))
+      );
     } catch (error) {
-      console.log('Load documents error:', error);
+      logDevelopmentError('Load documents error:', error);
       setDocumentsError(
         error instanceof Error ? error.message : 'Could not load medical records.'
       );
@@ -2627,7 +3627,7 @@ function usePawsoState() {
 
       await Linking.openURL(data.signedUrl);
     } catch (error) {
-      console.log('Open original document error:', error);
+      logDevelopmentError('Open original document error:', error);
       setDocumentsError(
         error instanceof Error ? error.message : 'Could not open the original veterinary record.'
       );
@@ -2659,16 +3659,14 @@ function usePawsoState() {
   }
 
   function parseWeightKg(value: string) {
-    if (!value.trim()) {
-      return null;
-    }
-
-    const match = value.replace(',', '.').match(/\d+(\.\d+)?/);
-
-    return match ? Number(match[0]) : null;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const match = /^(\d+(?:[.,]\d{1,2})?)\s*(?:kg)?$/i.exec(trimmed);
+    return match ? Number(match[1].replace(',', '.')) : null;
   }
 
   async function createPetProfile() {
+    if (!requireOnline(setDatabaseError)) return;
     if (!canCreateProfile || !petType) {
       return;
     }
@@ -2676,6 +3674,23 @@ function usePawsoState() {
     try {
       setIsSavingPet(true);
       setDatabaseError('');
+
+      if (petDateOfBirth.trim() && !isValidLocalDate(petDateOfBirth.trim())) {
+        throw new Error('Enter the birth date as YYYY-MM-DD.');
+      }
+      if (
+        petDateOfBirth.trim() &&
+        petDateOfBirth.trim() > formatDateInputInTimeZone(new Date(), householdTimeZone)
+      ) {
+        throw new Error('A pet’s birth date cannot be in the future.');
+      }
+      const parsedWeight = parseWeightKg(weight);
+      if (weight.trim() && (parsedWeight === null || parsedWeight <= 0)) {
+        throw new Error('Enter weight like 4.2 kg, or leave it blank.');
+      }
+      if (parsedWeight !== null && parsedWeight > 999999.99) {
+        throw new Error('That weight is outside Pawso’s supported range.');
+      }
 
       const {
         data: { session },
@@ -2695,6 +3710,7 @@ function usePawsoState() {
         species: petType,
         breed: breed.trim() || null,
         approximate_age: petAge.trim() || null,
+        date_of_birth: petDateOfBirth.trim() || null,
         sex: petSex,
         spayed_neutered:
           alteredStatus === 'yes'
@@ -2702,12 +3718,15 @@ function usePawsoState() {
             : alteredStatus === 'no'
             ? false
             : null,
-        weight_kg: parseWeightKg(weight),
+        weight_kg: parsedWeight,
         microchip_number: microchip.trim() || null,
         conditions: conditions.trim() || null,
         allergies: allergies.trim() || null,
         medications: medications.trim() || null,
         vet_clinic: vetClinic.trim() || null,
+        emergency_notes: emergencyNotes.trim() || null,
+        emergency_contact_name: emergencyContactName.trim() || null,
+        emergency_contact_phone: emergencyContactPhone.trim() || null,
       };
 
       const query = isEditingPet && currentPetId
@@ -2734,12 +3753,13 @@ function usePawsoState() {
         loadTimeline(savedPet.id),
         loadMedicationData(savedPet.id),
         loadCareData(savedPet.id),
+        loadHealthData(savedPet.id),
       ]);
 
       setTodayView(updatedPets.length > 1 ? 'all' : 'pet');
       setScreen('petProfile');
     } catch (error) {
-      console.log('Create pet error:', error);
+      logDevelopmentError('Create pet error:', error);
 
       setDatabaseError(
         error instanceof Error
@@ -2748,6 +3768,249 @@ function usePawsoState() {
       );
     } finally {
       setIsSavingPet(false);
+    }
+  }
+
+  async function refreshPetProfile(petId: string) {
+    const { data, error } = await supabase
+      .from('pets')
+      .select(PET_SELECT)
+      .eq('id', petId)
+      .single();
+    if (error) throw error;
+    const pet = data as unknown as PetSummary;
+    setPets((current) => current.map((item) => (item.id === pet.id ? pet : item)));
+    if (currentPetId === pet.id) hydratePet(pet);
+    return pet;
+  }
+
+  async function updatePetPhoto() {
+    if (!requireOnline(setDatabaseError)) return;
+    if (!currentPetId || !canManageMedical) return;
+    try {
+      setPetPhotoBusy(true);
+      setDatabaseError('');
+      const path = await chooseAndUploadPetPhoto(currentPetId, petPhotoPath);
+      if (!path) return;
+      setPetPhotoPath(path);
+      setPetPhotoUrl(await createPetPhotoUrl(path));
+      await refreshPetProfile(currentPetId);
+    } catch (error) {
+      setDatabaseError(
+        error instanceof Error ? error.message : 'Could not update the pet photo.'
+      );
+    } finally {
+      setPetPhotoBusy(false);
+    }
+  }
+
+  async function removePetPhoto() {
+    if (!requireOnline(setDatabaseError)) return;
+    if (!currentPetId || !petPhotoPath || !canManageMedical) return;
+    try {
+      setPetPhotoBusy(true);
+      setDatabaseError('');
+      await removeStoredPetPhoto(currentPetId, petPhotoPath);
+      setPetPhotoPath(null);
+      setPetPhotoUrl(null);
+      await refreshPetProfile(currentPetId);
+    } catch (error) {
+      setDatabaseError(
+        error instanceof Error ? error.message : 'Could not remove the pet photo.'
+      );
+    } finally {
+      setPetPhotoBusy(false);
+    }
+  }
+
+  async function archiveCurrentPet() {
+    if (!requireOnline(setDataRightsError)) return;
+    if (!currentPetId || !canManageMedical) return;
+    try {
+      setDataRightsBusy(true);
+      setDataRightsError('');
+      const archivedPetId = currentPetId;
+      const { error } = await supabase
+        .from('pets')
+        .update({ archived_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq('id', archivedPetId);
+      if (error) throw error;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Pawso session is not ready.');
+      const rows = await loadPets(user.id, householdId);
+      if (rows[0]) await selectPet(rows[0].id, 'pets');
+      else {
+        clearPetScopedState();
+        setScreen('pets');
+      }
+      setDataRightsMessage('Pet archived. Its records remain retained until deletion.');
+    } catch (error) {
+      setDataRightsError(
+        error instanceof Error ? error.message : 'Could not archive this pet.'
+      );
+    } finally {
+      setDataRightsBusy(false);
+    }
+  }
+
+  async function restoreArchivedPet(pet: PetSummary) {
+    if (!requireOnline(setDataRightsError)) return;
+    if (!canManageMedical) return;
+    try {
+      setDataRightsBusy(true);
+      setDataRightsError('');
+      const { error } = await supabase
+        .from('pets')
+        .update({ archived_at: null, updated_at: new Date().toISOString() })
+        .eq('id', pet.id);
+      if (error) throw error;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Pawso session is not ready.');
+      await loadPets(user.id, householdId);
+      setDataRightsMessage(`${pet.name} was restored.`);
+    } catch (error) {
+      setDataRightsError(
+        error instanceof Error ? error.message : 'Could not restore this pet.'
+      );
+    } finally {
+      setDataRightsBusy(false);
+    }
+  }
+
+  async function deleteArchivedPet(pet: PetSummary) {
+    if (!requireOnline(setDataRightsError)) return;
+    if (!canManageMedical) return;
+    try {
+      setDataRightsBusy(true);
+      setDataRightsError('');
+      await permanentlyDeletePet(pet.id);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Pawso session is not ready.');
+      await loadPets(user.id, householdId);
+      setDataRightsMessage(`${pet.name} and linked Pawso records were deleted.`);
+    } catch (error) {
+      setDataRightsError(
+        error instanceof Error ? error.message : 'Could not delete this pet.'
+      );
+    } finally {
+      setDataRightsBusy(false);
+    }
+  }
+
+  async function deleteCurrentPet() {
+    if (!requireOnline(setDataRightsError)) return;
+    if (!currentPetId || !canManageMedical) return;
+    try {
+      setDataRightsBusy(true);
+      setDataRightsError('');
+      const deletedPetId = currentPetId;
+      await permanentlyDeletePet(deletedPetId);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Pawso session is not ready.');
+      clearPetScopedState();
+      const rows = await loadPets(user.id, householdId);
+      if (rows[0]) await selectPet(rows[0].id, 'pets');
+      else setScreen('pets');
+      setDataRightsMessage('Pet and linked Pawso records were permanently deleted.');
+    } catch (error) {
+      setDataRightsError(
+        error instanceof Error ? error.message : 'Could not delete this pet.'
+      );
+    } finally {
+      setDataRightsBusy(false);
+    }
+  }
+
+  async function exportAccountData() {
+    if (!requireOnline(setDataRightsError)) return;
+    try {
+      setDataRightsBusy(true);
+      setDataRightsError('');
+      setDataRightsMessage('');
+      await shareStructuredDataExport();
+      setDataRightsMessage('Your structured Pawso export is ready.');
+    } catch (error) {
+      setDataRightsError(
+        error instanceof Error ? error.message : 'Could not export Pawso data.'
+      );
+    } finally {
+      setDataRightsBusy(false);
+    }
+  }
+
+  async function shareCurrentEmergencyCard() {
+    if (!currentPetId) return;
+    try {
+      setDataRightsBusy(true);
+      setDataRightsError('');
+      const pet = pets.find((item) => item.id === currentPetId) ??
+        (await refreshPetProfile(currentPetId));
+      await shareEmergencyPetCard(pet, medicationList, householdTimeZone);
+    } catch (error) {
+      setDataRightsError(
+        error instanceof Error ? error.message : 'Could not create the emergency card.'
+      );
+    } finally {
+      setDataRightsBusy(false);
+    }
+  }
+
+  async function archiveDocument(document: PetDocument) {
+    if (!requireOnline(setDocumentsError)) return;
+    if (!currentPetId || !canManageMedical) return;
+    try {
+      setDeletingDocumentId(document.id);
+      setDocumentsError('');
+      const { error } = await supabase
+        .from('documents')
+        .update({ archived_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq('id', document.id);
+      if (error) throw error;
+      await loadDocuments(currentPetId);
+    } catch (error) {
+      setDocumentsError(
+        error instanceof Error ? error.message : 'Could not archive this document.'
+      );
+    } finally {
+      setDeletingDocumentId(null);
+    }
+  }
+
+  async function restoreDocument(document: PetDocument) {
+    if (!requireOnline(setDocumentsError)) return;
+    if (!currentPetId || !canManageMedical) return;
+    try {
+      setDeletingDocumentId(document.id);
+      setDocumentsError('');
+      const { error } = await supabase
+        .from('documents')
+        .update({ archived_at: null, updated_at: new Date().toISOString() })
+        .eq('id', document.id);
+      if (error) throw error;
+      await loadDocuments(currentPetId);
+    } catch (error) {
+      setDocumentsError(
+        error instanceof Error ? error.message : 'Could not restore this document.'
+      );
+    } finally {
+      setDeletingDocumentId(null);
+    }
+  }
+
+  async function deleteDocumentPermanently(document: PetDocument) {
+    if (!requireOnline(setDocumentsError)) return;
+    if (!currentPetId || !canManageMedical) return;
+    try {
+      setDeletingDocumentId(document.id);
+      setDocumentsError('');
+      await permanentlyDeleteDocument(document.id);
+      await Promise.all([loadDocuments(currentPetId), loadTimeline(currentPetId)]);
+    } catch (error) {
+      setDocumentsError(
+        error instanceof Error ? error.message : 'Could not delete this document.'
+      );
+    } finally {
+      setDeletingDocumentId(null);
     }
   }
 
@@ -2769,7 +4032,7 @@ function usePawsoState() {
         setApiStatus('Backend unavailable');
       }
     } catch (error) {
-      console.log('Backend connection error:', error);
+      logDevelopmentError('Backend connection error:', error);
       setApiStatus('Backend unavailable');
     }
   }
@@ -2893,7 +4156,7 @@ function usePawsoState() {
         throw documentStorageUpdateError;
       }
     } catch (storageError) {
-      console.log('Supabase Storage upload error:', storageError);
+      logDevelopmentError('Supabase Storage upload error:', storageError);
       await supabase
         .from('documents')
         .update({ status: 'failed' })
@@ -3023,6 +4286,7 @@ function usePawsoState() {
   }
 
   async function pickVetRecord() {
+    if (!requireOnline(setUploadError)) return;
     let temporaryFileUri: string | null = null;
     try {
       setUploadError('');
@@ -3040,6 +4304,13 @@ function usePawsoState() {
 
       const asset = result.assets[0];
       temporaryFileUri = asset.uri;
+
+      if (asset.name.length > 255) {
+        throw new Error('Choose a file with a name of 255 characters or fewer.');
+      }
+      if (asset.size !== undefined && asset.size !== null && asset.size > 10 * 1024 * 1024) {
+        throw new Error('Choose a veterinary file smaller than 10 MB.');
+      }
 
       setDocumentName(asset.name);
       setDocumentSize(asset.size ?? null);
@@ -3065,13 +4336,27 @@ function usePawsoState() {
         }
       );
 
+      const responseBody = (() => {
+        try {
+          return JSON.parse(uploadResult.body);
+        } catch {
+          return null;
+        }
+      })();
+
       if (uploadResult.status < 200 || uploadResult.status >= 300) {
         throw new Error(
-          `Upload failed (${uploadResult.status}): ${uploadResult.body}`
+          getApiErrorMessage(
+            responseBody,
+            `Pawso could not analyze this file (${uploadResult.status}).`
+          )
         );
       }
+      if (!responseBody || typeof responseBody !== 'object') {
+        throw new Error('Pawso received an invalid document response.');
+      }
 
-      const data = JSON.parse(uploadResult.body);
+      const data = responseBody;
 
       setDocumentName(data.document?.filename || asset.name);
       setDocumentSize(data.document?.size_bytes ?? asset.size ?? null);
@@ -3125,7 +4410,7 @@ function usePawsoState() {
 
       setScreen('review');
     } catch (error) {
-      console.log('Document upload error:', error);
+      logDevelopmentError('Document upload error:', error);
 
       setUploadError(
         error instanceof Error
@@ -3144,6 +4429,7 @@ function usePawsoState() {
   }
 
   async function confirmExtraction() {
+    if (!requireOnline(setDatabaseError)) return;
     if (!currentPetId) {
       setDatabaseError(
         'Pawso could not identify the current pet. Please return to the pet profile and try again.'
@@ -3170,6 +4456,16 @@ function usePawsoState() {
 
       if (!currentDocumentId || !currentExtractionId) {
         throw new Error('This AI review draft is incomplete. Reopen it from Documents.');
+      }
+
+      if (visitDate.trim() && !isValidLocalDate(visitDate.trim())) {
+        throw new Error('Enter the visit date as YYYY-MM-DD, or leave it blank.');
+      }
+      if (
+        visitDate.trim() &&
+        visitDate.trim() > formatDateInputInTimeZone(new Date(), householdTimeZone)
+      ) {
+        throw new Error('A veterinary visit date cannot be in the future.');
       }
 
       const eventDate = normalizeEventDate(visitDate);
@@ -3209,7 +4505,7 @@ function usePawsoState() {
       setExtractionPromptVersion('');
       setScreen('timeline');
     } catch (error) {
-      console.log('Confirm extraction error:', error);
+      logDevelopmentError('Confirm extraction error:', error);
 
       setDatabaseError(
         error instanceof Error
@@ -3232,6 +4528,7 @@ function usePawsoState() {
   const activeCareTasks = careTasks.filter(
     (task) =>
       task.is_active &&
+      !task.paused_at &&
       !taskCompletions.some((completion) => completion.task_id === task.id)
   );
 
@@ -3262,6 +4559,8 @@ function usePawsoState() {
     apiStatus,
     householdId,
     householdName,
+    householdTimeZone,
+    householdOptions,
     householdRole,
     householdMembers,
     householdInvitations,
@@ -3283,12 +4582,17 @@ function usePawsoState() {
     setMemberDisplayName,
     ensureHousehold,
     loadHousehold,
+    loadHouseholdOptions,
+    switchHousehold,
+    updateHouseholdTimeZone,
+    updateHouseholdMemberRole,
     refreshHousehold,
     removeHouseholdMember,
     cancelHouseholdInvitation,
     createHouseholdInvite,
     acceptHouseholdInvite,
     accountEmail,
+    accountUserId,
     accountIsAnonymous,
     accountBusy,
     accountMessage,
@@ -3303,6 +4607,7 @@ function usePawsoState() {
     setSignInEmail,
     signInPassword,
     setSignInPassword,
+    passwordResetCooldown,
     signInAccount,
     requestPasswordReset,
     accountRecoveryMode,
@@ -3329,6 +4634,7 @@ function usePawsoState() {
     setCurrentPetId,
     pets,
     setPets,
+    archivedPets,
     allPetsToday,
     setAllPetsToday,
     todayView,
@@ -3341,6 +4647,8 @@ function usePawsoState() {
     setBreed,
     petAge,
     setPetAge,
+    petDateOfBirth,
+    setPetDateOfBirth,
     petSex,
     setPetSex,
     alteredStatus,
@@ -3357,6 +4665,15 @@ function usePawsoState() {
     setMedications,
     vetClinic,
     setVetClinic,
+    petPhotoPath,
+    petPhotoUrl,
+    petPhotoBusy,
+    emergencyNotes,
+    setEmergencyNotes,
+    emergencyContactName,
+    setEmergencyContactName,
+    emergencyContactPhone,
+    setEmergencyContactPhone,
     documentName,
     setDocumentName,
     documentSize,
@@ -3389,12 +4706,14 @@ function usePawsoState() {
     setTimelineEvents,
     petDocuments,
     setPetDocuments,
+    archivedPetDocuments,
     documentsLoading,
     setDocumentsLoading,
     documentsError,
     setDocumentsError,
     openingDocumentId,
     setOpeningDocumentId,
+    deletingDocumentId,
     medicationList,
     setMedicationList,
     medicationSchedules,
@@ -3420,6 +4739,17 @@ function usePawsoState() {
     setNewMedicationInstructions,
     newMedicationTimes,
     setNewMedicationTimes,
+    editingMedicationId,
+    newMedicationStartDate,
+    setNewMedicationStartDate,
+    newMedicationEndDate,
+    setNewMedicationEndDate,
+    newMedicationRefills,
+    setNewMedicationRefills,
+    newMedicationRefillDate,
+    setNewMedicationRefillDate,
+    newMedicationPaused,
+    setNewMedicationPaused,
     careTasks,
     setCareTasks,
     taskCompletions,
@@ -3440,6 +4770,12 @@ function usePawsoState() {
     setNewCareDate,
     newCareTime,
     setNewCareTime,
+    newCareFrequency,
+    setNewCareFrequency,
+    newCareInterval,
+    setNewCareInterval,
+    newCareEndsOn,
+    setNewCareEndsOn,
     askQuestion,
     setAskQuestion,
     askAnswer,
@@ -3469,6 +4805,31 @@ function usePawsoState() {
     setCheckInWeight,
     checkInSaving,
     checkInError,
+    symptomSeverity,
+    setSymptomSeverity,
+    symptomFrequency,
+    setSymptomFrequency,
+    symptomDuration,
+    setSymptomDuration,
+    symptomEntries,
+    labResults,
+    healthDataLoading,
+    healthDataError,
+    healthDataSaving,
+    newLabDate,
+    setNewLabDate,
+    newLabTest,
+    setNewLabTest,
+    newLabValue,
+    setNewLabValue,
+    newLabUnit,
+    setNewLabUnit,
+    newLabLow,
+    setNewLabLow,
+    newLabHigh,
+    setNewLabHigh,
+    newLabNotes,
+    setNewLabNotes,
     smartCareSuggestions,
     smartCareLoading,
     smartCareError,
@@ -3477,6 +4838,16 @@ function usePawsoState() {
     notificationSyncing,
     scheduledNotificationCount,
     notificationError,
+    dataRightsBusy,
+    dataRightsMessage,
+    dataRightsError,
+    isOnline,
+    offlineSnapshotAt,
+    offlineAccessEnabled,
+    appearanceMode,
+    resolvedAppearance,
+    setAppearanceMode,
+    updateOfflineAccess,
     refreshNotificationState,
     enableNotifications,
     disableNotifications,
@@ -3497,6 +4868,9 @@ function usePawsoState() {
     openVetVisitPrep,
     openHealthCheckIn,
     saveHealthCheckIn,
+    loadHealthData,
+    openHealthTrends,
+    saveLabResult,
     openSmartCarePlan,
     generateSmartCarePlan,
     acceptSmartCareSuggestion,
@@ -3506,6 +4880,8 @@ function usePawsoState() {
     openCareScreen,
     createCareTask,
     completeCareTask,
+    skipCareTask,
+    setCareTaskState,
     deleteCareTask,
     deletingTaskId,
     formatDueLabel,
@@ -3515,19 +4891,34 @@ function usePawsoState() {
     getTodayMedicationDoses,
     formatMedicationTime,
     openMedicationsScreen,
+    startAddMedication,
+    startEditMedication,
     createMedication,
     deleteMedication,
+    setMedicationState,
     deletingMedicationId,
     logMedicationDose,
+    snoozeMedicationDose,
     loadDocuments,
     openDocumentsScreen,
     resumeExtractionReview,
     openOriginalDocument,
+    archiveDocument,
+    restoreDocument,
+    deleteDocumentPermanently,
     formatDocumentDate,
     formatDocumentSize,
     normalizeEventDate,
     parseWeightKg,
     createPetProfile,
+    updatePetPhoto,
+    removePetPhoto,
+    archiveCurrentPet,
+    restoreArchivedPet,
+    deleteArchivedPet,
+    deleteCurrentPet,
+    exportAccountData,
+    shareCurrentEmergencyCard,
     checkBackend,
     canCreateProfile,
     petEmoji,

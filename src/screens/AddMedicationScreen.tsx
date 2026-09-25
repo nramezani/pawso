@@ -8,6 +8,7 @@ import {
   Input,
   PrimaryButton,
   SecondaryButton,
+  OptionButton,
   styles,
 } from '../components/ui';
 
@@ -26,6 +27,17 @@ export function AddMedicationScreen() {
     setNewMedicationInstructions,
     newMedicationTimes,
     setNewMedicationTimes,
+    editingMedicationId,
+    newMedicationStartDate,
+    setNewMedicationStartDate,
+    newMedicationEndDate,
+    setNewMedicationEndDate,
+    newMedicationRefills,
+    setNewMedicationRefills,
+    newMedicationRefillDate,
+    setNewMedicationRefillDate,
+    newMedicationPaused,
+    setNewMedicationPaused,
     createMedication,
   } = usePawso();
 
@@ -52,9 +64,11 @@ export function AddMedicationScreen() {
 
   return (
     <Page scroll keyboard>
-      <Header back={() => setScreen('medications')} title="Add Medication" />
+      <Header back={() => setScreen('medications')} title="Medication" />
 
-      <Text style={styles.pageTitle}>Add medication</Text>
+      <Text style={styles.pageTitle}>
+        {editingMedicationId ? 'Edit medication' : 'Add medication'}
+      </Text>
       <Text style={styles.pageSubtitle}>
         Enter the medication exactly as prescribed. Pawso only schedules the
         times you confirm here.
@@ -65,7 +79,64 @@ export function AddMedicationScreen() {
         value={newMedicationName}
         onChangeText={setNewMedicationName}
         placeholder="e.g. Clavamox"
+        maxLength={120}
       />
+
+      <Text style={styles.sectionTitle}>Course & refills</Text>
+      <Text style={styles.cardMuted}>
+        Optional dates keep reminders from appearing outside the prescribed course.
+      </Text>
+      <Label text="Start date" />
+      <Input
+        value={newMedicationStartDate}
+        onChangeText={setNewMedicationStartDate}
+        placeholder="YYYY-MM-DD"
+        keyboardType="numbers-and-punctuation"
+        maxLength={10}
+      />
+      <Label text="End date" />
+      <Input
+        value={newMedicationEndDate}
+        onChangeText={setNewMedicationEndDate}
+        placeholder="YYYY-MM-DD"
+        keyboardType="numbers-and-punctuation"
+        maxLength={10}
+      />
+      <View style={styles.medicationDoseRow}>
+        <View style={{ flex: 1 }}>
+          <Label text="Refills remaining" />
+          <Input
+            value={newMedicationRefills}
+            onChangeText={setNewMedicationRefills}
+            placeholder="e.g. 2"
+            keyboardType="number-pad"
+            maxLength={6}
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Label text="Refill due" />
+          <Input
+            value={newMedicationRefillDate}
+            onChangeText={setNewMedicationRefillDate}
+            placeholder="YYYY-MM-DD"
+            keyboardType="numbers-and-punctuation"
+            maxLength={10}
+          />
+        </View>
+      </View>
+      <Label text="Reminder state" />
+      <View style={styles.row}>
+        <OptionButton
+          title="Active"
+          selected={!newMedicationPaused}
+          onPress={() => setNewMedicationPaused(false)}
+        />
+        <OptionButton
+          title="Paused"
+          selected={newMedicationPaused}
+          onPress={() => setNewMedicationPaused(true)}
+        />
+      </View>
 
       <View style={styles.medicationDoseRow}>
         <View style={{ flex: 1 }}>
@@ -74,6 +145,7 @@ export function AddMedicationScreen() {
             value={newMedicationDose}
             onChangeText={setNewMedicationDose}
             placeholder="e.g. 1"
+            maxLength={80}
           />
         </View>
 
@@ -83,6 +155,7 @@ export function AddMedicationScreen() {
             value={newMedicationUnit}
             onChangeText={setNewMedicationUnit}
             placeholder="e.g. mL"
+            maxLength={40}
           />
         </View>
       </View>
@@ -93,6 +166,7 @@ export function AddMedicationScreen() {
         onChangeText={setNewMedicationInstructions}
         placeholder="e.g. Give with food"
         multiline
+        maxLength={2000}
       />
 
       <Text style={styles.sectionTitle}>Daily schedule</Text>
@@ -109,6 +183,7 @@ export function AddMedicationScreen() {
             onChangeText={(value: string) => updateTime(index, value)}
             placeholder={index === 0 ? '08:00' : '20:00'}
             keyboardType="numbers-and-punctuation"
+            maxLength={5}
           />
           {newMedicationTimes.length > 1 ? (
             <SecondaryButton
@@ -142,7 +217,13 @@ export function AddMedicationScreen() {
       ) : null}
 
       <PrimaryButton
-        title={isSavingMedication ? 'Saving medication…' : 'Save medication'}
+        title={
+          isSavingMedication
+            ? 'Saving medication…'
+            : editingMedicationId
+            ? 'Save medication changes'
+            : 'Save medication'
+        }
         disabled={
           isSavingMedication || !newMedicationName.trim() || !allTimesValid
         }

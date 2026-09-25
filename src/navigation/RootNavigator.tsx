@@ -23,11 +23,14 @@ import { AccountScreen } from '../screens/AccountScreen';
 import { HouseholdScreen } from '../screens/HouseholdScreen';
 import { VetVisitPrepScreen } from '../screens/VetVisitPrepScreen';
 import { HealthCheckInScreen } from '../screens/HealthCheckInScreen';
+import { HealthTrendsScreen } from '../screens/HealthTrendsScreen';
+import { EmergencyCardScreen } from '../screens/EmergencyCardScreen';
 import { SmartCarePlanScreen } from '../screens/SmartCarePlanScreen';
 import type {
   MainTabParamList,
   RootStackParamList,
 } from './navigationRef';
+import { usePawso } from '../context/PawsoContext';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -50,20 +53,22 @@ const tabIcons: Record<
 
 function MainTabs() {
   const insets = useSafeAreaInsets();
+  const { resolvedAppearance, canViewMedical } = usePawso();
+  const dark = resolvedAppearance === 'dark';
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'android' ? 12 : 8);
 
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarActiveTintColor: '#53166F',
-        tabBarInactiveTintColor: '#59645F',
+        tabBarActiveTintColor: dark ? '#D7A5EF' : '#53166F',
+        tabBarInactiveTintColor: dark ? '#BAC5C0' : '#59645F',
         tabBarStyle: {
           height: 58 + bottomInset,
           paddingTop: 6,
           paddingBottom: bottomInset,
-          borderTopColor: '#E4E8E6',
-          backgroundColor: '#FFFFFF',
+          borderTopColor: dark ? '#39433F' : '#E4E8E6',
+          backgroundColor: dark ? '#1B211E' : '#FFFFFF',
         },
         tabBarItemStyle: {
           paddingVertical: 2,
@@ -85,20 +90,23 @@ function MainTabs() {
       <Tab.Screen name="Today" component={TodayScreen} />
       <Tab.Screen name="Pets" component={PetsScreen} />
       <Tab.Screen name="Add" component={AddMenuScreen} />
-      <Tab.Screen name="Ask" component={AskScreen} />
+      {canViewMedical ? <Tab.Screen name="Ask" component={AskScreen} /> : null}
       <Tab.Screen name="Care" component={CareScreen} />
     </Tab.Navigator>
   );
 }
 
 export function RootNavigator() {
+  const { resolvedAppearance } = usePawso();
   return (
     <Stack.Navigator
       initialRouteName="Welcome"
       screenOptions={{
         headerShown: false,
         animation: 'slide_from_right',
-        contentStyle: { backgroundColor: '#F8F6F1' },
+        contentStyle: {
+          backgroundColor: resolvedAppearance === 'dark' ? '#111512' : '#F8F6F1',
+        },
       }}
     >
       <Stack.Screen name="Welcome" component={WelcomeScreen} />
@@ -116,6 +124,8 @@ export function RootNavigator() {
       <Stack.Screen name="Household" component={HouseholdScreen} />
       <Stack.Screen name="VetVisitPrep" component={VetVisitPrepScreen} />
       <Stack.Screen name="HealthCheckIn" component={HealthCheckInScreen} />
+      <Stack.Screen name="HealthTrends" component={HealthTrendsScreen} />
+      <Stack.Screen name="EmergencyCard" component={EmergencyCardScreen} />
       <Stack.Screen name="SmartCarePlan" component={SmartCarePlanScreen} />
     </Stack.Navigator>
   );

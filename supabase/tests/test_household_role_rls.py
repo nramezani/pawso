@@ -138,27 +138,73 @@ class HouseholdRoleRLSTests(unittest.TestCase):
             "(only owner can, per can_manage_household_medical).",
         )
 
-    def test_owner_can_insert_medication(self):
-        response = requests.post(
+    def test_owner_uses_atomic_medication_rpc_not_direct_insert(self):
+        direct_response = requests.post(
             f"{SUPABASE_URL}/rest/v1/medications",
-            headers={**_headers(self.owner_jwt), "Prefer": "return=representation"},
-            json={"pet_id": TEST_PET_ID, "name": "rls-test-owner-write"},
+            headers=_headers(self.owner_jwt),
+            json={"pet_id": TEST_PET_ID, "name": "rls-direct-write-should-fail"},
+            timeout=10,
+        )
+        self.assertIn(
+            direct_response.status_code,
+            (401, 403),
+            "Direct medication writes must stay disabled so schedules cannot be partially saved.",
+        )
+
+        rpc_response = requests.post(
+            f"{SUPABASE_URL}/rest/v1/rpc/save_medication_with_schedules",
+            headers=_headers(self.owner_jwt),
+            json={
+                "target_pet": TEST_PET_ID,
+                "target_name": "rls-test-owner-rpc",
+                "target_dose": "1",
+                "target_unit": "tablet",
+                "target_instructions": "Disposable staging test row; archive after creation.",
+                "target_times": ["08:00"],
+            },
             timeout=10,
         )
         self.assertEqual(
-            response.status_code,
-            201,
-            f"Owner should be able to create a medication (status={response.status_code}, "
-            f"body={response.text}).",
+            rpc_response.status_code,
+            200,
+            f"Owner medication RPC failed (status={rpc_response.status_code}, "
+            f"body={rpc_response.text}).",
         )
-        # Clean up the row this test created.
-        created = response.json()
-        if created:
-            requests.delete(
-                f"{SUPABASE_URL}/rest/v1/medications?id=eq.{created[0]['id']}",
-                headers=_headers(self.owner_jwt),
-                timeout=10,
-            )
+        medication_id = rpc_response.json()
+        archive_response = requests.post(
+            f"{SUPABASE_URL}/rest/v1/rpc/set_medication_state",
+            headers=_headers(self.owner_jwt),
+            json={"target_medication": medication_id, "target_action": "archive"},
+            timeout=10,
+        )
+        self.assertEqual(archive_response.status_code, 200)
+
+    def test_structured_health_tables_are_rpc_only_and_hidden_from_sitter(self):
+        for table in ("symptom_entries", "lab_results"):
+            with self.subTest(table=table):
+                sitter_view = requests.get(
+                    f"{SUPABASE_URL}/rest/v1/{table}?pet_id=eq.{TEST_PET_ID}",
+                    headers=_headers(self.sitter_jwt),
+                    timeout=10,
+                )
+                self.assertEqual(sitter_view.status_code, 200)
+                self.assertEqual(sitter_view.json(), [])
+
+                owner_direct_write = requests.post(
+                    f"{SUPABASE_URL}/rest/v1/{table}",
+                    headers=_headers(self.owner_jwt),
+                    json={"pet_id": TEST_PET_ID},
+                    timeout=10,
+                )
+                self.assertIn(owner_direct_write.status_code, (401, 403))
+
+    def test_rate_limit_counters_are_not_readable(self):
+        response = requests.get(
+            f"{SUPABASE_URL}/rest/v1/api_rate_limits?select=*",
+            headers=_headers(self.owner_jwt),
+            timeout=10,
+        )
+        self.assertIn(response.status_code, (401, 403))
 
     def test_sitter_can_view_pets_and_add_task_completions(self):
         """Sanity check that the fix didn't over-tighten: sitters should
