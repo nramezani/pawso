@@ -1,6 +1,7 @@
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
+import { formatDateDigits } from '../utils/dateTime';
 import {
   Page,
   Header,
@@ -10,6 +11,57 @@ import {
   PrimaryButton,
   styles,
 } from '../components/ui';
+
+const ROUTINE_PRESETS = [
+  {
+    title: 'Nail trim',
+    note: 'Adjust the timing to your pet’s nail growth and comfort.',
+    frequency: 'monthly',
+    interval: '1',
+  },
+  {
+    title: 'Flea & tick prevention',
+    note: 'Set the repeat schedule from the product label or your veterinarian.',
+    frequency: 'none',
+    interval: '1',
+  },
+  {
+    title: 'Deworming',
+    note: 'Set the repeat schedule recommended by your veterinarian.',
+    frequency: 'none',
+    interval: '1',
+  },
+  {
+    title: 'Vaccine or booster',
+    note: 'Use the next due date and interval provided by your veterinarian.',
+    frequency: 'none',
+    interval: '1',
+  },
+  {
+    title: 'Annual wellness exam',
+    note: 'Routine annual veterinary checkup.',
+    frequency: 'monthly',
+    interval: '12',
+  },
+  {
+    title: 'Grooming',
+    note: 'Adjust the timing for coat type and your groomer’s recommendation.',
+    frequency: 'monthly',
+    interval: '1',
+  },
+  {
+    title: 'Medication refill',
+    note: 'Confirm the refill timing from the prescription and remaining supply.',
+    frequency: 'none',
+    interval: '1',
+  },
+  {
+    title: 'Dental care',
+    note: 'Choose the home-care or professional follow-up schedule recommended for your pet.',
+    frequency: 'none',
+    interval: '1',
+  },
+] as const;
 
 export function AddCareTaskScreen() {
   const {
@@ -42,6 +94,30 @@ return (
         <Text style={styles.pageSubtitle}>
           Create a reminder for something you need to do for {petName}.
         </Text>
+
+        <Text style={styles.sectionTitle}>Quick routine reminders</Text>
+        <Text style={styles.cardMuted}>
+          Pick a template, then confirm its first due date and repeat schedule.
+        </Text>
+        <View style={styles.askSuggestions}>
+          {ROUTINE_PRESETS.map((preset) => (
+            <Pressable
+              key={preset.title}
+              style={styles.askSuggestionChip}
+              accessibilityRole="button"
+              accessibilityLabel={`Use ${preset.title} reminder template`}
+              onPress={() => {
+                setNewCareTitle(preset.title);
+                setNewCareNotes(preset.note);
+                setNewCareFrequency(preset.frequency);
+                setNewCareInterval(preset.interval);
+                setNewCareEndsOn('');
+              }}
+            >
+              <Text style={styles.askSuggestionText}>{preset.title}</Text>
+            </Pressable>
+          ))}
+        </View>
 
         <Label text="Task *" />
         <Input
@@ -78,9 +154,9 @@ return (
             <Label text="Stop repeating after (optional)" />
             <Input
               value={newCareEndsOn}
-              onChangeText={setNewCareEndsOn}
-              placeholder="YYYY-MM-DD"
-              keyboardType="numbers-and-punctuation"
+              onChangeText={(value: string) => setNewCareEndsOn(formatDateDigits(value))}
+              placeholder="YYYYMMDD"
+              keyboardType="number-pad"
               maxLength={10}
             />
           </>
@@ -98,8 +174,9 @@ return (
         <Label text="Due date *" />
         <Input
           value={newCareDate}
-          onChangeText={setNewCareDate}
-          placeholder="YYYY-MM-DD"
+          onChangeText={(value: string) => setNewCareDate(formatDateDigits(value))}
+          placeholder="YYYYMMDD"
+          keyboardType="number-pad"
           maxLength={10}
         />
 

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
+import { formatDateDigits } from '../utils/dateTime';
 import {
   Page,
   Header,
@@ -105,11 +106,12 @@ export function AddPetScreen() {
       <Label text="Date of birth" />
       <Input
         value={petDateOfBirth}
-        onChangeText={setPetDateOfBirth}
-        placeholder="YYYY-MM-DD"
-        keyboardType="numbers-and-punctuation"
+        onChangeText={(value: string) => setPetDateOfBirth(formatDateDigits(value))}
+        placeholder="YYYYMMDD"
+        keyboardType="number-pad"
         maxLength={10}
       />
+      <Text style={styles.cardMuted}>Type 8 numbers; Pawso adds the dashes.</Text>
 
       <Label text="Approximate age (if DOB is unknown)" />
       <Input

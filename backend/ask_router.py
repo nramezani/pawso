@@ -1,6 +1,7 @@
 import html
 import json
 import logging
+from datetime import date
 from typing import Annotated, Literal
 
 from dotenv import load_dotenv
@@ -21,6 +22,11 @@ class PetContext(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     species: str | None = Field(default=None, max_length=100)
     breed: str | None = Field(default=None, max_length=200)
+    date_of_birth: str | None = Field(default=None, max_length=10)
+    approximate_age: str | None = Field(default=None, max_length=100)
+    sex: str | None = Field(default=None, max_length=50)
+    spayed_neutered: bool | None = None
+    weight_kg: float | None = Field(default=None, gt=0, le=999999.99)
     conditions: str | None = Field(default=None, max_length=4000)
     allergies: str | None = Field(default=None, max_length=4000)
 
@@ -53,6 +59,7 @@ def _validate_total_source_length(sources: list[AskSource]) -> list[AskSource]:
 
 class AskRequest(BaseModel):
     pet: PetContext
+    current_date: date | None = None
     question: str = Field(min_length=1, max_length=1000)
     sources: list[AskSource] = Field(default_factory=list, max_length=200)
 
@@ -188,6 +195,8 @@ Rules:
 9. General educational guidance must be clearly described as general, not as a fact about this pet.
 10. Be concise, calm, and non-alarmist.
 11. If the question describes an obvious emergency, safety_category must be "urgent" and the answer should advise prompt veterinary/emergency evaluation without trying to diagnose.
+12. You may calculate age from a supplied date of birth using current_date. State years and months when useful.
+13. For weight questions, describe only the supplied measurements and their dates. You may calculate the numeric change, but do not claim a healthy or ideal weight without veterinary context such as body-condition score. Flag rapid or unexplained change for veterinary discussion without diagnosing it.
 """
 )
 
@@ -262,6 +271,7 @@ def ask_pawso(payload: AskRequest):
     urgent_match = any(term in question_lower for term in URGENT_TERMS)
 
     context = {
+        "current_date": (payload.current_date or date.today()).isoformat(),
         "pet": payload.pet.model_dump(),
         "sources": [_source_payload(source) for source in payload.sources],
         "question": payload.question,
