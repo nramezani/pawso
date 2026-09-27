@@ -1,4 +1,5 @@
 import unittest
+import json
 from unittest.mock import patch
 
 from fastapi import HTTPException
@@ -66,6 +67,33 @@ class AggregateSourceLengthValidationTests(unittest.TestCase):
 
 
 class AskPawsoEndpointTests(unittest.TestCase):
+    def test_passes_current_date_and_profile_to_model(self):
+        payload = AskRequest(
+            pet=PetContext(
+                id="pet-1",
+                name="Vicki",
+                date_of_birth="2020-09-20",
+                weight_kg=4.2,
+            ),
+            question="How old is Vicki?",
+            sources=[_source()],
+        )
+        model_response = AskResponse(
+            answer="Vicki's age can be calculated from her profile.",
+            source_ids=[],
+            answer_type="record_lookup",
+            safety_category="normal",
+        )
+        with patch.object(ask_router, "get_client", return_value=object()), patch.object(
+            ask_router, "call_structured", return_value=model_response
+        ) as call:
+            ask_pawso(payload)
+
+        model_context = json.loads(call.call_args.kwargs["user_content"])
+        self.assertRegex(model_context["current_date"], r"^\d{4}-\d{2}-\d{2}$")
+        self.assertEqual(model_context["pet"]["date_of_birth"], "2020-09-20")
+        self.assertEqual(model_context["pet"]["weight_kg"], 4.2)
+
     def test_filters_and_deduplicates_source_ids(self):
         payload = AskRequest(pet=_pet(), question="How is Fido?", sources=[_source("allowed-id")])
         model_response = AskResponse(

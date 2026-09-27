@@ -553,7 +553,13 @@ function usePawsoState() {
 
       const selected = await selectPetRef.current(petId);
       if (!selected) return;
-      setScreen(data.kind === 'care_task' ? 'care' : 'medications');
+      setScreen(
+        data.kind === 'care_task'
+          ? 'care'
+          : data.kind === 'birthday'
+          ? 'petProfile'
+          : 'medications'
+      );
     })
       .then((cleanup) => {
         if (active) unsubscribe = cleanup;
@@ -2258,6 +2264,30 @@ function usePawsoState() {
 
       const sources: AskSource[] = [];
 
+      sources.push({
+        id: `profile:${currentPetId}`,
+        label: `${petName}'s profile`,
+        source_type: 'Pet profile',
+        text: [
+          `Name: ${petName}`,
+          petType ? `Species: ${petType}` : '',
+          breed ? `Breed: ${breed}` : '',
+          petDateOfBirth ? `Date of birth: ${petDateOfBirth}` : '',
+          petAge ? `Approximate age: ${petAge}` : '',
+          petSex ? `Sex: ${petSex}` : '',
+          alteredStatus === 'yes'
+            ? 'Spayed/neutered: yes'
+            : alteredStatus === 'no'
+            ? 'Spayed/neutered: no'
+            : '',
+          weight ? `Current profile weight: ${weight}` : '',
+          conditions ? `Conditions: ${conditions}` : '',
+          allergies ? `Allergies: ${allergies}` : '',
+        ]
+          .filter(Boolean)
+          .join(' · '),
+      });
+
       for (const event of timelineEvents) {
         sources.push({
           id: `event:${event.id}`,
@@ -2322,6 +2352,16 @@ function usePawsoState() {
             name: petName,
             species: petType,
             breed: breed || null,
+            date_of_birth: petDateOfBirth || null,
+            approximate_age: petAge || null,
+            sex: petSex,
+            spayed_neutered:
+              alteredStatus === 'yes'
+                ? true
+                : alteredStatus === 'no'
+                ? false
+                : null,
+            weight_kg: parseWeightKg(weight),
             conditions: conditions || null,
             allergies: allergies || null,
           },
@@ -3749,6 +3789,7 @@ function usePawsoState() {
 
       const updatedPets = await loadPets(session.user.id);
       await refreshAllPetsToday(updatedPets);
+      await syncNotificationsIfEnabled(updatedPets);
       await Promise.all([
         loadTimeline(savedPet.id),
         loadMedicationData(savedPet.id),

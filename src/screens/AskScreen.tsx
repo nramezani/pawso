@@ -36,9 +36,9 @@ export function AskScreen() {
   ).length;
 
   const suggestedQuestions = [
+    `How old is ${petName}?`,
+    `What does ${petName}'s weight trend show?`,
     `Summarize ${petName}'s health history.`,
-    'What follow-up did the vet recommend?',
-    `What medications are currently recorded for ${petName}?`,
   ];
   const uniqueAnswerSourceIds = askAnswer
     ? Array.from(new Set(askAnswer.source_ids))
@@ -80,7 +80,7 @@ export function AskScreen() {
           <MetricStrip
             items={[
               {
-                label: 'Health events',
+                label: 'Profile + events',
                 value: timelineEvents.length,
                 icon: '📋',
                 tone: 'purple',

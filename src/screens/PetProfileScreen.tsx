@@ -45,6 +45,7 @@ export function PetProfileScreen() {
     petEmoji,
     alteredLabel,
     alteredValue,
+    notificationsEnabled,
   } = usePawso();
 
 return (
@@ -130,6 +131,17 @@ return (
             label="Weight"
             value={weight || 'Not provided'}
           />
+
+          {petDateOfBirth ? (
+            <Info
+              label="Birthday reminder"
+              value={
+                notificationsEnabled
+                  ? 'On · every year at 9:00 AM'
+                  : 'Turn on Reminders in Account'
+              }
+            />
+          ) : null}
         </Card>
 
         {canViewMedical ? (

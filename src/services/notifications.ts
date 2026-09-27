@@ -110,7 +110,7 @@ export async function subscribeToPawsoNotificationResponses(
 }
 
 export async function syncPawsoLocalNotifications(
-  pets: { id: string; name: string }[],
+  pets: { id: string; name: string; date_of_birth?: string | null }[],
   timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
 ) {
   const Notifications = await getNotifications();
@@ -173,6 +173,38 @@ export async function syncPawsoLocalNotifications(
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
         date: due,
+        channelId: CHANNEL_ID,
+      },
+    });
+
+    scheduledCount += 1;
+  }
+
+  for (const pet of pets) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(pet.date_of_birth ?? '');
+    if (!match) continue;
+
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    if (month < 1 || month > 12 || day < 1 || day > 31) continue;
+
+    await Notifications.scheduleNotificationAsync({
+      identifier: `birthday:${pet.id}`,
+      content: {
+        title: `🎉 It’s ${pet.name}’s birthday!`,
+        body: `Celebrate ${pet.name} today.`,
+        sound: 'default',
+        data: {
+          kind: 'birthday',
+          petId: pet.id,
+        },
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.YEARLY,
+        month: month - 1,
+        day,
+        hour: 9,
+        minute: 0,
         channelId: CHANNEL_ID,
       },
     });
