@@ -1,5 +1,6 @@
 import unittest
 import json
+from datetime import date
 from unittest.mock import patch
 
 from fastapi import HTTPException
@@ -75,6 +76,7 @@ class AskPawsoEndpointTests(unittest.TestCase):
                 date_of_birth="2020-09-20",
                 weight_kg=4.2,
             ),
+            current_date=date(2026, 9, 26),
             question="How old is Vicki?",
             sources=[_source()],
         )
@@ -90,7 +92,7 @@ class AskPawsoEndpointTests(unittest.TestCase):
             ask_pawso(payload)
 
         model_context = json.loads(call.call_args.kwargs["user_content"])
-        self.assertRegex(model_context["current_date"], r"^\d{4}-\d{2}-\d{2}$")
+        self.assertEqual(model_context["current_date"], "2026-09-26")
         self.assertEqual(model_context["pet"]["date_of_birth"], "2020-09-20")
         self.assertEqual(model_context["pet"]["weight_kg"], 4.2)
 

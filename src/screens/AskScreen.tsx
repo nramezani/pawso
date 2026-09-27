@@ -81,7 +81,7 @@ export function AskScreen() {
             items={[
               {
                 label: 'Profile + events',
-                value: timelineEvents.length,
+                value: timelineEvents.length + 1,
                 icon: '📋',
                 tone: 'purple',
               },

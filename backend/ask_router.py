@@ -59,6 +59,7 @@ def _validate_total_source_length(sources: list[AskSource]) -> list[AskSource]:
 
 class AskRequest(BaseModel):
     pet: PetContext
+    current_date: date | None = None
     question: str = Field(min_length=1, max_length=1000)
     sources: list[AskSource] = Field(default_factory=list, max_length=200)
 
@@ -270,7 +271,7 @@ def ask_pawso(payload: AskRequest):
     urgent_match = any(term in question_lower for term in URGENT_TERMS)
 
     context = {
-        "current_date": date.today().isoformat(),
+        "current_date": (payload.current_date or date.today()).isoformat(),
         "pet": payload.pet.model_dump(),
         "sources": [_source_payload(source) for source in payload.sources],
         "question": payload.question,

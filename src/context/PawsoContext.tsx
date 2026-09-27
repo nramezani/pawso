@@ -2365,6 +2365,7 @@ function usePawsoState() {
             conditions: conditions || null,
             allergies: allergies || null,
           },
+          current_date: formatDateInputInTimeZone(new Date(), householdTimeZone),
           question,
           sources: safeSources,
         }),

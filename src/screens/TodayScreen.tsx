@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
-import { formatDateInputInTimeZone, getHourInTimeZone } from '../utils/dateTime';
+import { formatDateInputInTimeZone } from '../utils/dateTime';
 import {
   Page,
   PrimaryButton,
@@ -71,7 +71,9 @@ export function TodayScreen() {
   } = usePawso();
 
   const showAllPets = pets.length > 1 && todayView === 'all';
-  const localHour = getHourInTimeZone(new Date(), householdTimeZone);
+  // Greetings follow the phone's clock. Household time zone still controls
+  // care schedules and "today" calculations elsewhere on this screen.
+  const localHour = new Date().getHours();
   const greeting =
     localHour < 12
       ? 'Good morning'

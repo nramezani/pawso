@@ -181,6 +181,9 @@ export async function syncPawsoLocalNotifications(
   }
 
   for (const pet of pets) {
+    // Keep the total below iOS's scheduled-notification ceiling.
+    if (scheduledCount >= 60) break;
+
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(pet.date_of_birth ?? '');
     if (!match) continue;
 
