@@ -33,6 +33,7 @@ export function HealthCheckInScreen() {
     symptomDuration,
     setSymptomDuration,
     saveHealthCheckIn,
+    weightUnit,
   } = usePawso();
 
   const isSymptom = checkInType === 'symptom';
@@ -111,7 +112,7 @@ export function HealthCheckInScreen() {
         </>
       ) : (
         <>
-          <Label text="Weight (kg)" />
+          <Label text={`Weight (${weightUnit})`} />
           <Input
             value={checkInWeight}
             onChangeText={setCheckInWeight}

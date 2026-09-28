@@ -8,6 +8,25 @@ MIGRATIONS = REPO_ROOT / "supabase" / "migrations"
 
 
 class MigrationContractTests(unittest.TestCase):
+    def test_pre_beta_profiles_reminders_and_sharing_are_scoped(self):
+        migration = (
+            MIGRATIONS / "20260930_pre_beta_polish.sql"
+        ).read_text(encoding="utf-8").lower()
+
+        for fragment in (
+            "preferred_weight_unit",
+            "insurance_policy_number",
+            "pet_notification_preferences",
+            "emergency_share_links",
+            "assigned_member_id",
+            "create_care_task_with_recurrence_v2",
+            "created_by = auth.uid()",
+            "can_manage_household_medical",
+            "can_manage_household_care",
+        ):
+            self.assertIn(fragment, migration)
+        self.assertNotIn("using (true)", migration)
+
     def test_invitation_cancellation_uses_an_allowed_status(self):
         household_schema = (
             MIGRATIONS / "20260912_household_shared_care.sql"

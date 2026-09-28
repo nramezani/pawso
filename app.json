@@ -52,7 +52,7 @@
         "expo-image-picker",
         {
           "photosPermission": "Allow Pawso to choose a pet profile photo.",
-          "cameraPermission": false,
+          "cameraPermission": "Allow Pawso to photograph veterinary records for secure upload.",
           "microphonePermission": false
         }
       ],

@@ -33,6 +33,7 @@ export function CareScreen() {
     overdueCareTasks,
     upcomingCareTasks,
     householdTimeZone,
+    householdMembers,
   } = usePawso();
 
   const completedTaskIds = new Set(
@@ -159,6 +160,11 @@ return (
                 <View style={{ flex: 1 }}>
                   <Text style={styles.documentCardTitle}>{task.title}</Text>
                   <Text style={styles.documentCardMeta}>{formatDueLabel(task.due_at)}</Text>
+                  {task.assigned_member_id ? (
+                    <Text style={styles.documentCardMeta}>
+                      Assigned to {householdMembers.find((member) => member.id === task.assigned_member_id)?.display_name ?? 'household member'}
+                    </Text>
+                  ) : null}
                   {task.recurrence_frequency !== 'none' ? (
                     <Text style={styles.documentCardMeta}>
                       Repeats every {task.recurrence_interval > 1 ? `${task.recurrence_interval} ` : ''}

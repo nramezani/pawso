@@ -39,6 +39,7 @@ export function MedicationsScreen() {
     completedMedicationDoses,
     isOnline,
     householdTimeZone,
+    householdMembers,
   } = usePawso();
 
   const givenToday = todayMedicationDoses.filter(
@@ -303,6 +304,9 @@ return (
                     <View key={schedule.id} style={styles.scheduleChip}>
                       <Text style={styles.scheduleChipText}>
                         {formatMedicationTime(buildScheduledDate(schedule.time_of_day))}
+                        {schedule.assigned_member_id
+                          ? ` · ${householdMembers.find((member) => member.id === schedule.assigned_member_id)?.display_name ?? 'Assigned'}`
+                          : ''}
                       </Text>
                     </View>
                   ))}

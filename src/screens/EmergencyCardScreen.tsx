@@ -1,4 +1,5 @@
-import { Image, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Image, Share, Text, View } from 'react-native';
 
 import {
   Card,
@@ -10,10 +11,13 @@ import {
   styles,
 } from '../components/ui';
 import { usePawso } from '../context/PawsoContext';
+import { supabase } from '../../lib/supabase';
+import { API_BASE_URL } from '../config';
 
 export function EmergencyCardScreen() {
   const {
     setScreen,
+    currentPetId,
     petName,
     petType,
     breed,
@@ -59,6 +63,44 @@ export function EmergencyCardScreen() {
     )
     .map((item) => [item.name, item.dose, item.unit].filter(Boolean).join(' '))
     .join(', ');
+  const [emergencyToken, setEmergencyToken] = useState('');
+  const [linkBusy, setLinkBusy] = useState(false);
+  const [linkMessage, setLinkMessage] = useState('');
+  const emergencyUrl = emergencyToken ? `${API_BASE_URL}/api/v1/emergency/${emergencyToken}` : '';
+
+  useEffect(() => {
+    if (!currentPetId) return;
+    supabase.from('emergency_share_links').select('token').eq('pet_id', currentPetId)
+      .is('revoked_at', null).order('created_at', { ascending: false }).limit(1).maybeSingle()
+      .then(({ data }) => setEmergencyToken(data?.token ?? ''));
+  }, [currentPetId]);
+
+  async function createEmergencyLink() {
+    if (!currentPetId) return;
+    setLinkBusy(true);
+    setLinkMessage('');
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setLinkMessage('Sign in again to create a link.');
+      setLinkBusy(false);
+      return;
+    }
+    const { data, error } = await supabase.from('emergency_share_links')
+      .insert({ pet_id: currentPetId, created_by: user.id }).select('token').single();
+    if (error) setLinkMessage(error.message);
+    else setEmergencyToken(data.token);
+    setLinkBusy(false);
+  }
+
+  async function revokeEmergencyLink() {
+    if (!emergencyToken) return;
+    setLinkBusy(true);
+    const { error } = await supabase.from('emergency_share_links')
+      .update({ revoked_at: new Date().toISOString() }).eq('token', emergencyToken);
+    setLinkMessage(error ? error.message : 'Emergency link revoked.');
+    if (!error) setEmergencyToken('');
+    setLinkBusy(false);
+  }
 
   return (
     <Page scroll>
@@ -121,6 +163,21 @@ export function EmergencyCardScreen() {
         disabled={dataRightsBusy}
         onPress={shareCurrentEmergencyCard}
       />
+      <Card title="Limited emergency QR">
+        <Text style={styles.cardMuted}>
+          This revocable link shows only the emergency card above. It does not expose documents, household access, or your Pawso account.
+        </Text>
+        {emergencyUrl ? (
+          <>
+            <Image source={{ uri: `${emergencyUrl}/qr` }} style={{ width: 220, height: 220, alignSelf: 'center', marginVertical: 16 }} accessibilityLabel="Emergency card QR code" />
+            <PrimaryButton title="Share emergency link" onPress={() => Share.share({ message: `${petName}'s Pawso emergency card: ${emergencyUrl}` })} />
+            <SecondaryButton title={linkBusy ? 'Revoking…' : 'Revoke link'} disabled={linkBusy} onPress={revokeEmergencyLink} />
+          </>
+        ) : (
+          <PrimaryButton title={linkBusy ? 'Creating…' : 'Create emergency QR'} disabled={linkBusy} onPress={createEmergencyLink} />
+        )}
+        {linkMessage ? <Text style={styles.cardMuted}>{linkMessage}</Text> : null}
+      </Card>
       <SecondaryButton title="Edit pet details" onPress={startEditPet} />
     </Page>
   );
