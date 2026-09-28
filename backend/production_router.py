@@ -123,6 +123,39 @@ class InvitationEmailRequest(BaseModel):
         return normalized
 
 
+@router.get("/invite/{invite_code}", response_class=HTMLResponse)
+async def invitation_landing_page(invite_code: UUID):
+    """Give email clients an HTTPS destination and a usable Expo Go fallback."""
+    code = str(invite_code)
+    app_base = os.getenv("PAWSO_INVITE_BASE_URL", "pawso://invite").rstrip("/")
+    app_url = f"{app_base}/{code}"
+    ios_url = os.getenv("PAWSO_IOS_DOWNLOAD_URL", "")
+    android_url = os.getenv("PAWSO_ANDROID_DOWNLOAD_URL", "")
+    download_links = "".join(
+        f'<p><a href="{html.escape(url, quote=True)}">{label}</a></p>'
+        for url, label in (
+            (ios_url, "Get Pawso for iPhone"),
+            (android_url, "Get Pawso for Android"),
+        )
+        if url.startswith("https://")
+    )
+    page = f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="referrer" content="no-referrer"><title>Join Pawso household</title>
+    <style>body{{font-family:system-ui;background:#fbf8f2;color:#26222b;margin:0;padding:24px}}
+    main{{max-width:520px;margin:10vh auto;background:white;border-radius:18px;padding:28px}}
+    a.button{{display:inline-block;background:#53166f;color:white;padding:13px 20px;border-radius:10px;text-decoration:none}}
+    code{{overflow-wrap:anywhere;user-select:all}}</style></head><body><main>
+    <h1>You're invited to Pawso</h1><p>If the Pawso app is installed, open the invitation:</p>
+    <p><a class="button" href="{html.escape(app_url, quote=True)}">Open Pawso</a></p>
+    <p>Using Expo Go? Open Pawso, sign in with the invited email, then enter this code in <strong>People &amp; access</strong>:</p>
+    <p><code>{code}</code></p>{download_links}</main></body></html>"""
+    return HTMLResponse(page, headers={
+        "Cache-Control": "no-store",
+        "Referrer-Policy": "no-referrer",
+        "X-Robots-Tag": "noindex, nofollow",
+    })
+
+
 class ClientEventRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -398,8 +431,8 @@ async def send_household_invitation(
             detail="Automatic invitation email is not configured yet. Use Share invitation instead.",
         )
 
-    invite_base = os.getenv("PAWSO_INVITE_BASE_URL", "pawso://invite").rstrip("/")
-    invite_url = f"{invite_base}/{request.invite_code}"
+    public_base = os.getenv("PAWSO_PUBLIC_API_URL", "https://pawso.onrender.com").rstrip("/")
+    invite_url = f"{public_base}/api/v1/invite/{request.invite_code}"
     ios_url = os.getenv("PAWSO_IOS_DOWNLOAD_URL", "")
     android_url = os.getenv("PAWSO_ANDROID_DOWNLOAD_URL", "")
 

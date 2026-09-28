@@ -26,9 +26,16 @@ SUPABASE_SERVICE_ROLE_KEY=...
 RESEND_API_KEY=...
 PAWSO_INVITE_FROM_EMAIL=Pawso <invites@verified-domain.example>
 PAWSO_INVITE_BASE_URL=pawso://invite
+PAWSO_PUBLIC_API_URL=https://pawso.onrender.com
 PAWSO_IOS_DOWNLOAD_URL=...
 PAWSO_ANDROID_DOWNLOAD_URL=...
 ```
+
+Invitation emails use the public HTTPS API URL for the Accept invitation button.
+The landing page links to the installed app through `PAWSO_INVITE_BASE_URL`
+and displays the one-time code for Expo Go, which cannot handle a stable
+`pawso://` link. Verify the public API URL points to this backend before
+sending invitations.
 
 EAS `development`, `preview`, and `production` environments:
 
@@ -95,4 +102,3 @@ Before public launch and quarterly afterward:
 - Verify identity before discussing account-specific data. Never request a password or service token.
 - Escalate deletion/export failures and suspected privacy events immediately.
 - Maintain a public support page before store submission.
-

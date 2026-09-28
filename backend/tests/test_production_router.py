@@ -1,9 +1,10 @@
 import unittest
 from pathlib import Path
+from uuid import UUID
 
 from pydantic import ValidationError
 
-from production_router import ClientEventRequest, InvitationEmailRequest
+from production_router import ClientEventRequest, InvitationEmailRequest, invitation_landing_page
 
 
 class InvitationEmailRequestTests(unittest.TestCase):
@@ -25,6 +26,17 @@ class InvitationEmailRequestTests(unittest.TestCase):
                 role="caregiver",
                 invite_code="22222222-2222-2222-2222-222222222222",
             )
+
+    def test_email_landing_has_link_and_expo_go_code(self):
+        import asyncio
+
+        code = UUID("22222222-2222-2222-2222-222222222222")
+        response = asyncio.run(invitation_landing_page(code))
+        body = response.body.decode()
+        self.assertIn('href="pawso://invite/22222222-2222-2222-2222-222222222222"', body)
+        self.assertIn("Using Expo Go?", body)
+        self.assertIn("People &amp; access", body)
+        self.assertEqual(response.headers["Referrer-Policy"], "no-referrer")
 
     def test_rejects_malformed_identifiers(self):
         with self.assertRaises(ValidationError):
