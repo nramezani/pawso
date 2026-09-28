@@ -27,6 +27,8 @@ export function AddPetScreen() {
     setPetAge,
     petDateOfBirth,
     setPetDateOfBirth,
+    petAdoptionDate,
+    setPetAdoptionDate,
     petSex,
     setPetSex,
     alteredStatus,
@@ -34,6 +36,8 @@ export function AddPetScreen() {
     alteredLabel,
     weight,
     setWeight,
+    weightUnit,
+    setWeightUnit,
     microchip,
     setMicrochip,
     conditions,
@@ -44,6 +48,18 @@ export function AddPetScreen() {
     setMedications,
     vetClinic,
     setVetClinic,
+    insuranceCompany,
+    setInsuranceCompany,
+    insurancePolicyNumber,
+    setInsurancePolicyNumber,
+    insuranceDeductible,
+    setInsuranceDeductible,
+    insuranceCoveragePercent,
+    setInsuranceCoveragePercent,
+    insuranceClaimsContact,
+    setInsuranceClaimsContact,
+    insuranceRenewalDate,
+    setInsuranceRenewalDate,
     emergencyNotes,
     setEmergencyNotes,
     emergencyContactName,
@@ -113,6 +129,15 @@ export function AddPetScreen() {
       />
       <Text style={styles.cardMuted}>Type 8 numbers; Pawso adds the dashes.</Text>
 
+      <Label text="Adoption / Gotcha Day" />
+      <Input
+        value={petAdoptionDate}
+        onChangeText={(value: string) => setPetAdoptionDate(formatDateDigits(value))}
+        placeholder="YYYYMMDD"
+        keyboardType="number-pad"
+        maxLength={10}
+      />
+
       <Label text="Approximate age (if DOB is unknown)" />
       <Input
         value={petAge}
@@ -168,7 +193,11 @@ export function AddPetScreen() {
           </Text>
 
           <Label text="Weight" />
-          <Input value={weight} onChangeText={setWeight} placeholder="e.g. 4 kg" maxLength={32} />
+          <View style={styles.row}>
+            <OptionButton title="Kilograms" selected={weightUnit === 'kg'} onPress={() => setWeightUnit('kg')} />
+            <OptionButton title="Pounds" selected={weightUnit === 'lb'} onPress={() => setWeightUnit('lb')} />
+          </View>
+          <Input value={weight} onChangeText={setWeight} placeholder={weightUnit === 'kg' ? 'e.g. 4.2 kg' : 'e.g. 9.3 lb'} keyboardType="decimal-pad" maxLength={32} />
 
           <Label text="Microchip number" />
           <Input value={microchip} onChangeText={setMicrochip} placeholder="Optional" maxLength={80} />
@@ -196,6 +225,21 @@ export function AddPetScreen() {
 
           <Label text="Primary vet or clinic" />
           <Input value={vetClinic} onChangeText={setVetClinic} placeholder="Clinic name" maxLength={200} />
+
+          <Text style={styles.sectionTitle}>Pet insurance</Text>
+          <Text style={styles.cardMuted}>Optional details for renewals, emergencies, and claims.</Text>
+          <Label text="Insurance company" />
+          <Input value={insuranceCompany} onChangeText={setInsuranceCompany} placeholder="e.g. Trupanion" maxLength={160} />
+          <Label text="Policy number" />
+          <Input value={insurancePolicyNumber} onChangeText={setInsurancePolicyNumber} placeholder="Optional" maxLength={160} />
+          <Label text="Deductible" />
+          <Input value={insuranceDeductible} onChangeText={setInsuranceDeductible} placeholder="e.g. 200" keyboardType="decimal-pad" maxLength={12} />
+          <Label text="Coverage percentage" />
+          <Input value={insuranceCoveragePercent} onChangeText={setInsuranceCoveragePercent} placeholder="e.g. 90" keyboardType="decimal-pad" maxLength={6} />
+          <Label text="Claims phone or email" />
+          <Input value={insuranceClaimsContact} onChangeText={setInsuranceClaimsContact} placeholder="Optional" maxLength={240} />
+          <Label text="Renewal date" />
+          <Input value={insuranceRenewalDate} onChangeText={(value: string) => setInsuranceRenewalDate(formatDateDigits(value))} placeholder="YYYYMMDD" keyboardType="number-pad" maxLength={10} />
 
           <Text style={styles.sectionTitle}>Emergency handoff</Text>
           <Label text="Emergency contact name" />

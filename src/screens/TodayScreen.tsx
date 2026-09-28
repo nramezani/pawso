@@ -240,6 +240,8 @@ export function TodayScreen() {
         )}
       </View>
 
+      <SecondaryButton title="View household upcoming calendar" onPress={() => setScreen('upcomingCalendar')} />
+
       {uploadError !== '' ? (
         <View style={styles.errorCard}>
           <Text style={styles.errorTitle}>Upload failed</Text>

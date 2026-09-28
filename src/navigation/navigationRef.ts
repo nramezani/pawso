@@ -32,6 +32,8 @@ export type RootStackParamList = {
   HealthTrends: undefined;
   EmergencyCard: undefined;
   SmartCarePlan: undefined;
+  UpcomingCalendar: undefined;
+  NotificationPreferences: undefined;
 };
 
 export const navigationRef = createNavigationContainerRef<RootStackParamList>();
@@ -115,6 +117,12 @@ export function navigateToScreen(screen: Screen) {
       return;
     case 'smartCarePlan':
       navigateWhenReady('SmartCarePlan');
+      return;
+    case 'upcomingCalendar':
+      navigateWhenReady('UpcomingCalendar');
+      return;
+    case 'notificationPreferences':
+      navigateWhenReady('NotificationPreferences');
       return;
   }
 }

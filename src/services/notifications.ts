@@ -110,7 +110,7 @@ export async function subscribeToPawsoNotificationResponses(
 }
 
 export async function syncPawsoLocalNotifications(
-  pets: { id: string; name: string; date_of_birth?: string | null }[],
+  pets: { id: string; name: string; date_of_birth?: string | null; adoption_date?: string | null }[],
   timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
 ) {
   const Notifications = await getNotifications();
@@ -135,34 +135,55 @@ export async function syncPawsoLocalNotifications(
 
   const petIds = pets.map((pet) => pet.id);
   const petNameById = new Map(pets.map((pet) => [pet.id, pet.name]));
+  const { data: preferenceRows, error: preferenceError } = await supabase
+    .from('pet_notification_preferences')
+    .select('pet_id, birthday_enabled, adoption_day_enabled, medication_enabled, care_enabled, vaccine_enabled, lead_days')
+    .in('pet_id', petIds);
+  if (preferenceError) throw preferenceError;
+  const preferenceByPet = new Map((preferenceRows ?? []).map((item) => [item.pet_id, item]));
+  const preferencesFor = (petId: string) => preferenceByPet.get(petId) ?? {
+    birthday_enabled: true,
+    adoption_day_enabled: true,
+    medication_enabled: true,
+    care_enabled: true,
+    vaccine_enabled: true,
+    lead_days: [0],
+  };
   let scheduledCount = 0;
   const now = Date.now();
 
   const { data: careTasks, error: careError } = await supabase
     .from('care_tasks')
-    .select('id, pet_id, title, due_at, is_active, paused_at')
+    .select('id, pet_id, title, due_at, task_type, is_active, paused_at')
     .in('pet_id', petIds)
     .eq('is_active', true)
     .is('paused_at', null)
     .gt('due_at', new Date(now).toISOString())
     .order('due_at', { ascending: true })
     // Keep room under iOS's scheduled-notification ceiling for medications.
-    .limit(30);
+    .limit(15);
 
   if (careError) throw careError;
 
   for (const task of careTasks ?? []) {
     if (task.paused_at) continue;
+    const preference = preferencesFor(task.pet_id);
+    if (task.task_type === 'vaccine' ? !preference.vaccine_enabled : !preference.care_enabled) continue;
     const due = new Date(task.due_at);
     if (Number.isNaN(due.getTime()) || due.getTime() <= now) continue;
 
     const petName = petNameById.get(task.pet_id) ?? 'your pet';
 
-    await Notifications.scheduleNotificationAsync({
-      identifier: `care:${task.id}`,
+    const leadDays = Array.isArray(preference.lead_days) ? preference.lead_days : [0];
+    for (const leadDay of leadDays) {
+      if (scheduledCount >= 60) break;
+      const notifyAt = new Date(due.getTime() - Number(leadDay) * 86400000);
+      if (notifyAt.getTime() <= now) continue;
+      await Notifications.scheduleNotificationAsync({
+      identifier: `care:${task.id}:${leadDay}`,
       content: {
-        title: `${petName} · Care reminder`,
-        body: task.title,
+        title: `${petName} · ${task.task_type === 'vaccine' ? 'Vaccine' : 'Care'} reminder`,
+        body: `${task.title}${leadDay ? ` · due in ${leadDay} day${leadDay === 1 ? '' : 's'}` : ''}`,
         sound: 'default',
         data: {
           kind: 'care_task',
@@ -172,47 +193,78 @@ export async function syncPawsoLocalNotifications(
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
-        date: due,
+        date: notifyAt,
         channelId: CHANNEL_ID,
       },
-    });
-
-    scheduledCount += 1;
+      });
+      scheduledCount += 1;
+    }
   }
 
   for (const pet of pets) {
     // Keep the total below iOS's scheduled-notification ceiling.
     if (scheduledCount >= 60) break;
 
-    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(pet.date_of_birth ?? '');
+    const preference = preferencesFor(pet.id);
+    const annualDates = [
+      { kind: 'birthday', value: pet.date_of_birth, enabled: preference.birthday_enabled, title: `🎉 It’s ${pet.name}’s birthday!`, body: `Celebrate ${pet.name} today.` },
+      { kind: 'adoption_day', value: pet.adoption_date, enabled: preference.adoption_day_enabled, title: `🐾 It’s ${pet.name}’s Gotcha Day!`, body: `Celebrate the day ${pet.name} joined the family.` },
+    ];
+    for (const annual of annualDates) {
+    if (!annual.enabled) continue;
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(annual.value ?? '');
     if (!match) continue;
 
     const month = Number(match[2]);
     const day = Number(match[3]);
     if (month < 1 || month > 12 || day < 1 || day > 31) continue;
 
-    await Notifications.scheduleNotificationAsync({
-      identifier: `birthday:${pet.id}`,
-      content: {
-        title: `🎉 It’s ${pet.name}’s birthday!`,
-        body: `Celebrate ${pet.name} today.`,
-        sound: 'default',
-        data: {
-          kind: 'birthday',
-          petId: pet.id,
-        },
-      },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.YEARLY,
-        month: month - 1,
-        day,
-        hour: 9,
-        minute: 0,
-        channelId: CHANNEL_ID,
-      },
-    });
-
-    scheduledCount += 1;
+    const annualLeadDays = Array.isArray(preference.lead_days) ? preference.lead_days : [0];
+    for (const leadDay of annualLeadDays) {
+      if (scheduledCount >= 60) break;
+      const content = {
+        title: annual.title,
+        body: leadDay ? `${annual.body} Coming up in ${leadDay} day${leadDay === 1 ? '' : 's'}.` : annual.body,
+        sound: 'default' as const,
+        data: { kind: annual.kind, petId: pet.id },
+      };
+      if (leadDay === 0) {
+        await Notifications.scheduleNotificationAsync({
+          identifier: `${annual.kind}:${pet.id}:0`,
+          content,
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.YEARLY,
+            month: month - 1,
+            day,
+            hour: 9,
+            minute: 0,
+            channelId: CHANNEL_ID,
+          },
+        });
+      } else {
+        const currentYear = Number(formatDateInputInTimeZone(new Date(), timeZone).slice(0, 4));
+        let annualDate = `${currentYear}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        let notificationDate = addDaysToDateInput(annualDate, -leadDay);
+        let triggerDate = parseDateTimeInTimeZone(notificationDate, '09:00', timeZone);
+        if (!triggerDate || triggerDate.getTime() <= now) {
+          annualDate = `${currentYear + 1}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          notificationDate = addDaysToDateInput(annualDate, -leadDay);
+          triggerDate = parseDateTimeInTimeZone(notificationDate, '09:00', timeZone);
+        }
+        if (!triggerDate) continue;
+        await Notifications.scheduleNotificationAsync({
+          identifier: `${annual.kind}:${pet.id}:${leadDay}`,
+          content,
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.DATE,
+            date: triggerDate,
+            channelId: CHANNEL_ID,
+          },
+        });
+      }
+      scheduledCount += 1;
+    }
+    }
   }
 
   const { data: medications, error: medicationError } = await supabase
@@ -274,6 +326,7 @@ export async function syncPawsoLocalNotifications(
     const capacity = Math.max(0, 60 - scheduledCount);
     for (const occurrence of occurrences.slice(0, capacity)) {
       const { schedule, medication, date } = occurrence;
+      if (!preferencesFor(schedule.pet_id).medication_enabled) continue;
 
       const petName = petNameById.get(schedule.pet_id) ?? 'your pet';
       const dose = [medication.dose, medication.unit].filter(Boolean).join(' ');

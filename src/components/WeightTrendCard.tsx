@@ -2,6 +2,7 @@ import { Pressable, Text, View } from 'react-native';
 
 import type { TimelineEvent } from '../types';
 import { createPawsoStyles } from './ui';
+import { fromKilograms, type WeightUnit } from '../utils/petProfile';
 
 type WeightPoint = {
   id: string;
@@ -11,11 +12,12 @@ type WeightPoint = {
 };
 
 function parseWeight(value: string) {
-  const match = /(\d+(?:[.,]\d+)?)\s*kg\b/i.exec(value);
+  const match = /(\d+(?:[.,]\d+)?)\s*(kg|lb|lbs)\b/i.exec(value);
   if (!match) return null;
 
   const parsed = Number(match[1].replace(',', '.'));
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return /^lb/i.test(match[2]) ? parsed * 0.45359237 : parsed;
 }
 
 function parseEventDate(value: string) {
@@ -38,8 +40,9 @@ function shortDate(date: Date) {
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
-function formatWeight(value: number) {
-  return `${Number(value.toFixed(2))} kg`;
+function formatWeight(valueKg: number, unit: WeightUnit) {
+  const value = fromKilograms(valueKg, unit);
+  return `${Number(value.toFixed(2))} ${unit}`;
 }
 
 function getWeightPoints(timelineEvents: TimelineEvent[], currentWeight: string) {
@@ -81,11 +84,13 @@ export function WeightTrendCard({
   currentWeight,
   petName,
   onRecordWeight,
+  weightUnit,
 }: {
   timelineEvents: TimelineEvent[];
   currentWeight: string;
   petName: string;
   onRecordWeight?: () => void;
+  weightUnit: WeightUnit;
 }) {
   const points = getWeightPoints(timelineEvents, currentWeight);
 
@@ -121,9 +126,9 @@ export function WeightTrendCard({
   const changeLabel =
     points.length < 2
       ? 'Add another measurement to see change'
-      : `${change > 0 ? '+' : ''}${Number(change.toFixed(2))} kg since ${first.dateLabel}`;
+      : `${change > 0 ? '+' : ''}${Number(fromKilograms(change, weightUnit).toFixed(2))} ${weightUnit} since ${first.dateLabel}`;
   const accessibilitySummary = points
-    .map((point) => `${point.dateLabel}, ${formatWeight(point.value)}`)
+    .map((point) => `${point.dateLabel}, ${formatWeight(point.value, weightUnit)}`)
     .join('; ');
 
   return (
@@ -131,7 +136,7 @@ export function WeightTrendCard({
       <View style={chartStyles.headingRow}>
         <View>
           <Text style={chartStyles.title}>Weight trend</Text>
-          <Text style={chartStyles.current}>{formatWeight(latest.value)}</Text>
+          <Text style={chartStyles.current}>{formatWeight(latest.value, weightUnit)}</Text>
         </View>
         <View style={chartStyles.changeBadge}>
           <Text style={chartStyles.changeText}>{changeLabel}</Text>
@@ -152,7 +157,7 @@ export function WeightTrendCard({
           return (
             <View key={point.id} style={chartStyles.column}>
               <Text style={[chartStyles.value, isLatest && chartStyles.valueLatest]}>
-                {Number(point.value.toFixed(1))}
+                {Number(fromKilograms(point.value, weightUnit).toFixed(1))}
               </Text>
               <View style={chartStyles.barArea}>
                 <View
@@ -173,7 +178,7 @@ export function WeightTrendCard({
 
       <View style={chartStyles.footerRow}>
         <Text style={chartStyles.range}>
-          Range {formatWeight(minimum)}–{formatWeight(maximum)}
+          Range {formatWeight(minimum, weightUnit)}–{formatWeight(maximum, weightUnit)}
         </Text>
         {onRecordWeight ? (
           <Pressable

@@ -18,6 +18,8 @@ export type Screen =
   | 'healthTrends'
   | 'emergencyCard'
   | 'smartCarePlan'
+  | 'upcomingCalendar'
+  | 'notificationPreferences'
   | 'account'
   | 'household';
 
@@ -65,6 +67,7 @@ export type MedicationSchedule = {
   medication_id: string;
   time_of_day: string;
   snoozed_until: string | null;
+  assigned_member_id: string | null;
 };
 
 export type MedicationLog = {
@@ -102,6 +105,7 @@ export type CareTask = {
   occurrence_number: number;
   paused_at: string | null;
   snoozed_until: string | null;
+  assigned_member_id: string | null;
 };
 
 export type TaskCompletion = {
@@ -200,9 +204,11 @@ export type PetSummary = {
   breed: string | null;
   approximate_age: string | null;
   date_of_birth: string | null;
+  adoption_date: string | null;
   sex: PetSex | null;
   spayed_neutered: boolean | null;
   weight_kg: number | null;
+  preferred_weight_unit: 'kg' | 'lb';
   microchip_number: string | null;
   conditions: string | null;
   allergies: string | null;
@@ -214,6 +220,12 @@ export type PetSummary = {
   emergency_notes: string | null;
   emergency_contact_name: string | null;
   emergency_contact_phone: string | null;
+  insurance_company: string | null;
+  insurance_policy_number: string | null;
+  insurance_deductible: number | null;
+  insurance_coverage_percent: number | null;
+  insurance_claims_contact: string | null;
+  insurance_renewal_date: string | null;
   created_at: string;
 };
 

@@ -37,6 +37,18 @@ class InvitationEmailRequestTests(unittest.TestCase):
 
 
 class StorageDeletionTests(unittest.TestCase):
+    def test_claim_package_requires_owner_selected_documents(self):
+        source = (Path(__file__).resolve().parents[1] / "production_router.py").read_text(
+            encoding="utf-8"
+        )
+        handler = source.split('@router.get("/insurance-claim-package")', 1)[1].split(
+            '@router.delete("/documents/{document_id}"', 1
+        )[0]
+        self.assertIn("_confirm_pet_owner", handler)
+        self.assertIn("document_ids", handler)
+        self.assertIn("len(selected_ids) > 20", handler)
+        self.assertIn('"pet_id": f"eq.{pet_id}"', handler)
+
     def test_document_deletion_uses_all_discovered_storage_objects(self):
         source = (Path(__file__).resolve().parents[1] / "production_router.py").read_text(
             encoding="utf-8"

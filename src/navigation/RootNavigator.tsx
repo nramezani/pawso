@@ -26,6 +26,8 @@ import { HealthCheckInScreen } from '../screens/HealthCheckInScreen';
 import { HealthTrendsScreen } from '../screens/HealthTrendsScreen';
 import { EmergencyCardScreen } from '../screens/EmergencyCardScreen';
 import { SmartCarePlanScreen } from '../screens/SmartCarePlanScreen';
+import { UpcomingCalendarScreen } from '../screens/UpcomingCalendarScreen';
+import { NotificationPreferencesScreen } from '../screens/NotificationPreferencesScreen';
 import type {
   MainTabParamList,
   RootStackParamList,
@@ -127,6 +129,8 @@ export function RootNavigator() {
       <Stack.Screen name="HealthTrends" component={HealthTrendsScreen} />
       <Stack.Screen name="EmergencyCard" component={EmergencyCardScreen} />
       <Stack.Screen name="SmartCarePlan" component={SmartCarePlanScreen} />
+      <Stack.Screen name="UpcomingCalendar" component={UpcomingCalendarScreen} />
+      <Stack.Screen name="NotificationPreferences" component={NotificationPreferencesScreen} />
     </Stack.Navigator>
   );
 }

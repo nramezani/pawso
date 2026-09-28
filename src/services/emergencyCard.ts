@@ -4,6 +4,7 @@ import * as Sharing from 'expo-sharing';
 
 import type { Medication, PetSummary } from '../types';
 import { formatDateInputInTimeZone } from '../utils/dateTime';
+import { formatWeight } from '../utils/petProfile';
 
 function escapeHtml(value: unknown) {
   return String(value ?? '')
@@ -63,7 +64,7 @@ export async function shareEmergencyPetCard(
     <table>
       ${row('Date of birth', pet.date_of_birth || pet.approximate_age)}
       ${row('Sex', pet.sex)}
-      ${row('Weight', pet.weight_kg ? `${pet.weight_kg} kg` : null)}
+      ${row('Weight', formatWeight(pet.weight_kg, pet.preferred_weight_unit))}
       ${row('Microchip', pet.microchip_number)}
       ${row('Conditions', pet.conditions)}
       ${row('Allergies', pet.allergies)}

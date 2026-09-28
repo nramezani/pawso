@@ -38,6 +38,9 @@ export function AddMedicationScreen() {
     setNewMedicationRefillDate,
     newMedicationPaused,
     setNewMedicationPaused,
+    newMedicationAssignments,
+    setNewMedicationAssignments,
+    householdMembers,
     createMedication,
   } = usePawso();
 
@@ -52,6 +55,9 @@ export function AddMedicationScreen() {
   function removeTime(index: number) {
     setNewMedicationTimes((times: string[]) =>
       times.filter((_: string, timeIndex: number) => timeIndex !== index)
+    );
+    setNewMedicationAssignments((assignments: (string | null)[]) =>
+      assignments.filter((_: string | null, assignmentIndex: number) => assignmentIndex !== index)
     );
   }
 
@@ -185,6 +191,22 @@ export function AddMedicationScreen() {
             keyboardType="numbers-and-punctuation"
             maxLength={5}
           />
+          <Label text={`Responsible for time ${index + 1}`} />
+          <View style={styles.scheduleWrap}>
+            <OptionButton
+              title="Anyone"
+              selected={!newMedicationAssignments[index]}
+              onPress={() => setNewMedicationAssignments((assignments: (string | null)[]) => assignments.map((value, assignmentIndex) => assignmentIndex === index ? null : value))}
+            />
+            {householdMembers.map((member) => (
+              <OptionButton
+                key={`${index}-${member.id}`}
+                title={member.display_name}
+                selected={newMedicationAssignments[index] === member.id}
+                onPress={() => setNewMedicationAssignments((assignments: (string | null)[]) => assignments.map((value, assignmentIndex) => assignmentIndex === index ? member.id : value))}
+              />
+            ))}
+          </View>
           {newMedicationTimes.length > 1 ? (
             <SecondaryButton
               title={`Remove time ${index + 1}`}
@@ -203,9 +225,10 @@ export function AddMedicationScreen() {
       {newMedicationTimes.length < 6 ? (
         <SecondaryButton
           title="+ Add another daily time"
-          onPress={() =>
-            setNewMedicationTimes((times: string[]) => [...times, ''])
-          }
+          onPress={() => {
+            setNewMedicationTimes((times: string[]) => [...times, '']);
+            setNewMedicationAssignments((assignments: (string | null)[]) => [...assignments, null]);
+          }}
         />
       ) : null}
 

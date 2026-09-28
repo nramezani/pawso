@@ -2,6 +2,7 @@ import { Alert, Image, Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
 import { WeightTrendCard } from '../components/WeightTrendCard';
+import { formatPetAge } from '../utils/petProfile';
 import {
   Page,
   Header,
@@ -32,8 +33,10 @@ export function PetProfileScreen() {
     breed,
     petAge,
     petDateOfBirth,
+    petAdoptionDate,
     petSex,
     weight,
+    weightUnit,
     conditions,
     allergies,
     medications,
@@ -46,6 +49,12 @@ export function PetProfileScreen() {
     alteredLabel,
     alteredValue,
     notificationsEnabled,
+    insuranceCompany,
+    insurancePolicyNumber,
+    insuranceDeductible,
+    insuranceCoveragePercent,
+    insuranceClaimsContact,
+    insuranceRenewalDate,
   } = usePawso();
 
 return (
@@ -108,8 +117,10 @@ return (
         <Card title="About">
           <Info
             label="Age / DOB"
-            value={petDateOfBirth || petAge || 'Not provided'}
+            value={formatPetAge(petDateOfBirth || null, petAge || 'Not provided')}
           />
+
+          <Info label="Gotcha / adoption day" value={petAdoptionDate || 'Not provided'} />
 
           <Info
             label="Sex"
@@ -144,10 +155,22 @@ return (
           ) : null}
         </Card>
 
+        {insuranceCompany || insurancePolicyNumber ? (
+          <Card title="Insurance">
+            <Info label="Company" value={insuranceCompany || 'Not provided'} />
+            <Info label="Policy" value={insurancePolicyNumber || 'Not provided'} />
+            <Info label="Deductible" value={insuranceDeductible || 'Not provided'} />
+            <Info label="Coverage" value={insuranceCoveragePercent ? `${insuranceCoveragePercent}%` : 'Not provided'} />
+            <Info label="Claims contact" value={insuranceClaimsContact || 'Not provided'} />
+            <Info label="Renewal" value={insuranceRenewalDate || 'Not provided'} />
+          </Card>
+        ) : null}
+
         {canViewMedical ? (
           <WeightTrendCard
             timelineEvents={timelineEvents}
             currentWeight={weight}
+            weightUnit={weightUnit}
             petName={petName}
             onRecordWeight={
               canManageMedical ? () => openHealthCheckIn('weight') : undefined
@@ -181,6 +204,8 @@ return (
           <SecondaryButton title="Health trends" onPress={openHealthTrends} />
         ) : null}
         <SecondaryButton title="Emergency card & PDF" onPress={() => setScreen('emergencyCard')} />
+        <SecondaryButton title="Reminder preferences" onPress={() => setScreen('notificationPreferences')} />
+        <SecondaryButton title="Household upcoming calendar" onPress={() => setScreen('upcomingCalendar')} />
 
         {canManageMedical ? (
           <>

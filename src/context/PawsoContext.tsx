@@ -1,5 +1,6 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { decode } from 'base64-arraybuffer';
 import { Alert, Appearance } from 'react-native';
@@ -57,6 +58,7 @@ import {
   isValidLocalDate,
   parseDateTimeInTimeZone,
 } from '../utils/dateTime';
+import { formatWeight, toKilograms, type WeightUnit } from '../utils/petProfile';
 import type {
   Screen,
   PetType,
@@ -93,9 +95,11 @@ const PET_SELECT = [
   'breed',
   'approximate_age',
   'date_of_birth',
+  'adoption_date',
   'sex',
   'spayed_neutered',
   'weight_kg',
+  'preferred_weight_unit',
   'microchip_number',
   'conditions',
   'allergies',
@@ -106,6 +110,12 @@ const PET_SELECT = [
   'emergency_notes',
   'emergency_contact_name',
   'emergency_contact_phone',
+  'insurance_company',
+  'insurance_policy_number',
+  'insurance_deductible',
+  'insurance_coverage_percent',
+  'insurance_claims_contact',
+  'insurance_renewal_date',
   'created_at',
 ].join(', ');
 
@@ -209,6 +219,7 @@ function usePawsoState() {
   const [petPhotoBusy, setPetPhotoBusy] = useState(false);
   const petPhotoRequestRef = useRef(0);
   const [petDateOfBirth, setPetDateOfBirth] = useState('');
+  const [petAdoptionDate, setPetAdoptionDate] = useState('');
   const [emergencyNotes, setEmergencyNotes] = useState('');
   const [emergencyContactName, setEmergencyContactName] = useState('');
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
@@ -222,11 +233,18 @@ function usePawsoState() {
     useState<AlteredStatus | null>(null);
 
   const [weight, setWeight] = useState('');
+  const [weightUnit, setWeightUnit] = useState<WeightUnit>('kg');
   const [microchip, setMicrochip] = useState('');
   const [conditions, setConditions] = useState('');
   const [allergies, setAllergies] = useState('');
   const [medications, setMedications] = useState('');
   const [vetClinic, setVetClinic] = useState('');
+  const [insuranceCompany, setInsuranceCompany] = useState('');
+  const [insurancePolicyNumber, setInsurancePolicyNumber] = useState('');
+  const [insuranceDeductible, setInsuranceDeductible] = useState('');
+  const [insuranceCoveragePercent, setInsuranceCoveragePercent] = useState('');
+  const [insuranceClaimsContact, setInsuranceClaimsContact] = useState('');
+  const [insuranceRenewalDate, setInsuranceRenewalDate] = useState('');
 
   const [documentName, setDocumentName] = useState('');
   const [documentSize, setDocumentSize] = useState<number | null>(null);
@@ -277,6 +295,7 @@ function usePawsoState() {
   const [newMedicationRefills, setNewMedicationRefills] = useState('');
   const [newMedicationRefillDate, setNewMedicationRefillDate] = useState('');
   const [newMedicationPaused, setNewMedicationPaused] = useState(false);
+  const [newMedicationAssignments, setNewMedicationAssignments] = useState<(string | null)[]>([null]);
 
   const [careTasks, setCareTasks] = useState<CareTask[]>([]);
   const [taskCompletions, setTaskCompletions] = useState<TaskCompletion[]>([]);
@@ -295,6 +314,8 @@ function usePawsoState() {
   >('none');
   const [newCareInterval, setNewCareInterval] = useState('1');
   const [newCareEndsOn, setNewCareEndsOn] = useState('');
+  const [newCareTaskType, setNewCareTaskType] = useState('general');
+  const [newCareAssignedMemberId, setNewCareAssignedMemberId] = useState<string | null>(null);
 
   const [askQuestion, setAskQuestion] = useState('');
   const [askAnswer, setAskAnswer] = useState<AskAnswer | null>(null);
@@ -556,7 +577,7 @@ function usePawsoState() {
       setScreen(
         data.kind === 'care_task'
           ? 'care'
-          : data.kind === 'birthday'
+          : data.kind === 'birthday' || data.kind === 'adoption_day'
           ? 'petProfile'
           : 'medications'
       );
@@ -1723,6 +1744,7 @@ function usePawsoState() {
     setBreed(data.breed ?? '');
     setPetAge(data.approximate_age ?? '');
     setPetDateOfBirth(data.date_of_birth ?? '');
+    setPetAdoptionDate(data.adoption_date ?? '');
     setPetSex((data.sex as PetSex) ?? null);
 
     if (data.spayed_neutered === true) {
@@ -1733,11 +1755,9 @@ function usePawsoState() {
       setAlteredStatus(null);
     }
 
-    setWeight(
-      data.weight_kg !== null && data.weight_kg !== undefined
-        ? `${data.weight_kg} kg`
-        : ''
-    );
+    const nextWeightUnit = data.preferred_weight_unit === 'lb' ? 'lb' : 'kg';
+    setWeightUnit(nextWeightUnit);
+    setWeight(formatWeight(data.weight_kg, nextWeightUnit));
     setMicrochip(data.microchip_number ?? '');
     setConditions(data.conditions ?? '');
     setAllergies(data.allergies ?? '');
@@ -1757,6 +1777,12 @@ function usePawsoState() {
     setEmergencyNotes(data.emergency_notes ?? '');
     setEmergencyContactName(data.emergency_contact_name ?? '');
     setEmergencyContactPhone(data.emergency_contact_phone ?? '');
+    setInsuranceCompany(data.insurance_company ?? '');
+    setInsurancePolicyNumber(data.insurance_policy_number ?? '');
+    setInsuranceDeductible(data.insurance_deductible?.toString() ?? '');
+    setInsuranceCoveragePercent(data.insurance_coverage_percent?.toString() ?? '');
+    setInsuranceClaimsContact(data.insurance_claims_contact ?? '');
+    setInsuranceRenewalDate(data.insurance_renewal_date ?? '');
   }
 
   function clearPetScopedState() {
@@ -1769,14 +1795,22 @@ function usePawsoState() {
     setBreed('');
     setPetAge('');
     setPetDateOfBirth('');
+    setPetAdoptionDate('');
     setPetSex(null);
     setAlteredStatus(null);
     setWeight('');
+    setWeightUnit('kg');
     setMicrochip('');
     setConditions('');
     setAllergies('');
     setMedications('');
     setVetClinic('');
+    setInsuranceCompany('');
+    setInsurancePolicyNumber('');
+    setInsuranceDeductible('');
+    setInsuranceCoveragePercent('');
+    setInsuranceClaimsContact('');
+    setInsuranceRenewalDate('');
     setPetPhotoPath(null);
     setPetPhotoUrl(null);
     setEmergencyNotes('');
@@ -2130,14 +2164,22 @@ function usePawsoState() {
     setBreed('');
     setPetAge('');
     setPetDateOfBirth('');
+    setPetAdoptionDate('');
     setPetSex(null);
     setAlteredStatus(null);
     setWeight('');
+    setWeightUnit('kg');
     setMicrochip('');
     setConditions('');
     setAllergies('');
     setMedications('');
     setVetClinic('');
+    setInsuranceCompany('');
+    setInsurancePolicyNumber('');
+    setInsuranceDeductible('');
+    setInsuranceCoveragePercent('');
+    setInsuranceClaimsContact('');
+    setInsuranceRenewalDate('');
     setPetPhotoPath(null);
     setPetPhotoUrl(null);
     setEmergencyNotes('');
@@ -2571,13 +2613,14 @@ function usePawsoState() {
       return;
     }
 
-    const weightValue = Number(checkInWeight.trim());
+    const enteredWeightValue = Number(checkInWeight.trim());
+    const weightValue = toKilograms(enteredWeightValue, weightUnit);
     if (checkInType === 'symptom' && !checkInTitle.trim()) {
       setCheckInError('Add a short symptom or observation.');
       return;
     }
     if (checkInType === 'weight' && (!Number.isFinite(weightValue) || weightValue <= 0)) {
-      setCheckInError('Enter a valid weight in kilograms.');
+      setCheckInError(`Enter a valid weight in ${weightUnit === 'kg' ? 'kilograms' : 'pounds'}.`);
       return;
     }
     if (checkInType === 'weight' && weightValue > 999999.99) {
@@ -2605,7 +2648,7 @@ function usePawsoState() {
         );
         if (weightError) throw weightError;
 
-        setWeight(`${weightValue} kg`);
+        setWeight(formatWeight(weightValue, weightUnit));
         setPets((current) => current.map((pet) =>
           pet.id === currentPetId ? { ...pet, weight_kg: weightValue } : pet
         ));
@@ -2782,7 +2825,7 @@ function usePawsoState() {
       const { data: tasks, error: tasksError } = await supabase
         .from('care_tasks')
         .select(
-          'id, title, notes, due_at, task_type, is_active, series_id, recurrence_frequency, recurrence_interval, recurrence_ends_on, occurrence_number, paused_at, snoozed_until'
+          'id, title, notes, due_at, task_type, is_active, series_id, recurrence_frequency, recurrence_interval, recurrence_ends_on, occurrence_number, paused_at, snoozed_until, assigned_member_id'
         )
         .eq('pet_id', petId)
         .order('due_at', { ascending: true });
@@ -2874,7 +2917,7 @@ function usePawsoState() {
         throw new Error('Repeat end date cannot be before the first task.');
       }
 
-      const { error } = await supabase.rpc('create_care_task_with_recurrence', {
+      const { error } = await supabase.rpc('create_care_task_with_recurrence_v2', {
         target_pet: currentPetId,
         target_title: newCareTitle.trim(),
         target_notes: newCareNotes.trim(),
@@ -2883,6 +2926,8 @@ function usePawsoState() {
         target_interval: interval,
         target_ends_on:
           newCareFrequency === 'none' ? null : newCareEndsOn || null,
+        target_task_type: newCareTaskType,
+        target_assigned_member: newCareAssignedMemberId,
       });
 
       if (error) throw error;
@@ -2894,6 +2939,8 @@ function usePawsoState() {
       setNewCareFrequency('none');
       setNewCareInterval('1');
       setNewCareEndsOn('');
+      setNewCareTaskType('general');
+      setNewCareAssignedMemberId(null);
 
       await loadCareData(currentPetId);
       await refreshAllPetsToday();
@@ -3123,7 +3170,7 @@ function usePawsoState() {
       if (medicationIds.length > 0) {
         const { data: scheduleRows, error: schedulesError } = await supabase
           .from('medication_schedules')
-          .select('id, medication_id, time_of_day, snoozed_until')
+          .select('id, medication_id, time_of_day, snoozed_until, assigned_member_id')
           .in('medication_id', medicationIds)
           .order('time_of_day', { ascending: true });
 
@@ -3252,6 +3299,7 @@ function usePawsoState() {
     setNewMedicationRefills('');
     setNewMedicationRefillDate('');
     setNewMedicationPaused(false);
+    setNewMedicationAssignments([null]);
   }
 
   function startAddMedication() {
@@ -3277,6 +3325,14 @@ function usePawsoState() {
     );
     setNewMedicationRefillDate(medication.refill_due_date ?? '');
     setNewMedicationPaused(Boolean(medication.paused_at));
+    const medicationScheduleRows = medicationSchedules
+      .filter((schedule) => schedule.medication_id === medication.id)
+      .sort((a, b) => a.time_of_day.localeCompare(b.time_of_day));
+    setNewMedicationAssignments(
+      medicationScheduleRows.length > 0
+        ? medicationScheduleRows.map((schedule) => schedule.assigned_member_id)
+        : [null]
+    );
     setMedicationsError('');
     setScreen('addMedication');
   }
@@ -3334,7 +3390,7 @@ function usePawsoState() {
       setIsSavingMedication(true);
       setMedicationsError('');
 
-      const { error: medicationError } = await supabase.rpc(
+      const { data: savedMedicationId, error: medicationError } = await supabase.rpc(
         'save_medication_with_schedules',
         {
           target_pet: currentPetId,
@@ -3353,6 +3409,22 @@ function usePawsoState() {
       );
 
       if (medicationError) throw medicationError;
+      const medicationId = typeof savedMedicationId === 'string' ? savedMedicationId : editingMedicationId;
+      if (medicationId) {
+        const { data: savedSchedules, error: scheduleLoadError } = await supabase
+          .from('medication_schedules')
+          .select('id, time_of_day')
+          .eq('medication_id', medicationId);
+        if (scheduleLoadError) throw scheduleLoadError;
+        for (const schedule of savedSchedules ?? []) {
+          const timeIndex = times.findIndex((time) => schedule.time_of_day.slice(0, 5) === time);
+          const { error: assignmentError } = await supabase
+            .from('medication_schedules')
+            .update({ assigned_member_id: newMedicationAssignments[timeIndex] ?? null })
+            .eq('id', schedule.id);
+          if (assignmentError) throw assignmentError;
+        }
+      }
 
       resetMedicationEditor();
 
@@ -3702,8 +3774,10 @@ function usePawsoState() {
   function parseWeightKg(value: string) {
     const trimmed = value.trim();
     if (!trimmed) return null;
-    const match = /^(\d+(?:[.,]\d{1,2})?)\s*(?:kg)?$/i.exec(trimmed);
-    return match ? Number(match[1].replace(',', '.')) : null;
+    const match = /^(\d+(?:[.,]\d{1,2})?)\s*(?:kg|lb|lbs)?$/i.exec(trimmed);
+    if (!match) return null;
+    const explicitUnit = /lbs?$/i.test(trimmed) ? 'lb' : /kg$/i.test(trimmed) ? 'kg' : weightUnit;
+    return toKilograms(Number(match[1].replace(',', '.')), explicitUnit);
   }
 
   async function createPetProfile() {
@@ -3725,9 +3799,15 @@ function usePawsoState() {
       ) {
         throw new Error('A pet’s birth date cannot be in the future.');
       }
+      if (petAdoptionDate.trim() && !isValidLocalDate(petAdoptionDate.trim())) {
+        throw new Error('Enter the adoption date as YYYY-MM-DD.');
+      }
+      if (insuranceRenewalDate.trim() && !isValidLocalDate(insuranceRenewalDate.trim())) {
+        throw new Error('Enter the insurance renewal date as YYYY-MM-DD.');
+      }
       const parsedWeight = parseWeightKg(weight);
       if (weight.trim() && (parsedWeight === null || parsedWeight <= 0)) {
-        throw new Error('Enter weight like 4.2 kg, or leave it blank.');
+        throw new Error(`Enter weight like ${weightUnit === 'lb' ? '9.3 lb' : '4.2 kg'}, or leave it blank.`);
       }
       if (parsedWeight !== null && parsedWeight > 999999.99) {
         throw new Error('That weight is outside Pawso’s supported range.');
@@ -3752,6 +3832,7 @@ function usePawsoState() {
         breed: breed.trim() || null,
         approximate_age: petAge.trim() || null,
         date_of_birth: petDateOfBirth.trim() || null,
+        adoption_date: petAdoptionDate.trim() || null,
         sex: petSex,
         spayed_neutered:
           alteredStatus === 'yes'
@@ -3760,6 +3841,7 @@ function usePawsoState() {
             ? false
             : null,
         weight_kg: parsedWeight,
+        preferred_weight_unit: weightUnit,
         microchip_number: microchip.trim() || null,
         conditions: conditions.trim() || null,
         allergies: allergies.trim() || null,
@@ -3768,7 +3850,22 @@ function usePawsoState() {
         emergency_notes: emergencyNotes.trim() || null,
         emergency_contact_name: emergencyContactName.trim() || null,
         emergency_contact_phone: emergencyContactPhone.trim() || null,
+        insurance_company: insuranceCompany.trim() || null,
+        insurance_policy_number: insurancePolicyNumber.trim() || null,
+        insurance_deductible: insuranceDeductible.trim() ? Number(insuranceDeductible) : null,
+        insurance_coverage_percent: insuranceCoveragePercent.trim()
+          ? Number(insuranceCoveragePercent)
+          : null,
+        insurance_claims_contact: insuranceClaimsContact.trim() || null,
+        insurance_renewal_date: insuranceRenewalDate.trim() || null,
       };
+
+      if (petValues.insurance_deductible !== null && (!Number.isFinite(petValues.insurance_deductible) || petValues.insurance_deductible < 0)) {
+        throw new Error('Insurance deductible must be zero or greater.');
+      }
+      if (petValues.insurance_coverage_percent !== null && (!Number.isFinite(petValues.insurance_coverage_percent) || petValues.insurance_coverage_percent < 0 || petValues.insurance_coverage_percent > 100)) {
+        throw new Error('Insurance coverage must be between 0 and 100%.');
+      }
 
       const query = isEditingPet && currentPetId
         ? supabase.from('pets').update(petValues).eq('id', currentPetId)
@@ -4327,7 +4424,7 @@ function usePawsoState() {
     });
   }
 
-  async function pickVetRecord() {
+  async function selectAndUploadVetRecord(source: 'files' | 'camera') {
     if (!requireOnline(setUploadError)) return;
     let temporaryFileUri: string | null = null;
     try {
@@ -4335,16 +4432,31 @@ function usePawsoState() {
 
       if (!(await confirmAiProcessingConsent())) return;
 
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/pdf', 'image/*'],
-        copyToCacheDirectory: true,
-      });
-
-      if (result.canceled) {
-        return;
+      let asset: { uri: string; name: string; size?: number | null; mimeType?: string | null };
+      if (source === 'camera') {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) throw new Error('Camera access is needed to scan a veterinary record.');
+        const result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ['images'],
+          quality: 0.85,
+          allowsEditing: false,
+        });
+        if (result.canceled) return;
+        const captured = result.assets[0];
+        asset = {
+          uri: captured.uri,
+          name: captured.fileName || `vet-record-${Date.now()}.jpg`,
+          size: captured.fileSize,
+          mimeType: captured.mimeType || 'image/jpeg',
+        };
+      } else {
+        const result = await DocumentPicker.getDocumentAsync({
+          type: ['application/pdf', 'image/*'],
+          copyToCacheDirectory: true,
+        });
+        if (result.canceled) return;
+        asset = result.assets[0];
       }
-
-      const asset = result.assets[0];
       temporaryFileUri = asset.uri;
 
       if (asset.name.length > 255) {
@@ -4468,6 +4580,14 @@ function usePawsoState() {
         );
       }
     }
+  }
+
+  async function pickVetRecord() {
+    return selectAndUploadVetRecord('files');
+  }
+
+  async function scanVetRecord() {
+    return selectAndUploadVetRecord('camera');
   }
 
   async function confirmExtraction() {
@@ -4691,12 +4811,16 @@ function usePawsoState() {
     setPetAge,
     petDateOfBirth,
     setPetDateOfBirth,
+    petAdoptionDate,
+    setPetAdoptionDate,
     petSex,
     setPetSex,
     alteredStatus,
     setAlteredStatus,
     weight,
     setWeight,
+    weightUnit,
+    setWeightUnit,
     microchip,
     setMicrochip,
     conditions,
@@ -4707,6 +4831,18 @@ function usePawsoState() {
     setMedications,
     vetClinic,
     setVetClinic,
+    insuranceCompany,
+    setInsuranceCompany,
+    insurancePolicyNumber,
+    setInsurancePolicyNumber,
+    insuranceDeductible,
+    setInsuranceDeductible,
+    insuranceCoveragePercent,
+    setInsuranceCoveragePercent,
+    insuranceClaimsContact,
+    setInsuranceClaimsContact,
+    insuranceRenewalDate,
+    setInsuranceRenewalDate,
     petPhotoPath,
     petPhotoUrl,
     petPhotoBusy,
@@ -4792,6 +4928,8 @@ function usePawsoState() {
     setNewMedicationRefillDate,
     newMedicationPaused,
     setNewMedicationPaused,
+    newMedicationAssignments,
+    setNewMedicationAssignments,
     careTasks,
     setCareTasks,
     taskCompletions,
@@ -4818,6 +4956,10 @@ function usePawsoState() {
     setNewCareInterval,
     newCareEndsOn,
     setNewCareEndsOn,
+    newCareTaskType,
+    setNewCareTaskType,
+    newCareAssignedMemberId,
+    setNewCareAssignedMemberId,
     askQuestion,
     setAskQuestion,
     askAnswer,
@@ -4968,6 +5110,7 @@ function usePawsoState() {
     alteredValue,
     persistExtractionProposal,
     pickVetRecord,
+    scanVetRecord,
     confirmExtraction,
     todayMedicationDoses,
     pendingMedicationDoses,

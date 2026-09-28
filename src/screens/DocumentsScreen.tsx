@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
+import { shareInsuranceClaimPackage } from '../services/insuranceClaims';
 import { FilterChipRow, MetricStrip } from '../components/VisualSummary';
 import {
   Page,
@@ -18,8 +19,13 @@ export function DocumentsScreen() {
   const [documentFilter, setDocumentFilter] = useState<DocumentFilter>('all');
   const [documentSearch, setDocumentSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
+  const [claimMode, setClaimMode] = useState(false);
+  const [selectedClaimDocuments, setSelectedClaimDocuments] = useState<string[]>([]);
+  const [claimBusy, setClaimBusy] = useState(false);
+  const [claimError, setClaimError] = useState('');
   const {
     setScreen,
+    currentPetId,
     canViewMedical,
     canManageMedical,
     petName,
@@ -37,6 +43,7 @@ export function DocumentsScreen() {
     formatDocumentDate,
     formatDocumentSize,
     pickVetRecord,
+    scanVetRecord,
   } = usePawso();
 
   const confirmedDocuments = petDocuments.filter(
@@ -61,6 +68,21 @@ export function DocumentsScreen() {
     label: string;
     count: number;
   }[] = [{ value: 'all', label: 'All', count: petDocuments.length }];
+
+  async function createClaimPackage() {
+    if (!currentPetId) return;
+    setClaimBusy(true);
+    setClaimError('');
+    try {
+      await shareInsuranceClaimPackage(currentPetId, selectedClaimDocuments);
+      setClaimMode(false);
+      setSelectedClaimDocuments([]);
+    } catch (error) {
+      setClaimError(error instanceof Error ? error.message : 'Could not create claim package.');
+    } finally {
+      setClaimBusy(false);
+    }
+  }
   if (documentsNeedingReview > 0) {
     documentFilterOptions.push({
       value: 'review_required',
@@ -125,14 +147,24 @@ return (
         ) : null}
 
         {canManageMedical ? (
-          <Pressable
-            style={styles.outlineButton}
-            onPress={pickVetRecord}
-            accessibilityRole="button"
-            accessibilityLabel="Upload veterinary record"
-          >
-            <Text style={styles.outlineButtonText}>＋ Upload veterinary record</Text>
-          </Pressable>
+          <>
+            <Pressable
+              style={styles.outlineButton}
+              onPress={scanVetRecord}
+              accessibilityRole="button"
+              accessibilityLabel="Scan veterinary record with camera"
+            >
+              <Text style={styles.outlineButtonText}>📷 Scan with camera</Text>
+            </Pressable>
+            <Pressable
+              style={styles.outlineButton}
+              onPress={pickVetRecord}
+              accessibilityRole="button"
+              accessibilityLabel="Upload veterinary record"
+            >
+              <Text style={styles.outlineButtonText}>＋ Choose PDF or image</Text>
+            </Pressable>
+          </>
         ) : canViewMedical ? (
           <View style={styles.infoCard}>
             <Text style={styles.cardStrong}>Medical records are read-only</Text>
@@ -148,6 +180,24 @@ return (
             </Text>
           </View>
         )}
+
+        {canManageMedical && petDocuments.length ? (
+          <>
+            <SecondaryButton title={claimMode ? 'Cancel claim package' : 'Create insurance claim package'} onPress={() => { setClaimMode((value) => !value); setSelectedClaimDocuments([]); setClaimError(''); }} />
+            {claimMode ? <View style={styles.infoCard}>
+              <Text style={styles.cardStrong}>Choose records for one dated ZIP package</Text>
+              <Text style={styles.cardMuted}>Only the records you select will be included.</Text>
+              {petDocuments.map((document) => {
+                const selected = selectedClaimDocuments.includes(document.id);
+                return <Pressable key={`claim-${document.id}`} style={styles.compactActionButton} onPress={() => setSelectedClaimDocuments((current) => selected ? current.filter((id) => id !== document.id) : [...current, document.id])}>
+                  <Text style={styles.compactActionText}>{selected ? '☑' : '☐'} {document.filename}</Text>
+                </Pressable>;
+              })}
+              {claimError ? <Text style={styles.errorText}>{claimError}</Text> : null}
+              <SecondaryButton title={claimBusy ? 'Preparing package…' : `Share selected (${selectedClaimDocuments.length})`} disabled={claimBusy || !selectedClaimDocuments.length} onPress={createClaimPackage} />
+            </View> : null}
+          </>
+        ) : null}
 
         {canViewMedical && petDocuments.length > 0 ? (
           <>

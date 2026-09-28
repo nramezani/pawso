@@ -83,6 +83,11 @@ export function AddCareTaskScreen() {
     setNewCareInterval,
     newCareEndsOn,
     setNewCareEndsOn,
+    newCareTaskType,
+    setNewCareTaskType,
+    newCareAssignedMemberId,
+    setNewCareAssignedMemberId,
+    householdMembers,
     createCareTask,
   } = usePawso();
 
@@ -112,6 +117,7 @@ return (
                 setNewCareFrequency(preset.frequency);
                 setNewCareInterval(preset.interval);
                 setNewCareEndsOn('');
+                setNewCareTaskType(preset.title.startsWith('Vaccine') ? 'vaccine' : 'routine_care');
               }}
             >
               <Text style={styles.askSuggestionText}>{preset.title}</Text>
@@ -126,6 +132,25 @@ return (
           placeholder="e.g. Repeat urinalysis"
           maxLength={160}
         />
+
+        <Label text="Category" />
+        <View style={styles.row}>
+          <OptionButton title="Care" selected={newCareTaskType !== 'vaccine'} onPress={() => setNewCareTaskType('general')} />
+          <OptionButton title="Vaccine" selected={newCareTaskType === 'vaccine'} onPress={() => setNewCareTaskType('vaccine')} />
+        </View>
+
+        <Label text="Assign to" />
+        <View style={styles.scheduleWrap}>
+          <OptionButton title="Anyone" selected={!newCareAssignedMemberId} onPress={() => setNewCareAssignedMemberId(null)} />
+          {householdMembers.map((member) => (
+            <OptionButton
+              key={member.id}
+              title={member.display_name}
+              selected={newCareAssignedMemberId === member.id}
+              onPress={() => setNewCareAssignedMemberId(member.id)}
+            />
+          ))}
+        </View>
 
         <Text style={styles.sectionTitle}>Repeat</Text>
         <Text style={styles.cardMuted}>

@@ -3,13 +3,17 @@ import html
 import logging
 import os
 import re
+import io
+import json
+import zipfile
 from datetime import UTC, datetime
 from typing import Literal
 from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Response, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+import qrcode
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from auth import AuthenticatedUser, require_user
@@ -36,6 +40,72 @@ export_limiter = DistributedUsageLimiter(
     bucket="data_export",
     label="data export",
 )
+
+
+async def _public_emergency_pet(token: UUID) -> dict:
+    supabase_url, service_headers = _service_configuration()
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        link_response = await client.get(
+            f"{supabase_url}/rest/v1/emergency_share_links",
+            params={
+                "token": f"eq.{token}",
+                "revoked_at": "is.null",
+                "select": "pet_id,expires_at",
+                "limit": "1",
+            },
+            headers=service_headers,
+        )
+        if link_response.status_code != 200 or not link_response.json():
+            raise HTTPException(status_code=404, detail="Emergency card is unavailable.")
+        link = link_response.json()[0]
+        if link.get("expires_at") and datetime.fromisoformat(link["expires_at"].replace("Z", "+00:00")) <= datetime.now(UTC):
+            raise HTTPException(status_code=410, detail="Emergency card has expired.")
+        pet_response = await client.get(
+            f"{supabase_url}/rest/v1/pets",
+            params={
+                "id": f"eq.{link['pet_id']}",
+                "archived_at": "is.null",
+                "select": "name,species,breed,date_of_birth,weight_kg,preferred_weight_unit,microchip_number,conditions,allergies,medications,vet_clinic,emergency_notes,emergency_contact_name,emergency_contact_phone",
+                "limit": "1",
+            },
+            headers=service_headers,
+        )
+    if pet_response.status_code != 200 or not pet_response.json():
+        raise HTTPException(status_code=404, detail="Emergency card is unavailable.")
+    return pet_response.json()[0]
+
+
+@router.get("/emergency/{token}", response_class=HTMLResponse)
+async def public_emergency_card(token: UUID):
+    pet = await _public_emergency_pet(token)
+    def row(label: str, value: object) -> str:
+        if value is None or value == "":
+            return ""
+        return f"<div class='row'><strong>{html.escape(label)}</strong><span>{html.escape(str(value))}</span></div>"
+    display_weight = None
+    if pet.get("weight_kg") is not None:
+        display_weight = f"{round(float(pet['weight_kg']) / 0.45359237, 1)} lb" if pet.get("preferred_weight_unit") == "lb" else f"{pet['weight_kg']} kg"
+    page = f"""<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>
+    <title>{html.escape(pet['name'])} emergency card</title><style>
+    body{{font-family:system-ui;margin:0;background:#f7f3ec;color:#18352f}}main{{max-width:680px;margin:auto;padding:24px}}
+    .card{{background:white;border-radius:18px;padding:20px;box-shadow:0 2px 16px #0001}}h1{{margin:0 0 6px}}.row{{padding:11px 0;border-top:1px solid #e4e8e6;display:grid;grid-template-columns:150px 1fr;gap:12px}}span{{white-space:pre-wrap}}.notice{{font-size:13px;color:#59645f;margin-top:16px}}
+    </style></head><body><main><div class='card'><h1>🐾 {html.escape(pet['name'])}</h1><p>{html.escape(str(pet['species']).title())}{' · ' + html.escape(pet['breed']) if pet.get('breed') else ''}</p>
+    {row('Date of birth', pet.get('date_of_birth'))}{row('Weight', display_weight)}{row('Microchip', pet.get('microchip_number'))}
+    {row('Conditions', pet.get('conditions'))}{row('Allergies', pet.get('allergies'))}{row('Medication notes', pet.get('medications'))}{row('Vet clinic', pet.get('vet_clinic'))}
+    {row('Emergency contact', pet.get('emergency_contact_name'))}{row('Phone', pet.get('emergency_contact_phone'))}{row('Emergency notes', pet.get('emergency_notes'))}
+    <p class='notice'>Limited emergency summary shared by the pet owner. This is not medical advice.</p></div></main></body></html>"""
+    return HTMLResponse(page, headers={"Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow"})
+
+
+@router.get("/emergency/{token}/qr")
+async def public_emergency_qr(token: UUID):
+    await _public_emergency_pet(token)
+    base_url = os.getenv("PAWSO_PUBLIC_API_URL", "https://pawso.onrender.com").rstrip("/")
+    image = qrcode.make(f"{base_url}/api/v1/emergency/{token}")
+    output = io.BytesIO()
+    image.save(output, format="PNG")
+    output.seek(0)
+    return StreamingResponse(output, media_type="image/png", headers={"Cache-Control": "no-store"})
 
 
 class InvitationEmailRequest(BaseModel):
@@ -442,6 +512,77 @@ async def export_account_data(user: AuthenticatedUser = Depends(require_user)):
         payload,
         headers={
             "Content-Disposition": f'attachment; filename="pawso-export-{filename_date}.json"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@router.get("/insurance-claim-package")
+async def insurance_claim_package(
+    pet_id: UUID,
+    document_ids: str = Query(min_length=36, max_length=2000),
+    user: AuthenticatedUser = Depends(require_user),
+):
+    """Build a dated ZIP containing only owner-selected veterinary records."""
+    try:
+        selected_ids = [str(UUID(value.strip())) for value in document_ids.split(",") if value.strip()]
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="A selected document ID is invalid.") from exc
+    if not selected_ids or len(selected_ids) > 20:
+        raise HTTPException(status_code=400, detail="Select between 1 and 20 documents.")
+
+    supabase_url, service_headers = _service_configuration()
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        pet = await _confirm_pet_owner(client, supabase_url, service_headers, user.id, str(pet_id))
+        response = await client.get(
+            f"{supabase_url}/rest/v1/documents",
+            params={
+                "pet_id": f"eq.{pet_id}",
+                "id": f"in.({','.join(selected_ids)})",
+                "archived_at": "is.null",
+                "select": "id,filename,content_type,storage_path,created_at",
+            },
+            headers=service_headers,
+        )
+        if response.status_code != 200:
+            raise HTTPException(status_code=502, detail="Could not load selected claim records.")
+        documents = response.json()
+        if len(documents) != len(set(selected_ids)):
+            raise HTTPException(status_code=404, detail="One or more selected records are unavailable.")
+
+        output = io.BytesIO()
+        manifest = {
+            "format": "pawso-insurance-claim-v1",
+            "created_at": datetime.now(UTC).isoformat(),
+            "pet": pet["name"],
+            "documents": [{"filename": item["filename"], "created_at": item["created_at"]} for item in documents],
+        }
+        with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("claim-package-manifest.json", json.dumps(manifest, indent=2))
+            used_names: set[str] = set()
+            for index, document in enumerate(documents, start=1):
+                storage_path = document.get("storage_path")
+                if not storage_path:
+                    continue
+                file_response = await client.get(
+                    f"{supabase_url}/storage/v1/object/vet-records/{storage_path}",
+                    headers=service_headers,
+                )
+                if file_response.status_code != 200:
+                    raise HTTPException(status_code=502, detail=f"Could not retrieve {document['filename']}.")
+                safe_name = re.sub(r"[^A-Za-z0-9._ -]", "_", document["filename"]).strip() or f"record-{index}"
+                while safe_name in used_names:
+                    safe_name = f"{index}-{safe_name}"
+                used_names.add(safe_name)
+                archive.writestr(f"records/{safe_name}", file_response.content)
+        output.seek(0)
+    date = datetime.now(UTC).date().isoformat()
+    filename = re.sub(r"[^A-Za-z0-9_-]", "-", pet["name"]).strip("-") or "pet"
+    return StreamingResponse(
+        output,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="pawso-{filename}-claim-{date}.zip"',
             "Cache-Control": "no-store",
         },
     )
