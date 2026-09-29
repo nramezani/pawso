@@ -42,6 +42,7 @@ export type PetDocument = {
   content_type: string | null;
   size_bytes: number | null;
   status: string;
+  source_type?: 'owner_upload' | 'clinic_upload';
   storage_path: string | null;
   created_at: string;
   linked_events: number;
@@ -214,6 +215,9 @@ export type PetSummary = {
   allergies: string | null;
   medications: string | null;
   vet_clinic: string | null;
+  vet_name: string | null;
+  vet_phone: string | null;
+  vet_email: string | null;
   photo_path: string | null;
   photo_url?: string | null;
   archived_at: string | null;

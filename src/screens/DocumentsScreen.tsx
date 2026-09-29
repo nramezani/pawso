@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
 
 import { usePawso } from '../context/PawsoContext';
 import { shareInsuranceClaimPackage } from '../services/insuranceClaims';
+import { confirmClinicDocument } from '../services/vetUpload';
 import { FilterChipRow, MetricStrip } from '../components/VisualSummary';
 import {
   Page,
@@ -23,6 +24,7 @@ export function DocumentsScreen() {
   const [selectedClaimDocuments, setSelectedClaimDocuments] = useState<string[]>([]);
   const [claimBusy, setClaimBusy] = useState(false);
   const [claimError, setClaimError] = useState('');
+  const [reviewingClinicId, setReviewingClinicId] = useState<string | null>(null);
   const {
     setScreen,
     currentPetId,
@@ -44,6 +46,7 @@ export function DocumentsScreen() {
     formatDocumentSize,
     pickVetRecord,
     scanVetRecord,
+    loadDocuments,
   } = usePawso();
 
   const confirmedDocuments = petDocuments.filter(
@@ -290,6 +293,10 @@ return (
                 </Text>
               </View>
 
+              {document.source_type === 'clinic_upload' ? (
+                <Text style={styles.cardMuted}>Received through a shared upload link. Sender identity is not verified; check the original before using its information.</Text>
+              ) : null}
+
               <Pressable
                 style={[
                   styles.documentOpenButton,
@@ -313,7 +320,25 @@ return (
                 </Text>
               </Pressable>
 
-              {document.status === 'review_required' && canManageMedical ? (
+              {document.status === 'review_required' && document.source_type === 'clinic_upload' && canManageMedical ? (
+                <SecondaryButton
+                  title={reviewingClinicId === document.id ? 'Saving review…' : 'Mark clinic record reviewed'}
+                  disabled={reviewingClinicId === document.id || !document.storage_path}
+                  onPress={() => Alert.alert('Review clinic record', 'Open the original file and check its contents before confirming. Confirming does not add medical facts to the timeline.', [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Confirm reviewed', onPress: async () => {
+                      setReviewingClinicId(document.id);
+                      try {
+                        await confirmClinicDocument(document.id);
+                        if (currentPetId) await loadDocuments(currentPetId);
+                      } catch (error) {
+                        Alert.alert('Could not confirm', error instanceof Error ? error.message : 'Try again.');
+                      } finally { setReviewingClinicId(null); }
+                    } },
+                  ])}
+                />
+              ) : null}
+              {document.status === 'review_required' && document.source_type !== 'clinic_upload' && canManageMedical ? (
                 <Pressable
                   style={styles.outlineButton}
                   accessibilityRole="button"

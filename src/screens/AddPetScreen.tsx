@@ -48,6 +48,12 @@ export function AddPetScreen() {
     setMedications,
     vetClinic,
     setVetClinic,
+    vetName,
+    setVetName,
+    vetPhone,
+    setVetPhone,
+    vetEmail,
+    setVetEmail,
     insuranceCompany,
     setInsuranceCompany,
     insurancePolicyNumber,
@@ -225,6 +231,12 @@ export function AddPetScreen() {
 
           <Label text="Primary vet or clinic" />
           <Input value={vetClinic} onChangeText={setVetClinic} placeholder="Clinic name" maxLength={200} />
+          <Label text="Veterinarian" />
+          <Input value={vetName} onChangeText={setVetName} placeholder="Optional name" maxLength={160} />
+          <Label text="Clinic phone" />
+          <Input value={vetPhone} onChangeText={setVetPhone} placeholder="Optional phone" keyboardType="phone-pad" maxLength={40} />
+          <Label text="Clinic email" />
+          <Input value={vetEmail} onChangeText={setVetEmail} placeholder="Optional email" keyboardType="email-address" autoCapitalize="none" maxLength={254} />
 
           <Text style={styles.sectionTitle}>Pet insurance</Text>
           <Text style={styles.cardMuted}>Optional details for renewals, emergencies, and claims.</Text>
