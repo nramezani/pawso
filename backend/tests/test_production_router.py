@@ -1,10 +1,14 @@
 import unittest
+import asyncio
+import io
+from unittest.mock import AsyncMock, Mock, patch
 from pathlib import Path
 from uuid import UUID
 
+from fastapi import HTTPException, UploadFile
 from pydantic import ValidationError
 
-from production_router import ClientEventRequest, InvitationEmailRequest, invitation_landing_page
+from production_router import ClientEventRequest, InvitationEmailRequest, _vet_link_hash, invitation_landing_page, receive_vet_record
 
 
 class InvitationEmailRequestTests(unittest.TestCase):
@@ -72,6 +76,57 @@ class StorageDeletionTests(unittest.TestCase):
         self.assertIn('"select": "id,pet_id,user_id,storage_path,filename"', document_handler)
         self.assertIn("document_objects.extend", document_handler)
         self.assertIn("document_objects,", document_handler)
+
+
+class ClinicIntakeTests(unittest.TestCase):
+    def test_rejects_malformed_link_before_database_access(self):
+        with self.assertRaises(HTTPException) as error:
+            _vet_link_hash('bad-token')
+        self.assertEqual(error.exception.status_code, 404)
+
+    def test_rejects_spoofed_pdf_without_consuming_link(self):
+        file = UploadFile(filename='results.pdf', file=io.BytesIO(b'not a pdf'),
+                          headers={'content-type': 'application/pdf'})
+        with patch('production_router._service_configuration') as config:
+            with self.assertRaises(HTTPException) as error:
+                asyncio.run(receive_vet_record('A' * 43, file))
+        self.assertEqual(error.exception.status_code, 400)
+        config.assert_not_called()
+
+    def test_expired_or_consumed_link_cannot_upload(self):
+        file = UploadFile(filename='results.pdf', file=io.BytesIO(b'%PDF-1.7\n'),
+                          headers={'content-type': 'application/pdf'})
+        client = AsyncMock()
+        client.post.return_value = Mock(status_code=200)
+        client.post.return_value.json.return_value = []
+        client.__aenter__.return_value = client
+        with patch('production_router._service_configuration', return_value=('https://example.test', {})), \
+             patch('production_router.httpx.AsyncClient', return_value=client):
+            with self.assertRaises(HTTPException) as error:
+                asyncio.run(receive_vet_record('A' * 43, file))
+        self.assertEqual(error.exception.status_code, 410)
+        client.post.assert_awaited_once()
+
+    def test_valid_one_time_claim_stores_private_file_and_links_document(self):
+        file = UploadFile(filename='results.pdf', file=io.BytesIO(b'%PDF-1.7\n'),
+                          headers={'content-type': 'application/pdf'})
+        owner = '11111111-1111-1111-1111-111111111111'
+        pet = '22222222-2222-2222-2222-222222222222'
+        document = '33333333-3333-3333-3333-333333333333'
+        client = AsyncMock()
+        client.__aenter__.return_value = client
+        claim = Mock(status_code=200)
+        claim.json.return_value = [{'owner_id': owner, 'pet_id': pet, 'document_id': document}]
+        client.post.side_effect = [claim, Mock(status_code=200)]
+        client.patch.return_value = Mock(status_code=204)
+        with patch('production_router._service_configuration', return_value=('https://example.test', {})), \
+             patch('production_router.httpx.AsyncClient', return_value=client):
+            response = asyncio.run(receive_vet_record('A' * 43, file))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('Record sent securely', response.body.decode())
+        self.assertIn(f'{owner}/{pet}/{document}/original.pdf', client.post.await_args_list[1].args[0])
+        self.assertEqual(client.patch.await_args.kwargs['json']['storage_path'],
+                         f'{owner}/{pet}/{document}/original.pdf')
 
 
 class ClientEventRequestTests(unittest.TestCase):

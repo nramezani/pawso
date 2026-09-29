@@ -1,9 +1,11 @@
 import asyncio
 import unittest
+from unittest.mock import patch
 
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
-from main import safe_request_id
+from main import app, safe_request_id
 from rate_limit import UsageLimiter
 from upload_validation import content_type_matches, detect_supported_file
 
@@ -48,6 +50,14 @@ class UsageLimiterTests(unittest.IsolatedAsyncioTestCase):
 
 
 class RequestIdSafetyTests(unittest.TestCase):
+    def test_public_upload_capability_is_redacted_from_metrics(self):
+        token = 'A' * 8
+        with patch('main.logger.info') as info:
+            response = TestClient(app).get(f'/api/v1/vet-upload/{token}')
+        self.assertEqual(response.status_code, 404)
+        self.assertNotIn(token, str(info.call_args_list))
+        self.assertIn('[redacted]', str(info.call_args_list))
+
     def test_preserves_compact_log_safe_request_id(self):
         self.assertEqual(safe_request_id("mobile.123:retry-2"), "mobile.123:retry-2")
 

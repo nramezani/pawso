@@ -105,6 +105,9 @@ const PET_SELECT = [
   'allergies',
   'medications',
   'vet_clinic',
+  'vet_name',
+  'vet_phone',
+  'vet_email',
   'photo_path',
   'archived_at',
   'emergency_notes',
@@ -239,6 +242,9 @@ function usePawsoState() {
   const [allergies, setAllergies] = useState('');
   const [medications, setMedications] = useState('');
   const [vetClinic, setVetClinic] = useState('');
+  const [vetName, setVetName] = useState('');
+  const [vetPhone, setVetPhone] = useState('');
+  const [vetEmail, setVetEmail] = useState('');
   const [insuranceCompany, setInsuranceCompany] = useState('');
   const [insurancePolicyNumber, setInsurancePolicyNumber] = useState('');
   const [insuranceDeductible, setInsuranceDeductible] = useState('');
@@ -1142,6 +1148,9 @@ function usePawsoState() {
     setAllergies('');
     setMedications('');
     setVetClinic('');
+    setVetName('');
+    setVetPhone('');
+    setVetEmail('');
     setPetPhotoPath(null);
     setPetPhotoUrl(null);
     setEmergencyNotes('');
@@ -1763,6 +1772,9 @@ function usePawsoState() {
     setAllergies(data.allergies ?? '');
     setMedications(data.medications ?? '');
     setVetClinic(data.vet_clinic ?? '');
+    setVetName(data.vet_name ?? '');
+    setVetPhone(data.vet_phone ?? '');
+    setVetEmail(data.vet_email ?? '');
     setPetPhotoPath(data.photo_path ?? null);
     setPetPhotoUrl(data.photo_url ?? null);
     if (data.photo_path && !data.photo_url) {
@@ -3606,7 +3618,7 @@ function usePawsoState() {
 
       const { data: documents, error: documentsQueryError } = await supabase
         .from('documents')
-        .select('id, filename, content_type, size_bytes, status, storage_path, created_at, archived_at')
+        .select('id, filename, content_type, size_bytes, status, source_type, storage_path, created_at, archived_at')
         .eq('pet_id', petId)
         .order('created_at', { ascending: false });
 
@@ -3847,6 +3859,9 @@ function usePawsoState() {
         allergies: allergies.trim() || null,
         medications: medications.trim() || null,
         vet_clinic: vetClinic.trim() || null,
+        vet_name: vetName.trim() || null,
+        vet_phone: vetPhone.trim() || null,
+        vet_email: vetEmail.trim() || null,
         emergency_notes: emergencyNotes.trim() || null,
         emergency_contact_name: emergencyContactName.trim() || null,
         emergency_contact_phone: emergencyContactPhone.trim() || null,
@@ -4831,6 +4846,12 @@ function usePawsoState() {
     setMedications,
     vetClinic,
     setVetClinic,
+    vetName,
+    setVetName,
+    vetPhone,
+    setVetPhone,
+    vetEmail,
+    setVetEmail,
     insuranceCompany,
     setInsuranceCompany,
     insurancePolicyNumber,

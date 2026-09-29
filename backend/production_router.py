@@ -6,18 +6,21 @@ import re
 import io
 import json
 import zipfile
-from datetime import UTC, datetime
+import hashlib
+import secrets
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 import qrcode
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from auth import AuthenticatedUser, require_user
 from rate_limit import DistributedUsageLimiter
+from upload_validation import content_type_matches, detect_supported_file
 
 
 router = APIRouter(prefix="/api/v1", tags=["production"])
@@ -65,7 +68,7 @@ async def _public_emergency_pet(token: UUID) -> dict:
             params={
                 "id": f"eq.{link['pet_id']}",
                 "archived_at": "is.null",
-                "select": "name,species,breed,date_of_birth,weight_kg,preferred_weight_unit,microchip_number,conditions,allergies,medications,vet_clinic,emergency_notes,emergency_contact_name,emergency_contact_phone",
+                "select": "name,species,breed,date_of_birth,weight_kg,preferred_weight_unit,microchip_number,conditions,allergies,medications,vet_clinic,vet_phone,emergency_notes,emergency_contact_name,emergency_contact_phone",
                 "limit": "1",
             },
             headers=service_headers,
@@ -91,7 +94,7 @@ async def public_emergency_card(token: UUID):
     .card{{background:white;border-radius:18px;padding:20px;box-shadow:0 2px 16px #0001}}h1{{margin:0 0 6px}}.row{{padding:11px 0;border-top:1px solid #e4e8e6;display:grid;grid-template-columns:150px 1fr;gap:12px}}span{{white-space:pre-wrap}}.notice{{font-size:13px;color:#59645f;margin-top:16px}}
     </style></head><body><main><div class='card'><h1>🐾 {html.escape(pet['name'])}</h1><p>{html.escape(str(pet['species']).title())}{' · ' + html.escape(pet['breed']) if pet.get('breed') else ''}</p>
     {row('Date of birth', pet.get('date_of_birth'))}{row('Weight', display_weight)}{row('Microchip', pet.get('microchip_number'))}
-    {row('Conditions', pet.get('conditions'))}{row('Allergies', pet.get('allergies'))}{row('Medication notes', pet.get('medications'))}{row('Vet clinic', pet.get('vet_clinic'))}
+    {row('Conditions', pet.get('conditions'))}{row('Allergies', pet.get('allergies'))}{row('Medication notes', pet.get('medications'))}{row('Vet clinic', pet.get('vet_clinic'))}{row('Vet phone', pet.get('vet_phone'))}
     {row('Emergency contact', pet.get('emergency_contact_name'))}{row('Phone', pet.get('emergency_contact_phone'))}{row('Emergency notes', pet.get('emergency_notes'))}
     <p class='notice'>Limited emergency summary shared by the pet owner. This is not medical advice.</p></div></main></body></html>"""
     return HTMLResponse(page, headers={"Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow"})
@@ -356,8 +359,121 @@ async def _confirm_pet_owner(
     if membership_response.status_code != 200:
         raise HTTPException(status_code=502, detail="Could not verify household ownership.")
     if not membership_response.json():
-        raise HTTPException(status_code=403, detail="Only the household owner can delete this data.")
+        raise HTTPException(status_code=403, detail="Only the household owner can manage this pet's data.")
     return pet
+
+
+@router.post('/pets/{pet_id}/vet-upload-link')
+async def create_vet_upload_link(
+    pet_id: UUID, user: AuthenticatedUser = Depends(require_user)
+):
+    supabase_url, headers = _service_configuration()
+    token = secrets.token_urlsafe(32)
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        await _confirm_pet_owner(client, supabase_url, headers, user.id, str(pet_id))
+        response = await client.post(
+            f'{supabase_url}/rest/v1/vet_upload_links',
+            headers={**headers, 'Prefer': 'return=minimal'},
+            json={
+                'pet_id': str(pet_id), 'owner_id': user.id,
+                'token_hash': hashlib.sha256(token.encode()).hexdigest(),
+                'expires_at': (datetime.now(UTC) + timedelta(days=7)).isoformat(),
+            },
+        )
+    if response.status_code != 201:
+        raise HTTPException(status_code=502, detail='Could not create the clinic upload link.')
+    base_url = os.getenv('PAWSO_PUBLIC_API_URL', 'https://pawso.onrender.com').rstrip('/')
+    return JSONResponse(
+        {'url': f'{base_url}/api/v1/vet-upload/{token}', 'expires_in_days': 7},
+        headers={'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer'},
+    )
+
+
+def _vet_link_hash(token: str) -> str:
+    if not re.fullmatch(r'[A-Za-z0-9_-]{40,64}', token):
+        raise HTTPException(status_code=404, detail='Upload link is unavailable.')
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+@router.get('/vet-upload/{token}', response_class=HTMLResponse)
+async def vet_upload_page(token: str):
+    token_hash = _vet_link_hash(token)
+    supabase_url, headers = _service_configuration()
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.get(
+            f'{supabase_url}/rest/v1/vet_upload_links',
+            headers=headers,
+            params={'token_hash': f'eq.{token_hash}', 'used_at': 'is.null',
+                    'revoked_at': 'is.null', 'expires_at': f'gt.{datetime.now(UTC).isoformat()}',
+                    'select': 'id', 'limit': '1'},
+        )
+    if response.status_code != 200:
+        raise HTTPException(status_code=502, detail='Could not check this upload link.')
+    if not response.json():
+        raise HTTPException(status_code=410, detail='This upload link has expired or was used.')
+    page = f'''<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Send a veterinary record to Pawso</title><style>
+    body{{font-family:system-ui;background:#f7f3ec;color:#18352f;margin:0}}
+    main{{max-width:520px;margin:4rem auto;padding:24px;background:white;border-radius:16px}}
+    input,button{{display:block;margin:18px 0;padding:12px;font:inherit}}
+    button{{background:#53166f;color:white;border:0;border-radius:9px;cursor:pointer}}
+    </style></head><body><main><h1>Send a veterinary record</h1>
+    <p>The pet owner invited you to securely upload one PDF or image. They will review it in Pawso.
+    This link expires in seven days and works once. Maximum file size: 10 MB.</p>
+    <form method="post" enctype="multipart/form-data" action="/api/v1/vet-upload/{token}">
+    <label>Veterinary record <input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png,.webp" required></label>
+    <button type="submit">Send record securely</button></form></main></body></html>'''
+    return HTMLResponse(page, headers={'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer',
+                                       'X-Robots-Tag': 'noindex, nofollow', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'"})
+
+
+@router.post('/vet-upload/{token}', response_class=HTMLResponse)
+async def receive_vet_record(token: str, file: UploadFile = File(...)):
+    token_hash = _vet_link_hash(token)
+    filename = (file.filename or 'vet-record').split('/')[-1].split('\\')[-1]
+    if not filename or len(filename) > 255:
+        raise HTTPException(status_code=400, detail='File name must be 1–255 characters.')
+    data = await file.read(10 * 1024 * 1024 + 1)
+    if not data or len(data) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail='Choose a file up to 10 MB.')
+    detected = detect_supported_file(data)
+    if not detected or not content_type_matches(file.content_type, detected):
+        raise HTTPException(status_code=400, detail='Choose a genuine PDF, JPEG, PNG, or WebP file.')
+    supabase_url, headers = _service_configuration()
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        claim = await client.post(
+            f'{supabase_url}/rest/v1/rpc/consume_vet_upload_link',
+            headers=headers,
+            json={'p_token_hash': token_hash, 'p_filename': filename,
+                  'p_content_type': detected.content_type, 'p_size_bytes': len(data)},
+        )
+        if claim.status_code != 200:
+            raise HTTPException(status_code=502, detail='Could not receive this record.')
+        rows = claim.json()
+        if not rows:
+            raise HTTPException(status_code=410, detail='This upload link has expired or was used.')
+        row = rows[0]
+        path = f"{row['owner_id']}/{row['pet_id']}/{row['document_id']}/original.{detected.extension}"
+        uploaded = await client.post(
+            f'{supabase_url}/storage/v1/object/vet-records/{path}',
+            headers={**headers, 'Content-Type': detected.content_type, 'x-upsert': 'false'},
+            content=data,
+        )
+        if uploaded.status_code not in (200, 201):
+            await client.delete(f'{supabase_url}/rest/v1/documents',
+                                headers=headers, params={'id': f"eq.{row['document_id']}"})
+            raise HTTPException(status_code=502, detail='Could not store the record. Ask the owner for a new link.')
+        saved = await client.patch(
+            f'{supabase_url}/rest/v1/documents',
+            headers={**headers, 'Prefer': 'return=minimal'},
+            params={'id': f"eq.{row['document_id']}"}, json={'storage_path': path},
+        )
+        if saved.status_code != 204:
+            await client.delete(f'{supabase_url}/storage/v1/object/vet-records/{path}', headers=headers)
+            await client.delete(f'{supabase_url}/rest/v1/documents',
+                                headers=headers, params={'id': f"eq.{row['document_id']}"})
+            raise HTTPException(status_code=502, detail='Could not finish storing the record. Ask the owner for a new link.')
+    return HTMLResponse('<!doctype html><html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Record sent</title><body style="font-family:system-ui;max-width:520px;margin:4rem auto;padding:24px"><h1>Record sent securely</h1><p>The pet owner can now review it in Pawso.</p></body></html>', headers={'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'X-Robots-Tag': 'noindex, nofollow'})
 
 
 async def _delete_storage_paths(

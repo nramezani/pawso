@@ -1,4 +1,6 @@
 import { Alert, Image, Text, View } from 'react-native';
+import { useState } from 'react';
+import { shareVetUploadLink } from '../services/vetUpload';
 
 import { usePawso } from '../context/PawsoContext';
 import { WeightTrendCard } from '../components/WeightTrendCard';
@@ -14,6 +16,7 @@ import {
 } from '../components/ui';
 
 export function PetProfileScreen() {
+  const [vetShareBusy, setVetShareBusy] = useState(false);
   const {
     setScreen,
     petPhotoUrl,
@@ -40,6 +43,10 @@ export function PetProfileScreen() {
     conditions,
     allergies,
     medications,
+    vetClinic,
+    vetName,
+    vetPhone,
+    vetEmail,
     timelineEvents,
     canViewMedical,
     canManageMedical,
@@ -194,6 +201,32 @@ return (
             value={medications || 'None added'}
           />
         </Card>
+
+        {canViewMedical ? (
+          <Card title="Veterinary clinic">
+            <Info label="Clinic" value={vetClinic || 'Not added'} />
+            {vetName ? <Info label="Veterinarian" value={vetName} /> : null}
+            {vetPhone ? <Info label="Phone" value={vetPhone} /> : null}
+            {vetEmail ? <Info label="Email" value={vetEmail} /> : null}
+            {canManageMedical && currentPetId ? (
+              <SecondaryButton
+                title={vetShareBusy ? 'Preparing link…' : 'Invite clinic to send a record'}
+                disabled={vetShareBusy}
+                onPress={async () => {
+                  setVetShareBusy(true);
+                  try {
+                    await shareVetUploadLink(currentPetId, petName);
+                  } catch (error) {
+                    Alert.alert('Could not share link', error instanceof Error ? error.message : 'Try again.');
+                  } finally {
+                    setVetShareBusy(false);
+                  }
+                }}
+              />
+            ) : null}
+            {canManageMedical ? <Text style={styles.cardMuted}>The link accepts one file within seven days. Review incoming records in Medical Records.</Text> : null}
+          </Card>
+        ) : null}
 
         <PrimaryButton
           title="Go to Today"

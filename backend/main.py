@@ -71,6 +71,12 @@ async def privacy_safe_request_metrics(request: Request, call_next):
     """Log route-level latency without bodies, tokens, email, or query text."""
 
     request_id = safe_request_id(request.headers.get("x-request-id"))
+    # Public bearer links are capabilities; never put their tokens in logs.
+    safe_path = re.sub(
+        r"(/api/v1/(?:vet-upload|invite|emergency)/)[^/]+",
+        r"\1[redacted]",
+        request.url.path,
+    )
     started = time.perf_counter()
     status_code = 500
     try:
@@ -83,7 +89,7 @@ async def privacy_safe_request_metrics(request: Request, call_next):
             "request_failed request_id=%s method=%s path=%s error_type=%s",
             request_id,
             request.method,
-            request.url.path,
+            safe_path,
             type(exc).__name__,
         )
         raise
@@ -93,7 +99,7 @@ async def privacy_safe_request_metrics(request: Request, call_next):
             "request_complete request_id=%s method=%s path=%s status=%s duration_ms=%s",
             request_id,
             request.method,
-            request.url.path,
+            safe_path,
             status_code,
             duration_ms,
         )
