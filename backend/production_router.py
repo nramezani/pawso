@@ -68,7 +68,7 @@ async def _public_emergency_pet(token: UUID) -> dict:
             params={
                 "id": f"eq.{link['pet_id']}",
                 "archived_at": "is.null",
-                "select": "name,species,breed,date_of_birth,weight_kg,preferred_weight_unit,microchip_number,conditions,allergies,medications,vet_clinic,vet_phone,emergency_notes,emergency_contact_name,emergency_contact_phone",
+                "select": "name,species,breed,date_of_birth,weight_kg,preferred_weight_unit,microchip_number,conditions,allergies,medications,vet_clinic,emergency_notes,emergency_contact_name,emergency_contact_phone",
                 "limit": "1",
             },
             headers=service_headers,
@@ -94,7 +94,7 @@ async def public_emergency_card(token: UUID):
     .card{{background:white;border-radius:18px;padding:20px;box-shadow:0 2px 16px #0001}}h1{{margin:0 0 6px}}.row{{padding:11px 0;border-top:1px solid #e4e8e6;display:grid;grid-template-columns:150px 1fr;gap:12px}}span{{white-space:pre-wrap}}.notice{{font-size:13px;color:#59645f;margin-top:16px}}
     </style></head><body><main><div class='card'><h1>🐾 {html.escape(pet['name'])}</h1><p>{html.escape(str(pet['species']).title())}{' · ' + html.escape(pet['breed']) if pet.get('breed') else ''}</p>
     {row('Date of birth', pet.get('date_of_birth'))}{row('Weight', display_weight)}{row('Microchip', pet.get('microchip_number'))}
-    {row('Conditions', pet.get('conditions'))}{row('Allergies', pet.get('allergies'))}{row('Medication notes', pet.get('medications'))}{row('Vet clinic', pet.get('vet_clinic'))}{row('Vet phone', pet.get('vet_phone'))}
+    {row('Conditions', pet.get('conditions'))}{row('Allergies', pet.get('allergies'))}{row('Medication notes', pet.get('medications'))}{row('Vet clinic', pet.get('vet_clinic'))}
     {row('Emergency contact', pet.get('emergency_contact_name'))}{row('Phone', pet.get('emergency_contact_phone'))}{row('Emergency notes', pet.get('emergency_notes'))}
     <p class='notice'>Limited emergency summary shared by the pet owner. This is not medical advice.</p></div></main></body></html>"""
     return HTMLResponse(page, headers={"Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow"})
