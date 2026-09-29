@@ -8,7 +8,12 @@ from uuid import UUID
 from fastapi import HTTPException, UploadFile
 from pydantic import ValidationError
 
-from production_router import ClientEventRequest, InvitationEmailRequest, _vet_link_hash, invitation_landing_page, receive_vet_record
+from production_router import (
+    ClientEventRequest, InvitationEmailRequest, _vet_link_hash,
+    create_vet_upload_link, invitation_landing_page, receive_vet_record,
+    revoke_vet_upload_links,
+)
+from auth import AuthenticatedUser
 
 
 class InvitationEmailRequestTests(unittest.TestCase):
@@ -79,6 +84,37 @@ class StorageDeletionTests(unittest.TestCase):
 
 
 class ClinicIntakeTests(unittest.TestCase):
+    def test_owner_can_revoke_unconsumed_links(self):
+        client = AsyncMock()
+        client.__aenter__.return_value = client
+        client.patch.return_value = Mock(status_code=204)
+        owner = AuthenticatedUser(id='11111111-1111-1111-1111-111111111111', email='owner@example.com', access_token='test')
+        pet = UUID('22222222-2222-2222-2222-222222222222')
+        with patch('production_router._service_configuration', return_value=('https://example.test', {})), \
+             patch('production_router._confirm_pet_owner', new_callable=AsyncMock) as confirm_owner, \
+             patch('production_router.httpx.AsyncClient', return_value=client):
+            response = asyncio.run(revoke_vet_upload_links(pet, owner))
+        self.assertEqual(response.status_code, 204)
+        confirm_owner.assert_awaited_once()
+        self.assertEqual(client.patch.await_args.kwargs['params']['used_at'], 'is.null')
+        self.assertEqual(client.patch.await_args.kwargs['params']['revoked_at'], 'is.null')
+
+    def test_creation_refuses_more_than_three_active_links(self):
+        client = AsyncMock()
+        client.__aenter__.return_value = client
+        client.get.return_value = Mock(status_code=200)
+        client.get.return_value.json.return_value = [{'id': str(i)} for i in range(3)]
+        owner = AuthenticatedUser(id='11111111-1111-1111-1111-111111111111', email='owner@example.com', access_token='test')
+        pet = UUID('22222222-2222-2222-2222-222222222222')
+        with patch('production_router._service_configuration', return_value=('https://example.test', {})), \
+             patch('production_router._confirm_pet_owner', new_callable=AsyncMock, return_value={}), \
+             patch('production_router.vet_link_limiter.check', new_callable=AsyncMock), \
+             patch('production_router.httpx.AsyncClient', return_value=client):
+            with self.assertRaises(HTTPException) as error:
+                asyncio.run(create_vet_upload_link(pet, owner))
+        self.assertEqual(error.exception.status_code, 409)
+        client.post.assert_not_awaited()
+
     def test_rejects_malformed_link_before_database_access(self):
         with self.assertRaises(HTTPException) as error:
             _vet_link_hash('bad-token')

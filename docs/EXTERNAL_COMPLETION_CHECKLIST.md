@@ -13,12 +13,15 @@ merged.
 ## 2. Supabase database
 
 - [ ] Open project `dwowtzzmprvmyinqrszj` → SQL Editor.
-- [ ] Run `supabase/migrations/20260929_complete_product_foundation.sql` once.
+- [ ] Confirm migrations through `20260930_pre_beta_polish.sql` were applied, then run
+  `supabase/migrations/20261001_vet_record_intake.sql` once on staging and production.
 - [ ] Do not rerun or edit older applied migrations; if SQL fails, save the exact error and line.
 - [ ] Confirm the `pet-photos` Storage bucket exists and is private.
 - [ ] Confirm tables `symptom_entries`, `lab_results`, `medication_log_revisions`, and `api_rate_limits` exist.
 - [ ] Create a disposable staging Supabase project and run every migration in filename order.
 - [ ] Set staging test credentials and run `python supabase/tests/test_household_role_rls.py`.
+- [ ] In staging, test an owner clinic upload link from a separate browser, one-time
+  use, revocation, privacy by role, review, and private-object deletion.
 
 ## 3. Render
 

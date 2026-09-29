@@ -1,4 +1,9 @@
 from dataclasses import dataclass
+import os
+
+
+# The private bucket is capped at 10 MiB. Keep API limits at or below it.
+MAX_FILE_SIZE = min(10, max(1, int(os.getenv('MAX_UPLOAD_SIZE_MB', '10')))) * 1024 * 1024
 
 
 @dataclass(frozen=True)

@@ -79,6 +79,12 @@ owner account and a separate caregiver or sitter account.
   preserves owner-entered values when the AI omitted a field.
 - [ ] Suspected or uncertain diagnoses remain uncertain.
 - [ ] Original documents remain private and open with a signed URL.
+- [ ] Owner shares one clinic upload link; another browser uploads a sample PDF;
+  the owner sees it in Today's review inbox, opens the original, and marks it
+  reviewed without creating a medical timeline fact.
+- [ ] The same link cannot upload twice; unused links can be revoked; a fourth
+  active link is refused; caregiver, sitter, and anonymous users cannot create
+  or list links. Check that app/Render access logs omit bearer tokens.
 - [ ] Ask Pawso cites only the selected pet's records.
 - [ ] Ask Pawso degrades safely when the backend is unavailable.
 - [ ] Health check-ins distinguish owner observations from veterinary records.

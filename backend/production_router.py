@@ -20,7 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from auth import AuthenticatedUser, require_user
 from rate_limit import DistributedUsageLimiter
-from upload_validation import content_type_matches, detect_supported_file
+from upload_validation import MAX_FILE_SIZE, content_type_matches, detect_supported_file
 
 
 router = APIRouter(prefix="/api/v1", tags=["production"])
@@ -42,6 +42,12 @@ export_limiter = DistributedUsageLimiter(
     requests_per_day=max(1, int(os.getenv("DATA_EXPORTS_PER_DAY", "10"))),
     bucket="data_export",
     label="data export",
+)
+vet_link_limiter = DistributedUsageLimiter(
+    requests_per_minute=3,
+    requests_per_day=12,
+    bucket='vet_upload_link',
+    label='clinic upload link',
 )
 
 
@@ -333,7 +339,7 @@ async def _confirm_pet_owner(
         f"{supabase_url}/rest/v1/pets",
         params={
             "id": f"eq.{pet_id}",
-            "select": "id,household_id,photo_path,name",
+            "select": "id,household_id,photo_path,name,archived_at",
             "limit": "1",
         },
         headers=service_headers,
@@ -370,7 +376,20 @@ async def create_vet_upload_link(
     supabase_url, headers = _service_configuration()
     token = secrets.token_urlsafe(32)
     async with httpx.AsyncClient(timeout=10.0) as client:
-        await _confirm_pet_owner(client, supabase_url, headers, user.id, str(pet_id))
+        pet = await _confirm_pet_owner(client, supabase_url, headers, user.id, str(pet_id))
+        if pet.get('archived_at'):
+            raise HTTPException(status_code=409, detail='Restore this pet before inviting a clinic.')
+        await vet_link_limiter.check(user)
+        active_links = await client.get(
+            f'{supabase_url}/rest/v1/vet_upload_links', headers=headers,
+            params={'pet_id': f'eq.{pet_id}', 'used_at': 'is.null',
+                    'revoked_at': 'is.null', 'expires_at': f'gt.{datetime.now(UTC).isoformat()}',
+                    'select': 'id', 'limit': '3'},
+        )
+        if active_links.status_code != 200:
+            raise HTTPException(status_code=502, detail='Could not check active clinic links.')
+        if len(active_links.json()) >= 3:
+            raise HTTPException(status_code=409, detail='Revoke an unused clinic link before creating another.')
         response = await client.post(
             f'{supabase_url}/rest/v1/vet_upload_links',
             headers={**headers, 'Prefer': 'return=minimal'},
@@ -387,6 +406,42 @@ async def create_vet_upload_link(
         {'url': f'{base_url}/api/v1/vet-upload/{token}', 'expires_in_days': 7},
         headers={'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer'},
     )
+
+
+@router.get('/pets/{pet_id}/vet-upload-links')
+async def list_vet_upload_links(
+    pet_id: UUID, user: AuthenticatedUser = Depends(require_user)
+):
+    supabase_url, headers = _service_configuration()
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        await _confirm_pet_owner(client, supabase_url, headers, user.id, str(pet_id))
+        response = await client.get(
+            f'{supabase_url}/rest/v1/vet_upload_links', headers=headers,
+            params={'pet_id': f'eq.{pet_id}', 'used_at': 'is.null',
+                    'revoked_at': 'is.null', 'expires_at': f'gt.{datetime.now(UTC).isoformat()}',
+                    'select': 'id,created_at,expires_at', 'order': 'created_at.desc', 'limit': '3'},
+        )
+    if response.status_code != 200:
+        raise HTTPException(status_code=502, detail='Could not load clinic links.')
+    return JSONResponse({'links': response.json()}, headers={'Cache-Control': 'no-store'})
+
+
+@router.delete('/pets/{pet_id}/vet-upload-links', status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_vet_upload_links(
+    pet_id: UUID, user: AuthenticatedUser = Depends(require_user)
+):
+    supabase_url, headers = _service_configuration()
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        await _confirm_pet_owner(client, supabase_url, headers, user.id, str(pet_id))
+        response = await client.patch(
+            f'{supabase_url}/rest/v1/vet_upload_links',
+            headers={**headers, 'Prefer': 'return=minimal'},
+            params={'pet_id': f'eq.{pet_id}', 'used_at': 'is.null', 'revoked_at': 'is.null'},
+            json={'revoked_at': datetime.now(UTC).isoformat()},
+        )
+    if response.status_code != 204:
+        raise HTTPException(status_code=502, detail='Could not revoke clinic links.')
+    return Response(status_code=204)
 
 
 def _vet_link_hash(token: str) -> str:
@@ -419,7 +474,7 @@ async def vet_upload_page(token: str):
     button{{background:#53166f;color:white;border:0;border-radius:9px;cursor:pointer}}
     </style></head><body><main><h1>Send a veterinary record</h1>
     <p>The pet owner invited you to securely upload one PDF or image. They will review it in Pawso.
-    This link expires in seven days and works once. Maximum file size: 10 MB.</p>
+    This link expires in seven days and works once. Maximum file size: {MAX_FILE_SIZE // (1024 * 1024)} MB.</p>
     <form method="post" enctype="multipart/form-data" action="/api/v1/vet-upload/{token}">
     <label>Veterinary record <input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png,.webp" required></label>
     <button type="submit">Send record securely</button></form></main></body></html>'''
@@ -433,9 +488,9 @@ async def receive_vet_record(token: str, file: UploadFile = File(...)):
     filename = (file.filename or 'vet-record').split('/')[-1].split('\\')[-1]
     if not filename or len(filename) > 255:
         raise HTTPException(status_code=400, detail='File name must be 1–255 characters.')
-    data = await file.read(10 * 1024 * 1024 + 1)
-    if not data or len(data) > 10 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail='Choose a file up to 10 MB.')
+    data = await file.read(MAX_FILE_SIZE + 1)
+    if not data or len(data) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail=f'Choose a file up to {MAX_FILE_SIZE // (1024 * 1024)} MB.')
     detected = detect_supported_file(data)
     if not detected or not content_type_matches(file.content_type, detected):
         raise HTTPException(status_code=400, detail='Choose a genuine PDF, JPEG, PNG, or WebP file.')
