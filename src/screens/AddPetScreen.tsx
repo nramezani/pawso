@@ -79,6 +79,7 @@ export function AddPetScreen() {
     createPetProfile,
   } = usePawso();
   const [showHealthDetails, setShowHealthDetails] = useState(isEditingPet);
+  const [showMoreBasics, setShowMoreBasics] = useState(isEditingPet);
 
   return (
     <Page scroll keyboard>
@@ -121,6 +122,13 @@ export function AddPetScreen() {
           onPress={() => setPetType('dog')}
         />
       </View>
+
+      <SecondaryButton
+        title={showMoreBasics ? 'Hide optional profile details' : 'Add age, breed & more (optional)'}
+        onPress={() => setShowMoreBasics((value) => !value)}
+      />
+
+      {showMoreBasics ? <>
 
       <Label text="Breed" />
       <Input value={breed} onChangeText={setBreed} placeholder="Optional" maxLength={120} />
@@ -184,6 +192,7 @@ export function AddPetScreen() {
           onPress={() => setAlteredStatus('notSure')}
         />
       </View>
+      </> : null}
 
       <SecondaryButton
         title={showHealthDetails ? 'Hide optional health details' : 'Add health details (optional)'}

@@ -96,7 +96,7 @@ export function DocumentsScreen() {
   if (confirmedDocuments > 0) {
     documentFilterOptions.push({
       value: 'confirmed',
-      label: 'Confirmed',
+      label: 'Reviewed',
       count: confirmedDocuments,
     });
   }
@@ -128,7 +128,7 @@ return (
                 tone: 'neutral',
               },
               {
-                label: 'Confirmed',
+                label: 'Reviewed',
                 value: confirmedDocuments,
                 icon: '✓',
                 tone: 'green',
@@ -172,7 +172,7 @@ return (
           <View style={styles.infoCard}>
             <Text style={styles.cardStrong}>Medical records are read-only</Text>
             <Text style={styles.cardMuted}>
-              Caregivers can review confirmed records; only the owner can upload or change them.
+              Caregivers can view reviewed records; only the owner can upload or change them.
             </Text>
           </View>
         ) : (
@@ -239,7 +239,7 @@ return (
             <Text style={styles.cardMuted}>
               {canManageMedical
                 ? `Upload a veterinary PDF or image to start ${petName}'s document library.`
-                : 'The household owner has not added any confirmed records yet.'}
+                : 'The household owner has not added any reviewed records yet.'}
             </Text>
           </View>
         ) : filteredDocuments.length === 0 ? (
@@ -283,7 +283,7 @@ return (
                       : styles.documentStatusTextPending,
                   ]}>
                     {document.status === 'confirmed'
-                      ? '✓ Confirmed'
+                      ? document.source_type === 'clinic_upload' ? '✓ Reviewed by owner' : '✓ Details reviewed'
                       : document.status.replaceAll('_', ' ')}
                   </Text>
                 </View>

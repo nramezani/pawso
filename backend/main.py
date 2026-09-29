@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from rate_limit import enforce_ai_limits
 from production_router import router as production_router
-from upload_validation import content_type_matches, detect_supported_file
+from upload_validation import MAX_FILE_SIZE, content_type_matches, detect_supported_file
 
 
 load_dotenv()
@@ -105,7 +105,6 @@ async def privacy_safe_request_metrics(request: Request, call_next):
         )
 
 
-MAX_FILE_SIZE = max(1, int(os.getenv("MAX_UPLOAD_SIZE_MB", "10"))) * 1024 * 1024
 EXTRACTION_PROMPT_VERSION = "vet-record-extraction-v1"
 
 

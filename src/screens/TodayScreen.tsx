@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 
 import { usePawso } from '../context/PawsoContext';
+import { supabase } from '../../lib/supabase';
 import { formatDateInputInTimeZone } from '../utils/dateTime';
 import {
   Page,
@@ -13,6 +15,7 @@ import {
 
 export function TodayScreen() {
   const [showMoreTools, setShowMoreTools] = useState(false);
+  const [documentCounts, setDocumentCounts] = useState<{ total: number; incoming: number } | null>(null);
   const {
     apiStatus,
     checkBackend,
@@ -34,6 +37,7 @@ export function TodayScreen() {
     laterMedicationDoses,
     upcomingCareTasks,
     careTasks,
+    medicationList,
     taskCompletions,
     todayMedicationDoses,
     completedMedicationDoses,
@@ -71,6 +75,25 @@ export function TodayScreen() {
   } = usePawso();
 
   const showAllPets = pets.length > 1 && todayView === 'all';
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    if (!currentPetId || !canManageMedical || !isOnline) {
+      setDocumentCounts(null);
+      return () => { active = false; };
+    }
+    (async () => {
+      const [all, incoming] = await Promise.all([
+        supabase.from('documents').select('id', { count: 'exact', head: true })
+          .eq('pet_id', currentPetId).is('archived_at', null),
+        supabase.from('documents').select('id', { count: 'exact', head: true })
+          .eq('pet_id', currentPetId).eq('source_type', 'clinic_upload')
+          .eq('status', 'review_required').is('archived_at', null),
+      ]);
+      if (active) setDocumentCounts(!all.error && !incoming.error
+        ? { total: all.count ?? 0, incoming: incoming.count ?? 0 } : null);
+    })();
+    return () => { active = false; };
+  }, [currentPetId, canManageMedical, isOnline]));
   // Greetings follow the phone's clock. Household time zone still controls
   // care schedules and "today" calculations elsewhere on this screen.
   const localHour = new Date().getHours();
@@ -136,6 +159,24 @@ export function TodayScreen() {
               ? `Showing saved data from ${new Date(offlineSnapshotAt).toLocaleString()}. Reconnect before logging care or changing records.`
               : 'Reconnect before logging care or changing records.'}
           </Text>
+        </View>
+      ) : null}
+
+      {canManageMedical && documentCounts?.incoming ? (
+        <View style={styles.infoCard}>
+          <Text style={styles.cardStrong}>📄 {documentCounts.incoming} new clinic record{documentCounts.incoming === 1 ? '' : 's'} to review</Text>
+          <Text style={styles.cardMuted}>Open each original file and check its contents. The sender has not been verified.</Text>
+          <SecondaryButton title="Review incoming records" onPress={openDocumentsScreen} />
+        </View>
+      ) : null}
+
+      {canManageMedical && documentCounts?.total === 0 && careTasks.length === 0 && medicationList.length === 0 ? (
+        <View style={styles.infoCard}>
+          <Text style={styles.cardStrong}>Get started with {petName}</Text>
+          <Text style={styles.cardMuted}>Add a care reminder or save a veterinary record. You can fill in the rest of the profile later.</Text>
+          <SecondaryButton title="Add a care task" onPress={() => setScreen('addCareTask')} />
+          <SecondaryButton title="Add a veterinary record" onPress={pickVetRecord} />
+          <SecondaryButton title="Edit pet details" onPress={() => setScreen('petProfile')} />
         </View>
       ) : null}
 

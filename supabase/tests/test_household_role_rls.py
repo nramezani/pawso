@@ -91,6 +91,23 @@ class HouseholdRoleRLSTests(unittest.TestCase):
         )
         cls.sitter_jwt = _sign_in(os.getenv("TEST_SITTER_EMAIL"), os.getenv("TEST_SITTER_PASSWORD"))
 
+    def test_vet_upload_link_tokens_are_service_role_only(self):
+        for role, jwt in (("owner", self.owner_jwt), ("caregiver", self.caregiver_jwt), ("sitter", self.sitter_jwt)):
+            with self.subTest(role=role):
+                links = requests.get(
+                    f"{SUPABASE_URL}/rest/v1/vet_upload_links?select=id,token_hash&limit=1",
+                    headers=_headers(jwt), timeout=10,
+                )
+                self.assertIn(links.status_code, (401, 403))
+                consume = requests.post(
+                    f"{SUPABASE_URL}/rest/v1/rpc/consume_vet_upload_link",
+                    headers=_headers(jwt),
+                    json={"p_token_hash": "0" * 64, "p_filename": "test.pdf",
+                          "p_content_type": "application/pdf", "p_size_bytes": 1},
+                    timeout=10,
+                )
+                self.assertIn(consume.status_code, (401, 403))
+
     def test_sitter_cannot_insert_medication(self):
         """The core bug this migration fixes: a sitter should not be able to
         write medical data even though the RLS policy check only rejects

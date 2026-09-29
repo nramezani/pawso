@@ -1,6 +1,6 @@
-import { Alert, Image, Text, View } from 'react-native';
-import { useState } from 'react';
-import { shareVetUploadLink } from '../services/vetUpload';
+import { Alert, Image, Linking, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { countActiveVetUploadLinks, revokeVetUploadLinks, shareVetUploadLink } from '../services/vetUpload';
 
 import { usePawso } from '../context/PawsoContext';
 import { WeightTrendCard } from '../components/WeightTrendCard';
@@ -17,6 +17,25 @@ import {
 
 export function PetProfileScreen() {
   const [vetShareBusy, setVetShareBusy] = useState(false);
+  const [activeVetLinks, setActiveVetLinks] = useState<number | null>(null);
+  async function contactClinic(kind: 'phone' | 'email', value: string) {
+    const destination = kind === 'phone'
+      ? `tel:${value.replace(/[^+\d]/g, '')}`
+      : `mailto:${value.trim()}`;
+    if (kind === 'phone' && value.replace(/\D/g, '').length < 7) {
+      Alert.alert('Check clinic phone', 'Edit the clinic phone number before calling.');
+      return;
+    }
+    if (kind === 'email' && !/^[^\s@/?#]+@[^\s@/?#]+\.[^\s@/?#]+$/.test(value.trim())) {
+      Alert.alert('Check clinic email', 'Edit the clinic email address before writing.');
+      return;
+    }
+    try {
+      await Linking.openURL(destination);
+    } catch {
+      Alert.alert('Could not open contact', 'Check your device settings or edit the clinic details.');
+    }
+  }
   const {
     setScreen,
     petPhotoUrl,
@@ -63,6 +82,15 @@ export function PetProfileScreen() {
     insuranceClaimsContact,
     insuranceRenewalDate,
   } = usePawso();
+
+  useEffect(() => {
+    if (!canManageMedical || !currentPetId) return;
+    let active = true;
+    countActiveVetUploadLinks(currentPetId)
+      .then((count) => { if (active) setActiveVetLinks(count); })
+      .catch(() => { if (active) setActiveVetLinks(null); });
+    return () => { active = false; };
+  }, [canManageMedical, currentPetId]);
 
 return (
       <Page scroll>
@@ -208,6 +236,8 @@ return (
             {vetName ? <Info label="Veterinarian" value={vetName} /> : null}
             {vetPhone ? <Info label="Phone" value={vetPhone} /> : null}
             {vetEmail ? <Info label="Email" value={vetEmail} /> : null}
+            {vetPhone ? <SecondaryButton title="Call clinic" onPress={() => contactClinic('phone', vetPhone)} /> : null}
+            {vetEmail ? <SecondaryButton title="Email clinic" onPress={() => contactClinic('email', vetEmail)} /> : null}
             {canManageMedical && currentPetId ? (
               <SecondaryButton
                 title={vetShareBusy ? 'Preparing link…' : 'Invite clinic to send a record'}
@@ -216,6 +246,9 @@ return (
                   setVetShareBusy(true);
                   try {
                     await shareVetUploadLink(currentPetId, petName);
+                    countActiveVetUploadLinks(currentPetId)
+                      .then(setActiveVetLinks)
+                      .catch(() => setActiveVetLinks(null));
                   } catch (error) {
                     Alert.alert('Could not share link', error instanceof Error ? error.message : 'Try again.');
                   } finally {
@@ -224,7 +257,28 @@ return (
                 }}
               />
             ) : null}
-            {canManageMedical ? <Text style={styles.cardMuted}>The link accepts one file within seven days. Review incoming records in Medical Records.</Text> : null}
+            {canManageMedical ? <Text style={styles.cardMuted}>Each link accepts one file within seven days. Sender identity is not verified. Review incoming records in Medical Records.</Text> : null}
+            {canManageMedical && currentPetId && activeVetLinks !== null && activeVetLinks > 0 ? (
+              <>
+                <Text style={styles.cardMuted}>{activeVetLinks} unused clinic link{activeVetLinks === 1 ? '' : 's'} active.</Text>
+                <SecondaryButton title="Revoke unused clinic links" disabled={vetShareBusy} onPress={() => Alert.alert(
+                  'Revoke clinic links?',
+                  'All unused links for this pet will stop working. You can create a new one afterward.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Revoke links', style: 'destructive', onPress: async () => {
+                      setVetShareBusy(true);
+                      try {
+                        await revokeVetUploadLinks(currentPetId);
+                        setActiveVetLinks(0);
+                      } catch (error) {
+                        Alert.alert('Could not revoke links', error instanceof Error ? error.message : 'Try again.');
+                      } finally { setVetShareBusy(false); }
+                    } },
+                  ]
+                )} />
+              </>
+            ) : null}
           </Card>
         ) : null}
 

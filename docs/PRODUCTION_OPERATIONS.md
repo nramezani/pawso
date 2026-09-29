@@ -7,7 +7,10 @@
 - GitHub Actions calls `/ready` every six hours. Enable repository Action failure
   notifications for the owner. Before a public launch, add a dedicated external
   monitor with 5-minute checks and email/SMS escalation.
-- API logs contain request ID, route, status, and latency only. They must not
+- The Docker command disables Uvicorn's raw access log because bearer links are
+  in URL paths. The application emits redacted route metrics instead. Check
+  Render's edge/proxy logging configuration separately.
+- API logs contain request ID, redacted route, status, and latency only. They must not
   contain tokens, query bodies, email addresses, pet names, or veterinary text.
 - Mobile crash events contain only kind, opaque fingerprint, platform, and app version.
 
