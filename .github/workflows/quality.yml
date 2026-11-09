@@ -39,6 +39,8 @@ jobs:
         run: npm run lint:all
       - name: Expo Doctor
         run: npx expo-doctor
+      - name: Production dependency audit (high and critical)
+        run: npm audit --omit=dev --audit-level=high
       - name: Validate Expo configuration
         run: npx expo config --json > /dev/null
       - name: Bundle Android

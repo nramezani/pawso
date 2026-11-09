@@ -111,21 +111,32 @@ health endpoints are `/health` and `/ready`.
 - [Production operations runbook](docs/PRODUCTION_OPERATIONS.md)
 - [App Store and Play release checklist](docs/STORE_RELEASE_CHECKLIST.md)
 - [EAS environment setup](docs/EAS_ENVIRONMENT_SETUP.md)
+- [November 15 release gate](docs/NOVEMBER_15_RELEASE_GATE.md)
 - [Backend deployment guide](docs/BACKEND_DEPLOYMENT.md)
 - [Baseline Supabase schema](supabase/migrations/20260911_core_schema.sql)
 - [Household sharing migration](supabase/migrations/20260912_household_shared_care.sql)
 - [Reconciled household role permissions](supabase/migrations/20260923_reconcile_household_role_rls.sql)
 
-Apply all Supabase migrations in filename order. The mobile app expects the
-transactional, invitation, access-hardening, and product-completion changes in
-migrations `20260925` through `20260929`.
+Apply all Supabase migrations in filename order, including
+`20261001_vet_record_intake.sql` before enabling the clinic upload workflow.
+Run the role/RLS checks against a disposable staging project before production.
 
 ## Current status
 
 Pawso's planned private-beta feature and engineering work is implemented. It is
-a private-beta candidate after migration `20260929` is applied and the external
-security, deployment, staging, and physical-device gates in
+a private-beta candidate after all migrations through `20261001` are applied
+and the external security, deployment, staging, and physical-device gates in
 `docs/EXTERNAL_COMPLETION_CHECKLIST.md` pass. Public store release additionally
 requires legal review, published policies, store-console work, and a staged
 release. Paid membership remains intentionally deferred until beta retention
 and shared-care usage justify it.
+
+## Portfolio notes
+
+This repository demonstrates Expo/React Native, FastAPI, Supabase RLS,
+private-file storage, authenticated AI endpoints, and owner-controlled
+household permissions. Use synthetic pet records and screenshots for a public
+portfolio. Never commit local environment files, production keys, real veterinary
+records, invite links, or customer exports. A GitLab mirror should preserve
+the license and commit history, and its CI should be configured separately
+from GitHub Actions.

@@ -20,7 +20,9 @@
 
 - [ ] Final app name, subtitle/short description, full description, keywords, category, copyright.
 - [ ] App icon and adaptive/monochrome icons verified on real devices.
-- [ ] Phone screenshots for required iOS/Android sizes; tablet screenshots only if tablet support remains enabled.
+- [ ] Phone screenshots for required iOS/Android sizes. iPad support is disabled
+  for the first release; enable it only after iPad layout, accessibility, and
+  screenshots are tested.
 - [ ] Screenshots contain demo data only—no real email, pet medical data, invite codes, or notifications.
 - [ ] Support URL, Privacy URL, marketing URL if used, review notes, and emergency/medical disclaimer.
 - [ ] Explain anonymous onboarding, account security, AI record review, household sharing, and in-app account deletion to reviewers.
