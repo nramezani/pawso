@@ -1,0 +1,25 @@
+stages:
+  - verify
+
+mobile:
+  stage: verify
+  image: node:22.13.1
+  script:
+    - npm ci --ignore-scripts
+    - npm run typecheck
+    - npm run lint:all
+    - npx expo-doctor
+    - npm audit --omit=dev --audit-level=high
+    - npx expo config --json > /dev/null
+    - CI=1 npx expo export --platform ios --output-dir /tmp/pawso-ios
+    - CI=1 npx expo export --platform android --output-dir /tmp/pawso-android
+
+backend:
+  stage: verify
+  image: python:3.12
+  script:
+    - cd backend
+    - python -m pip install -r requirements.txt pip-audit
+    - python -m py_compile main.py ask_router.py auth.py production_router.py rate_limit.py upload_validation.py
+    - python -m unittest discover -s tests -v
+    - pip-audit -r requirements.txt
