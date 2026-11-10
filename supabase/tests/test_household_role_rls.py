@@ -194,7 +194,17 @@ class HouseholdRoleRLSTests(unittest.TestCase):
             json={"target_medication": medication_id, "target_action": "archive"},
             timeout=10,
         )
-        self.assertEqual(archive_response.status_code, 200)
+        # set_medication_state returns void, so PostgREST normally responds
+        # with 204 No Content. Verify the persisted state as well as HTTP success.
+        self.assertIn(archive_response.status_code, (200, 204))
+        archived_response = requests.get(
+            f"{SUPABASE_URL}/rest/v1/medications?id=eq.{medication_id}&select=id,is_active",
+            headers=_headers(self.owner_jwt),
+            timeout=10,
+        )
+        self.assertEqual(archived_response.status_code, 200)
+        self.assertEqual(len(archived_response.json()), 1)
+        self.assertFalse(archived_response.json()[0]["is_active"])
 
     def test_structured_health_tables_are_rpc_only_and_hidden_from_sitter(self):
         for table in ("symptom_entries", "lab_results"):
