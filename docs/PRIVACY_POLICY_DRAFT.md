@@ -1,9 +1,9 @@
 # Pawso Privacy Policy — Draft
 
 **Status:** Product draft for legal review before public beta  
-**Last updated:** September 24, 2026
+**Last edited:** November 10, 2026 (draft; not yet effective)
 **Operator:** [Insert legal business name and mailing address]  
-**Privacy contact:** [Insert monitored privacy email]
+**Privacy contact:** pawso.support@gmail.com (confirm inbox monitoring before publication)
 
 This draft is not legal advice. It must be reviewed for the jurisdictions where
 Pawso will be offered before publication.
@@ -23,6 +23,8 @@ Depending on the features used, Pawso may collect:
 - Pet details, including name, species, breed, age, sex, weight, microchip
   number, health conditions, allergies, medications, and veterinary clinic.
 - Uploaded files and their extracted content, including veterinary records and images.
+- Records sent through an owner-created clinic link. The link does not verify
+  the sender's professional identity; the owner reviews incoming records.
 - Care information, including medication schedules, dose logs, tasks,
   completion history, symptoms, weights, and owner notes.
 - Household information, including invitation codes, member names, roles, and
@@ -78,6 +80,9 @@ We disclose information only:
   properly disclosed business transfer.
 
 Invitation codes must be treated as private credentials.
+An owner-created clinic link lets its holder send a file for owner review; it
+does not give the holder access to the owner's existing records. Treat the
+link as a private credential and revoke it if shared in error.
 
 ## 7. Retention and deletion
 

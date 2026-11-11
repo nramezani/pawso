@@ -110,6 +110,8 @@ health endpoints are `/health` and `/ready`.
 - [Data governance and vendor register](docs/DATA_GOVERNANCE_AND_VENDORS.md)
 - [Production operations runbook](docs/PRODUCTION_OPERATIONS.md)
 - [App Store and Play release checklist](docs/STORE_RELEASE_CHECKLIST.md)
+- [Support](docs/SUPPORT.md)
+- [App Store submission packet and privacy worksheet](docs/APP_STORE_SUBMISSION_PACKET.md)
 - [EAS environment setup](docs/EAS_ENVIRONMENT_SETUP.md)
 - [November 15 release gate](docs/NOVEMBER_15_RELEASE_GATE.md)
 - [Backend deployment guide](docs/BACKEND_DEPLOYMENT.md)
@@ -123,13 +125,14 @@ Run the role/RLS checks against a disposable staging project before production.
 
 ## Current status
 
-Pawso's planned private-beta feature and engineering work is implemented. It is
-a private-beta candidate after all migrations through `20261001` are applied
-and the external security, deployment, staging, and physical-device gates in
-`docs/EXTERNAL_COMPLETION_CHECKLIST.md` pass. Public store release additionally
-requires legal review, published policies, store-console work, and a staged
-release. Paid membership remains intentionally deferred until beta retention
-and shared-care usage justify it.
+At the November 10, 2026 checkpoint, staging role/RLS tests passed 8/8 and
+the production backend and vet intake migrations were checked. An owner tested
+the clinic upload, review, one-time link expiry, and disposable pet deletion
+on a physical iPhone **preview** build from `753c812`. This is not a TestFlight
+build or public App Store approval. A new Android build, published legal and
+support pages, App Privacy details, actual screenshots, and full device
+regression remain release gates. See the [submission packet](docs/APP_STORE_SUBMISSION_PACKET.md)
+for evidence and next steps. Paid membership is not implemented.
 
 ## Portfolio notes
 
