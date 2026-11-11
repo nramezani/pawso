@@ -100,8 +100,6 @@ health endpoints are `/health` and `/ready`.
 - [Product and technical audit](docs/PAWSO_AUDIT_AND_ROADMAP.md)
 - [End-to-end QA checklist](docs/QA_CHECKLIST.md)
 - [Beta and business readiness plan](docs/BETA_READINESS_PLAN.md)
-- [Privacy policy draft](docs/PRIVACY_POLICY_DRAFT.md)
-- [Terms of use draft](docs/TERMS_OF_USE_DRAFT.md)
 - [Membership and pricing recommendation](docs/MEMBERSHIP_AND_PRICING.md)
 - [Release readiness review (2026-09-24)](docs/RELEASE_READINESS_REVIEW_2026-09-24.md)
 - [Deep product, workflow, UI, and engineering audit (2026-09-24)](docs/DEEP_AUDIT_2026-09-24.md)
@@ -111,6 +109,8 @@ health endpoints are `/health` and `/ready`.
 - [Production operations runbook](docs/PRODUCTION_OPERATIONS.md)
 - [App Store and Play release checklist](docs/STORE_RELEASE_CHECKLIST.md)
 - [Support](docs/SUPPORT.md)
+- [Privacy Policy](docs/PRIVACY_POLICY.md)
+- [Terms of Use](docs/TERMS_OF_USE.md)
 - [App Store submission packet and privacy worksheet](docs/APP_STORE_SUBMISSION_PACKET.md)
 - [EAS environment setup](docs/EAS_ENVIRONMENT_SETUP.md)
 - [November 15 release gate](docs/NOVEMBER_15_RELEASE_GATE.md)
@@ -129,8 +129,8 @@ At the November 10, 2026 checkpoint, staging role/RLS tests passed 8/8 and
 the production backend and vet intake migrations were checked. An owner tested
 the clinic upload, review, one-time link expiry, and disposable pet deletion
 on a physical iPhone **preview** build from `753c812`. This is not a TestFlight
-build or public App Store approval. A new Android build, published legal and
-support pages, App Privacy details, actual screenshots, and full device
+build or public App Store approval. A new Android build, production EAS legal
+links, App Privacy details, actual screenshots, and full device
 regression remain release gates. See the [submission packet](docs/APP_STORE_SUBMISSION_PACKET.md)
 for evidence and next steps. Paid membership is not implemented.
 

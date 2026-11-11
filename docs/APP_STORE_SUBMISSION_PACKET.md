@@ -14,11 +14,12 @@ internal preview is not a TestFlight build. The current Android install predates
 these changes. No TestFlight upload, App Review submission, or store approval is
 recorded here.
 
-Before publishing legal pages or entering their URLs:
+Before entering legal URLs into App Store Connect or submitting for review:
 
-- Identify the operator (the enrolled individual or registered entity) and a
-  suitable business contact
-  address. Do not publish a personal home address or an unmonitored inbox.
+- The owner approved public operator wording as Nafiseh Ramezani, individual
+  developer, British Columbia, Canada. Confirm whether a separate business
+  mailing address is needed for each launch jurisdiction; do not publish a
+  personal home address without a deliberate decision.
 - The selected public support/privacy inbox is `pawso.support@gmail.com`;
   the owner reported a successful send-and-reply test on November 10. Keep it
   monitored and enable account recovery/2FA.
@@ -28,11 +29,23 @@ Before publishing legal pages or entering their URLs:
   Supabase states this plan has no automatic database backups. Confirm the
   current production plan and establish a tested backup/restore process before
   inviting real customers; do not imply that automatic backups exist.
-- Finish the legal and data-flow review of the privacy and terms drafts. Make
-  stable public HTTPS pages and test them while signed out.
+- Review the public [Privacy Policy](PRIVACY_POLICY.md),
+  [Terms](TERMS_OF_USE.md) and [Support](SUPPORT.md) against actual vendor
+  settings. Check their HTTPS links while signed out, and update them if
+  production practices change.
 - Set `EXPO_PUBLIC_PRIVACY_POLICY_URL`, `EXPO_PUBLIC_TERMS_OF_USE_URL`, and
   `EXPO_PUBLIC_SUPPORT_EMAIL` in the **production** EAS environment, build
   again, and check all three Account links on the TestFlight install.
+
+Public repository URLs, once this change is merged to `main`:
+
+- Privacy: `https://github.com/nramezani/pawso/blob/main/docs/PRIVACY_POLICY.md`
+- Terms: `https://github.com/nramezani/pawso/blob/main/docs/TERMS_OF_USE.md`
+- Support: `https://github.com/nramezani/pawso/blob/main/docs/SUPPORT.md`
+
+GitHub's document view is usable over HTTPS, though a branded domain would
+provide a cleaner customer experience later. Keep these URLs stable after
+entering them in the store.
 
 ## Suggested English listing text
 
@@ -159,7 +172,7 @@ review link when review is complete.
 
 | Gate | Result | Evidence to attach |
 | --- | --- | --- |
-| Published privacy/terms/support | Pending | Public HTTPS URLs and monitored contact |
+| Published privacy/terms/support | Pages prepared; verify links and legal review | Public HTTPS URLs and monitored contact |
 | App Privacy and metadata | Pending | Saved App Store Connect form review |
 | Real iPhone screenshots | Pending | Synthetic capture from submitted binary |
 | Production iOS/TestFlight | Pending | EAS build ID, App Store Connect build number, installed TestFlight |
