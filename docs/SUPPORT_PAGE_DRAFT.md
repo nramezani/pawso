@@ -1,6 +1,6 @@
 # Pawso Support — Publication Draft
 
-**Status:** Test delivery and monitoring before publishing.
+**Status:** Owner reports send-and-reply test passed; monitor the inbox before publishing.
 
 Need help with Pawso? Contact **pawso.support@gmail.com**. Include the
 type of phone, app version, what you were trying to do, and the error shown.
