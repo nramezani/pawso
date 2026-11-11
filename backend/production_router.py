@@ -541,7 +541,8 @@ async def _delete_storage_paths(
     names = sorted({name for name in object_names if isinstance(name, str) and name})
     if not names:
         return
-    response = await client.delete(
+    response = await client.request(
+        "DELETE",
         f"{supabase_url}/storage/v1/object/{bucket}",
         headers=service_headers,
         json={"prefixes": names},
