@@ -1,15 +1,17 @@
 import unittest
 import asyncio
 import io
+import json
 from unittest.mock import AsyncMock, Mock, patch
 from pathlib import Path
 from uuid import UUID
 
+import httpx
 from fastapi import HTTPException, UploadFile
 from pydantic import ValidationError
 
 from production_router import (
-    ClientEventRequest, InvitationEmailRequest, _vet_link_hash,
+    ClientEventRequest, InvitationEmailRequest, _delete_storage_paths, _vet_link_hash,
     create_vet_upload_link, invitation_landing_page, receive_vet_record,
     revoke_vet_upload_links,
 )
@@ -58,6 +60,21 @@ class InvitationEmailRequestTests(unittest.TestCase):
 
 
 class StorageDeletionTests(unittest.TestCase):
+    def test_bulk_storage_deletion_sends_json_with_httpx(self):
+        def handle(request: httpx.Request) -> httpx.Response:
+            self.assertEqual(request.method, "DELETE")
+            self.assertEqual(request.url.path, "/storage/v1/object/vet-records")
+            self.assertEqual(json.loads(request.content), {"prefixes": ["a", "b"]})
+            return httpx.Response(200, json={"deleted": 2})
+
+        async def run():
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+                await _delete_storage_paths(
+                    client, "https://example.test", {}, "vet-records", ["b", "a", "a"]
+                )
+
+        asyncio.run(run())
+
     def test_claim_package_requires_owner_selected_documents(self):
         source = (Path(__file__).resolve().parents[1] / "production_router.py").read_text(
             encoding="utf-8"
