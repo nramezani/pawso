@@ -110,6 +110,7 @@ health endpoints are `/health` and `/ready`.
 - [Data governance and vendor register](docs/DATA_GOVERNANCE_AND_VENDORS.md)
 - [Production operations runbook](docs/PRODUCTION_OPERATIONS.md)
 - [App Store and Play release checklist](docs/STORE_RELEASE_CHECKLIST.md)
+- [Support](docs/SUPPORT.md)
 - [App Store submission packet and privacy worksheet](docs/APP_STORE_SUBMISSION_PACKET.md)
 - [EAS environment setup](docs/EAS_ENVIRONMENT_SETUP.md)
 - [November 15 release gate](docs/NOVEMBER_15_RELEASE_GATE.md)
