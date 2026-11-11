@@ -114,7 +114,7 @@ mandatory consumer rights in a user's jurisdiction.
 
 ## 14. Contact and changes
 
-Questions: [Insert support email]  
+Questions: pawso.support@gmail.com
 Legal notices: [Insert legal contact and address]
 
 Material changes should be communicated and, when required, accepted again.

@@ -3,7 +3,7 @@
 **Status:** Product draft for legal review before public beta  
 **Last edited:** November 10, 2026 (draft; not yet effective)
 **Operator:** [Insert legal business name and mailing address]  
-**Privacy contact:** [Insert monitored privacy email]
+**Privacy contact:** pawso.support@gmail.com (confirm inbox monitoring before publication)
 
 This draft is not legal advice. It must be reviewed for the jurisdictions where
 Pawso will be offered before publication.

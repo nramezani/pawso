@@ -16,9 +16,11 @@ recorded here.
 
 Before publishing legal pages or entering their URLs:
 
-- Identify the operator (the enrolled individual or registered entity), a
-  monitored public support/privacy email, and a suitable business contact
+- Identify the operator (the enrolled individual or registered entity) and a
+  suitable business contact
   address. Do not publish a personal home address or an unmonitored inbox.
+- The selected public support/privacy inbox is `pawso.support@gmail.com`;
+  test delivery, replies and monitoring before publication.
 - Verify the actual Supabase backup/restore window and Render, OpenAI, Resend,
   and Expo retention settings. The policy must describe deletion accurately.
 - Finish the legal and data-flow review of the privacy and terms drafts. Make
