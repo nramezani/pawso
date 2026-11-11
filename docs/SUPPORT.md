@@ -16,3 +16,5 @@ Records** separately before deleting the account.
 
 Pawso is not a veterinary or emergency service. If your pet needs urgent
 care, contact a veterinarian or emergency animal hospital now.
+
+[Privacy Policy](PRIVACY_POLICY.md) · [Terms of Use](TERMS_OF_USE.md)
