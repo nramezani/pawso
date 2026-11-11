@@ -1,7 +1,7 @@
 # Pawso Terms of Use — Draft
 
 **Status:** Product draft for legal review before public beta  
-**Last updated:** September 21, 2026  
+**Last edited:** November 10, 2026 (draft; not yet effective)
 **Provider:** [Insert legal business name]
 
 This draft is not legal advice and must be reviewed before publication.
@@ -48,6 +48,10 @@ The account holder is responsible for activity under their account. Owners
 control household invitations and roles. Caregivers and sitters receive limited
 access selected by the product's permissions. Pawso may suspend compromised,
 abusive, or unlawful accounts.
+
+An owner may create an expiring, one-use link for a clinic to upload a record.
+Possession of the link does not verify that the sender is a veterinarian or
+that the document is medically accurate. The owner must review the original.
 
 ## 6. User content and permission to operate the service
 

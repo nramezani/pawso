@@ -14,6 +14,7 @@ Before a public beta, also configure:
 
 - `EXPO_PUBLIC_PRIVACY_POLICY_URL`
 - `EXPO_PUBLIC_TERMS_OF_USE_URL`
+- `EXPO_PUBLIC_SUPPORT_EMAIL` (a monitored public support address)
 
 Use **Plain text** visibility for `EXPO_PUBLIC_*` values because Expo embeds them
 in the client application. Never put the Supabase service-role key, OpenAI key,
